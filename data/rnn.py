@@ -1,13 +1,13 @@
 from helpers import helper_functions
 import numpy as np
 
-def generator(data, batch_size=128, lookback=30, delay=1, min_index=0, max_index=None, shuffle=False, step=1):
+def generator(separated_data, batch_size, num_sigs, lookback=30, delay=1, min_index=0, max_index=None, shuffle=False, step=1):
     if max_index is None: 
         max_index = len(separated_data)-1
     border_indices = np.cumsum([len(elem) for elem in separated_data])
     border_indices = np.insert(border_indices, 0, 0, axis=0)
     data=[]
-    for elem in data:
+    for elem in separated_data:
         data.extend(elem)
     data=np.asarray(data)
     # i iterates over shots, j iterates over timesteps within shots
@@ -33,7 +33,7 @@ def generator(data, batch_size=128, lookback=30, delay=1, min_index=0, max_index
             targets[j] = data[rows[j] + delay,:-num_sigs]
         yield samples, targets
 
-def get_datasets(batch_size, input_data_file):
+def get_datasets(batch_size, input_data_file, num_sigs):
     k=5 # 1/k of the data is used for validation
     fold=k-1 # which fold of the data to use for validation
 
@@ -42,10 +42,12 @@ def get_datasets(batch_size, input_data_file):
 
     num_val_samples= len(separated_data) // k
 
-    train_iter = generator(data=separated_data[:fold * num_val_samples]+train_data[(fold + 1) * num_val_samples:],
-                           batch_size=batch_size)
+    train_iter = generator(separated_data=separated_data[:fold * num_val_samples]+separated_data[(fold + 1) * num_val_samples:],
+                           batch_size=batch_size,
+                           num_sigs=num_sigs)
 
-    valid_iter = generator(data=separated_data[fold * num_val_samples: (fold + 1) * num_val_samples],
-                           batch_size=batch_size)
+    valid_iter = generator(separated_data=separated_data[fold * num_val_samples: (fold + 1) * num_val_samples],
+                           batch_size=batch_size,
+                           num_sigs=num_sigs)
 
     return train_iter, valid_iter
