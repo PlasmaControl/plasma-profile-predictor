@@ -1,0 +1,21 @@
+description: 'RNN'
+output_dir: $SCRATCH/sc18-dl-tutorial/rnn-N${SLURM_JOB_NUM_NODES}-${SLURM_JOB_ID}
+
+data:
+    name: rnn
+    input_data_dir='/global/homes/a/abbatej/profile_predictor/input_data/train_data'
+
+model:
+    name: rnn
+    input_shape: (None, 35)
+    output_shape: 32
+
+optimizer:
+    name: Adam
+    lr: 0.001
+
+training:
+    batch_size: 128
+    n_epochs: 1
+    loss: 'mse'
+    metrics: ['mae']

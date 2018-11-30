@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J cifar-cnn
+#SBATCH -J rnn
 #SBATCH -C knl
 #SBATCH -N 1
 #SBATCH -q regular
@@ -7,5 +7,5 @@
 #SBATCH -o logs/%x-%j.out
 
 . scripts/setup.sh
-config=configs/cifar10_cnn.yaml
+config=configs/rnn.yaml
 srun python train.py $config
