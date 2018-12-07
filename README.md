@@ -1,7 +1,7 @@
 # Plasma Profile Predictor
 
 This repository is largely adapted from material for the SC18 tutorial:
-*Deep Learning at Scale*. Their readme contents are below. 
+*Deep Learning at Scale*. Please see [sc18-dl-tutorial](https://github.com/NERSC/sc18-dl-tutorial) on GitHub, and also see their readme below.  
 
 Here you will links to slides and resources as well as all the code
 for the hands-on sessions.
