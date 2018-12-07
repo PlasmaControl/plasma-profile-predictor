@@ -8,4 +8,4 @@
 
 . scripts/setup.sh
 config=configs/rnn.yaml
-srun python train.py $config
+srun python train.py $config -d False

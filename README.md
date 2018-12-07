@@ -1,7 +1,7 @@
-# SC18 Tutorial: Deep Learning At Scale
+# Plasma Profile Predictor
 
-This repository contains the material for the SC18 tutorial:
-*Deep Learning at Scale*.
+This repository is largely adapted from material for the SC18 tutorial:
+*Deep Learning at Scale*. Their readme contents are below. 
 
 Here you will links to slides and resources as well as all the code
 for the hands-on sessions.
