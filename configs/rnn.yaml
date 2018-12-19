@@ -17,8 +17,7 @@ optimizer:
 
 training:
     batch_size: 128
-    n_epochs: 1
-    steps_per_epoch: 100 #should ultimately be the number of train samples
-    validation_steps: 100 #should ultimately be number of validation samples
+    n_epochs: 20
+    steps_per_epoch: 128 #should ultimately be the number of train samples
     loss: mse
     metrics: [mae]

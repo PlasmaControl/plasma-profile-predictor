@@ -136,7 +136,7 @@ def main():
                                   epochs=train_config['n_epochs'],
                                   steps_per_epoch=steps_per_epoch,
                                   validation_data=valid_gen,
-                                  validation_steps=train_config['validation_steps'], #len(valid_gen),
+                                  validation_steps=len(valid_gen),
                                   callbacks=callbacks,
                                   workers=4, verbose=2)
 
