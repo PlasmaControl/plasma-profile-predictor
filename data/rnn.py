@@ -2,9 +2,6 @@ from helpers import helper_functions
 import numpy as np
 from keras.utils import Sequence
 
-# Ultimately, we'll want to have one file for each shot I think, so we 
-# don't have to hold so much data in memory
-
 class RnnDataset(Sequence):
 
     def __init__(self, batch_size, num_sigs, input_data_file, train_or_val='train', shuffle='False', lookback=30, delay=1):

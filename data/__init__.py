@@ -16,5 +16,8 @@ def get_datasets(name, **data_args):
     elif name == 'rnn':
         from .rnn import get_datasets
         return get_datasets(**data_args)
+    elif name == 'lstm_cnn':
+        from .lstm_cnn import get_datasets
+        return get_datasets(**data_args)
     else:
         raise ValueError('Dataset %s unknown' % name)

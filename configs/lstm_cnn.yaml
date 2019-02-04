@@ -1,0 +1,23 @@
+description: 'LSTM_CNN'
+output_dir: $SCRATCH/sc18-dl-tutorial/lstm_cnn-N${SLURM_JOB_NUM_NODES}-${SLURM_JOB_ID}
+
+data:
+    name: lstm_cnn
+    input_dir_name: '/global/homes/a/abbatej/'
+
+model:
+    name: lstm_cnn
+    num_sigs_0d: 3
+    num_sigs_1d: 1
+    rho_length: 22
+    lookback: 10
+
+optimizer:
+    name: Adam
+    lr: 0.001
+
+training:
+    batch_size: 128
+    n_epochs: 20
+    loss: mse
+    metrics: [mae]

@@ -2,7 +2,6 @@
 #SBATCH -J cifar-resnet
 #SBATCH -C knl
 #SBATCH -N 1
-#SBATCH --reservation=sc18
 #SBATCH -q regular
 #SBATCH -t 45
 #SBATCH -o logs/%x-%j.out

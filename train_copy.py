@@ -127,16 +127,22 @@ def main():
         callbacks.append(keras.callbacks.ModelCheckpoint(checkpoint_format))
 
     # Timing
-    timing_callback = TimingCallback()
-    callbacks.append(timing_callback)
+    #timing_callback = TimingCallback()
+    #callbacks.append(timing_callback)
 
-    callbacks.append(keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                   patience=5))
+    callbacks_list = [
+        keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=5,
+        ),
+        keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(output_dir, 'simple_model.h5')
+            monitor='val_mean_absolute_error',
+            save_best_only=True,
+            verbose=1,
+        ),
+    ]
 
-    callbacks.append(keras.callbacks.ModelCheckpoint(filepath=os.path.join(output_dir, 'simple_model.h5'),
-                                                     monitor='val_mean_absolute_error',
-                                                     save_best_only=True,
-                                                     verbose=1))
 
     # Train the model
     steps_per_epoch = len(train_gen) // n_ranks 
@@ -145,8 +151,9 @@ def main():
                                   steps_per_epoch=steps_per_epoch,
                                   validation_data=valid_gen,
                                   validation_steps=len(valid_gen),
-                                  callbacks=callbacks,
-                                  workers=4, verbose=2)
+                                  callbacks=callbacks_list)
+                                  #callbacks=callbacks,
+                                  #workers=4, verbose=2)
 
     # Save training history
     if rank == 0:

@@ -15,5 +15,8 @@ def get_model(name, **model_args):
     elif name == 'rnn':
         from .rnn import build_model
         return build_model(**model_args)
+    elif name == 'lstm_cnn':
+        from .lstm_cnn import build_model
+        return build_model(**model_args)
     else:
         raise ValueError('Model %s unknown' % name)
