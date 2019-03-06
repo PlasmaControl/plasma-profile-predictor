@@ -5,3 +5,7 @@
 *#*
 *~
 *.h5
+notebooks/core*
+out.log
+history.npz
+data/core*

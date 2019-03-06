@@ -1,0 +1,41 @@
+description: 'LSTM_CNN_MERGE'
+output_dir: $HOME/plasma_profiles_predictor/
+
+data:
+    name: lstm_cnn
+    input_dir_name: '/global/homes/a/abbatej/'
+
+model:
+    name: lstm_cnn_merge
+    num_sigs_0d: 3
+    num_sigs_1d: 1
+    rho_length: 30
+    lookback: 10
+    include_cnn: False
+    cnn_activation: 'linear'
+    cnn_padding: 'same'
+    kernel_size: 10
+    max_pool_size: 2
+    num_filters: 2
+    dense_cnn_size: 10
+    dense_cnn_activation: 'relu'
+    num_dense_cnn_layers: 0
+    dense_pre_size: 10
+    dense_pre_activation: 'linear'
+    num_pre_layers: 0
+    rnn_type: GRU
+    rnn_size: 40
+    rnn_activation: 'relu'
+    num_final_layers: 0
+    dense_final_activation: 'relu'
+    dense_final_size: 40
+
+optimizer:
+    name: Adam
+    lr: 0.001
+
+training:
+    batch_size: 128
+    n_epochs: 40
+    loss: 'mean_squared_error'
+    metrics: [mae]

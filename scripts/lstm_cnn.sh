@@ -9,4 +9,4 @@
 
 . scripts/setup.sh
 config=configs/lstm_cnn.yaml
-srun -l python train.py $config --distributed
+srun -l python train.py $config --distributed --verbose

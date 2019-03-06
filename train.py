@@ -110,33 +110,32 @@ def main():
         # Broadcast initial variable states from rank 0 to all processes.
         callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
 
-        # Learning rate warmup
-        warmup_epochs = train_config.get('lr_warmup_epochs', 0)
-        callbacks.append(hvd.callbacks.LearningRateWarmupCallback(
-            warmup_epochs=warmup_epochs, verbose=1))
+        # # Learning rate warmup
+        # warmup_epochs = train_config.get('lr_warmup_epochs', 0)
+        # callbacks.append(hvd.callbacks.LearningRateWarmupCallback(
+        #     warmup_epochs=warmup_epochs, verbose=1))
 
-        # Learning rate decay schedule
-        for lr_schedule in train_config.get('lr_schedule', []):
-            if rank == 0:
-                logging.info('Adding LR schedule: %s', lr_schedule)
-            callbacks.append(hvd.callbacks.LearningRateScheduleCallback(**lr_schedule))
+        # # Learning rate decay schedule
+        # for lr_schedule in train_config.get('lr_schedule', []):
+        #     if rank == 0:
+        #         logging.info('Adding LR schedule: %s', lr_schedule)
+        #     callbacks.append(hvd.callbacks.LearningRateScheduleCallback(**lr_schedule))
 
     # Checkpoint only from rank 0
     if rank == 0:
-        os.makedirs(os.path.dirname(checkpoint_format), exist_ok=True)
-        callbacks.append(keras.callbacks.ModelCheckpoint(checkpoint_format))
+        #os.makedirs(os.path.dirname(checkpoint_format), exist_ok=True)
+        #callbacks.append(keras.callbacks.ModelCheckpoint(checkpoint_format))
+        #callbacks.append(keras.callbacks.EarlyStopping(monitor='val_loss',
+        #                                           patience=5))
+        callbacks.append(keras.callbacks.ModelCheckpoint(filepath=os.path.join(output_dir, 'model.h5'),
+                                                         monitor='val_mean_absolute_error',
+                                                         save_best_only=True,
+                                                         verbose=2))
+
 
     # Timing
     timing_callback = TimingCallback()
     callbacks.append(timing_callback)
-
-    callbacks.append(keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                   patience=5))
-
-    callbacks.append(keras.callbacks.ModelCheckpoint(filepath=os.path.join(output_dir, 'simple_model.h5'),
-                                                     monitor='val_mean_absolute_error',
-                                                     save_best_only=True,
-                                                     verbose=1))
 
     # Train the model
     steps_per_epoch = len(train_gen) // n_ranks 
@@ -146,7 +145,7 @@ def main():
                                   validation_data=valid_gen,
                                   validation_steps=len(valid_gen),
                                   callbacks=callbacks,
-                                  workers=4, verbose=2)
+                                  workers=4, verbose=1)
 
     # Save training history
     if rank == 0:
@@ -157,6 +156,10 @@ def main():
         if 'val_top_k_categorical_accuracy' in history.history.keys():
             logging.info('Best top-5 validation accuracy: %.3f',
                          max(history.history['val_top_k_categorical_accuracy']))
+        if 'val_mean_absolute_error' in history.history.keys():
+            logging.info('Best validation mae: %.3f',
+                         min(history.history['val_mean_absolute_error']))
+
         logging.info('Average time per epoch: %.3f s',
                      np.mean(timing_callback.times))
         np.savez(os.path.join(output_dir, 'history'),

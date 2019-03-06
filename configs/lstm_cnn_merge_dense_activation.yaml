@@ -1,0 +1,36 @@
+description: 'LSTM_CNN_MERGE'
+output_dir: $SCRATCH/autoruns/feb25/dense_activation-N${SLURM_JOB_NUM_NODES}-${SLURM_JOB_ID}
+
+data:
+    name: lstm_cnn
+    input_dir_name: '/global/homes/a/abbatej/'
+
+model:
+    name: lstm_cnn_merge
+    num_sigs_0d: 4
+    num_sigs_1d: 1
+    rho_length: 30
+    lookback: 10
+    include_dense_1: False
+    dense_1_size: 10
+    dense_1_activation: 'relu'
+    rnn_type: GRU
+    rnn_size: 40
+    rnn_activation: 'linear'
+    include_cnn: True
+    cnn_activation: 'linear'
+    cnn_padding: 'same'
+    kernel_size: 10
+    max_pool_size: 2
+    num_filters: 2
+    dense_final_activation: 'linear'
+
+optimizer:
+    name: Adam
+    lr: 0.001
+
+training:
+    batch_size: 128
+    n_epochs: 40
+    loss: mse
+    metrics: [mae]
