@@ -7,3 +7,5 @@
 *test*
 *.h5
 *.pb
+*.o
+ktf2cpp/predictor

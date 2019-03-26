@@ -1,6 +1,6 @@
 INCL = -I ./frugally-deep/include -I ./eigen -I ./FunctionalPlus/include -I ./json/include
 FLAGS = -Wall -g 
-all: predictor
+all: predictor clean
 
 
 
@@ -10,4 +10,6 @@ predictor: predictor.o
 predictor.o: predictor.cpp
 	g++ $(FLAGS) -c predictor.cpp $(INCL)
 
-clean: rm *.o
+clean:
+	rm -f *.o
+	echo Clean done
