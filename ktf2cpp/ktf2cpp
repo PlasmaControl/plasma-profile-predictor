@@ -1,0 +1,12 @@
+  /home/fouriest/SCHOOL/Princeton/PPPL/plasma-profile-predictor/ktf2cpp:
+  total used in directory 8.1M available 136990156
+  drwxr-xr-x  7 fouriest fouriest 4.0K Mar 25 17:37 .
+  drwxr-xr-x 12 fouriest fouriest 4.0K Mar 25 14:15 ..
+  drwxr-xr-x 15 fouriest fouriest 4.0K Mar 25 16:54  eigen
+  drwxr-xr-x  9 fouriest fouriest 4.0K Mar 25 16:54  frugally-deep
+  drwxr-xr-x 11 fouriest fouriest 4.0K Mar 25 16:54  FunctionalPlus
+  drwxr-xr-x 10 fouriest fouriest 4.0K Mar 25 16:53  json
+  drwxr-xr-x  2 fouriest fouriest 4.0K Jan  9 13:11  __pycache__
+  -rw-r--r--  1 fouriest fouriest  286 Feb  4 09:45  predictor.cpp
+D -rw-r--r--  1 fouriest fouriest 8.0M Mar 25 17:37  main_test.o
+  -rw-r--r--  1 fouriest fouriest  219 Mar 25 17:37  Makefile
