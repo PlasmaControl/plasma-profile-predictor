@@ -2,7 +2,7 @@ from keras import models
 from keras import layers
 from keras.utils import plot_model
 
-def build_model(num_sigs_0d, num_sigs_1d, rho_length, lookback, 
+def build_model(num_sigs_0d, num_sigs_1d, num_sigs_predict, rho_length_in, rho_length_out, lookback, delay,
                 include_cnn, cnn_activation, cnn_padding,
                 kernel_size, max_pool_size, num_filters,
                 dense_cnn_size, dense_cnn_activation, num_dense_cnn_layers,
@@ -12,19 +12,18 @@ def build_model(num_sigs_0d, num_sigs_1d, rho_length, lookback,
 
     if (rnn_type=='LSTM'):
         rnn_layer = layers.LSTM
-    if (rnn_type=='GRU'):
+    elif (rnn_type=='GRU'):
         rnn_layer=layers.GRU
     else:
         raise ValueError('rnn_type in conf must be GRU or LSTM')
-    
-    my_input = layers.Input(shape=(lookback,num_sigs_0d+num_sigs_1d*rho_length,))
+    my_input = layers.Input(shape=(lookback+1+delay,num_sigs_0d+num_sigs_1d*rho_length_in,))
 
     # CNN
     if include_cnn:
-        input_0d = layers.Lambda(lambda x: x[:,:,:num_sigs_0d],output_shape=(lookback,num_sigs_0d,))(my_input)
-        input_1d = layers.Lambda(lambda x: x[:,:,num_sigs_0d:],output_shape=(lookback,num_sigs_1d*rho_length,))(my_input)
+        input_0d = layers.Lambda(lambda x: x[:,:,:num_sigs_0d],output_shape=(lookback+1+delay,num_sigs_0d,))(my_input)
+        input_1d = layers.Lambda(lambda x: x[:,:,num_sigs_0d:],output_shape=(lookback+1+delay,num_sigs_1d*rho_length_in,))(my_input)
 
-        input_1d = layers.Reshape((lookback,rho_length,1))(input_1d)
+        input_1d = layers.Reshape((lookback+1+delay,rho_length_in,1))(input_1d)
 
         input_1d = layers.TimeDistributed(layers.Conv1D(filters=num_filters, kernel_size=kernel_size, 
                                                         activation=cnn_activation, padding=cnn_padding))(input_1d)
@@ -32,7 +31,7 @@ def build_model(num_sigs_0d, num_sigs_1d, rho_length, lookback,
 
         converted_rho_length=int(input_1d.shape[2])
 
-        input_1d = layers.Reshape((lookback,converted_rho_length*num_filters))(input_1d)
+        input_1d = layers.Reshape((lookback+1+delay,converted_rho_length*num_filters))(input_1d)
 
         for i in range(num_dense_cnn_layers):
             input_1d = layers.TimeDistributed(layers.Dense(dense_cnn_size, activation=dense_cnn_activation))(input_1d)
@@ -51,7 +50,7 @@ def build_model(num_sigs_0d, num_sigs_1d, rho_length, lookback,
     # Post-RNN layer
     for i in range(num_final_layers):
         output = layers.Dense(dense_final_size, activation=dense_final_activation)(output)
-    output = layers.Dense(num_sigs_1d*rho_length)(output)
+    output = layers.Dense(num_sigs_predict*rho_length_out)(output)
     model = models.Model(inputs=my_input, outputs=output)
 
     print(model.summary())

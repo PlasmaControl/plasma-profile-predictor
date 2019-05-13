@@ -71,7 +71,7 @@ def main():
                                      'checkpoint-{epoch}.h5')
     os.makedirs(output_dir, exist_ok=True)
 
-    # Loggging
+    # Logging
     config_logging(verbose=args.verbose, output_dir=output_dir)
     logging.info('Initialized rank %i out of %i', rank, n_ranks)
     if args.show_config:
@@ -93,7 +93,18 @@ def main():
                                         **config['data'])
 
     # Build the model
-    model = get_model(**config['model'])
+    if (type(config['data']['n_components']) is int):
+        rho_length_in = config['data']['n_components']
+    else:
+        rho_length_in = config['model']['rho_length_out']
+
+    model = get_model(rho_length_in=rho_length_in, 
+                      num_sigs_0d=len(config['data']['sigs_0d']),
+                      num_sigs_1d=len(config['data']['sigs_1d']),
+                      num_sigs_predict=len(config['data']['sigs_predict']),
+                      lookback=config['data']['lookback'],
+                      delay=config['data']['delay'],
+                      **config['model'])
     # Configure optimizer
     opt = get_optimizer(n_ranks=n_ranks, distributed=args.distributed,
                         **config['optimizer'])
@@ -159,6 +170,8 @@ def main():
         if 'val_mean_absolute_error' in history.history.keys():
             logging.info('Best validation mae: %.3f',
                          min(history.history['val_mean_absolute_error']))
+
+        
 
         logging.info('Average time per epoch: %.3f s',
                      np.mean(timing_callback.times))

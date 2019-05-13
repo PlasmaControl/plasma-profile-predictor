@@ -13,7 +13,7 @@ from utils.callbacks import TimingCallback
 import numpy as np
 
 output_dir='/global/homes/a/abbatej/plasma_profiles_predictor'
-output_file_name='merge_1.h5' # will be formatted as {output_file_name}_{size of hidden layer}.h5
+output_file_name='merge_pca_6.h5' # will be formatted as {output_file_name}_{size of hidden layer}.h5
 model_name='lstm_cnn_merge.yaml'
 
 def load_config(config_file):
@@ -26,7 +26,18 @@ train_config = config['training']
 
 #output_file_name=output_file_name+str(config['model']['dense_1_size'])+'.h5'
 
-model = get_model(**config['model'])
+if (type(config['data']['n_components']) is int):
+    rho_length_in = config['data']['n_components']
+else:
+    rho_length_in = config['model']['rho_length_out']
+
+model = get_model(rho_length_in=rho_length_in, 
+                  num_sigs_0d=len(config['data']['sigs_0d']),
+                  num_sigs_1d=len(config['data']['sigs_1d']),
+                  num_sigs_predict=len(config['data']['sigs_predict']),
+                  lookback=config['data']['lookback'],
+                  delay=config['data']['delay'],
+                  **config['model'])
 
 rank=0
 n_ranks=1
