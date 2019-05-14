@@ -1034,10 +1034,19 @@ bc = [0.274271547794342,-0.2222729027271271,0.06116969883441925,0.29893723130226
      0.1443395763635635,0.09198543429374695,0.1070973947644234,0.4451940059661865,-0.06189791113138199,... 
      -0.2488249540328979,-0.1479221284389496,-0.05105424672365189,-0.03034373931586742,0.2928618788719177;... 
      ];
+dense1B = repmat(dense1B,8,1);
+dense2B = repmat(dense2B,8,1);
+ 
 
-
-layer1out = dense(input,dense1A,dense1B,1);
-layer2out = dense(layer1out,dense2A,dense2B,1);
+layer1out = double(zeros(8,20));
+layer2out = double(zeros(8,20));
+layer3out = double(zeros(1,30));
+ 
+ 
+layer1out = input*dense1A+dense1B;
+layer1out(layer1out<0) = 0;
+layer2out = layer1out*dense2A+dense2B;
+layer2out(layer2out<0)=0;
 layer3out = lstm(layer2out,Wi,Wf,Wc,Wo,Ui,Uf,Uc,Uo,bi,bf,bc,bo);
-prediction = dense(layer3out,dense3A,dense3B,0);
+prediction = layer3out*dense3A+dense3B;
 end
