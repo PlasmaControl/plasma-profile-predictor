@@ -25,7 +25,7 @@ extern emlrtCTX emlrtRootTLSGlobal;
 extern emlrtContext emlrtContextGlobal;
 
 /* Function Declarations */
-extern void profile_predictor(real_T input[256], real_T prediction[30]);
+extern void profile_predictor(real32_T input[256], real32_T prediction[30]);
 extern void profile_predictor_api(const mxArray * const prhs[1], int32_T nlhs,
   const mxArray *plhs[1]);
 extern void profile_predictor_atexit(void);

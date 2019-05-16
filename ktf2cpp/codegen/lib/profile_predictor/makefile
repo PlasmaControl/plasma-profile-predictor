@@ -6,5 +6,5 @@ predictor: main.o profile_predictor.o
 main.o: main.c
 	gcc -c -g -Wall main.c
 
-profile_predictor.o: profile_predictor.c
+profile_predictor.o: profile_predictor.c profile_predictor.h
 	gcc -c -g -Wall profile_predictor.c

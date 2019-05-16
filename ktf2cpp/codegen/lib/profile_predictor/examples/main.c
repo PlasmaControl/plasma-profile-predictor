@@ -38,12 +38,12 @@
 #include "main.h"
 
 /* Function Declarations */
-static void argInit_8x32_real_T(double result[256]);
-static double argInit_real_T(void);
+static void argInit_8x32_real32_T(float result[256]);
+static float argInit_real32_T(void);
 static void main_profile_predictor(void);
 
 /* Function Definitions */
-static void argInit_8x32_real_T(double result[256])
+static void argInit_8x32_real32_T(float result[256])
 {
   int idx0;
   int idx1;
@@ -53,26 +53,26 @@ static void argInit_8x32_real_T(double result[256])
     for (idx1 = 0; idx1 < 32; idx1++) {
       /* Set the value of the array element.
          Change this value to the value that the application requires. */
-      result[idx1 + (idx0 << 5)] = argInit_real_T();
+      result[idx1 + (idx0 << 5)] = argInit_real32_T();
     }
   }
 }
 
-static double argInit_real_T(void)
+static float argInit_real32_T(void)
 {
-  return 0.0;
+  return 0.0F;
 }
 
 static void main_profile_predictor(void)
 {
-  double dv1[256];
-  double prediction[30];
+  float fv17[256];
+  float prediction[30];
 
   /* Initialize function 'profile_predictor' input arguments. */
   /* Initialize function input argument 'input'. */
   /* Call the entry-point 'profile_predictor'. */
-  argInit_8x32_real_T(dv1);
-  profile_predictor(dv1, prediction);
+  argInit_8x32_real32_T(fv17);
+  profile_predictor(fv17, prediction);
 }
 
 int main(int argc, const char * const argv[])

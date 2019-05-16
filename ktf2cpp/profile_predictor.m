@@ -1038,9 +1038,9 @@ dense1B = repmat(dense1B,8,1);
 dense2B = repmat(dense2B,8,1);
  
 
-layer1out = double(zeros(8,20));
-layer2out = double(zeros(8,20));
-layer3out = double(zeros(1,30));
+layer1out = single(zeros(8,20));
+layer2out = single(zeros(8,20));
+layer3out = single(zeros(1,30));
  
  
 layer1out = input*dense1A+dense1B;

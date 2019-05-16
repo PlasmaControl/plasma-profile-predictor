@@ -25,7 +25,7 @@ bo = lstm2(units * 3+1:end)';
 
 
 input = linspace(0,10,8*32);
-input = reshape(input,[8,32]);
+input = single(reshape(input,[8,32]));
 
 
 prediction = profile_predictor(input);

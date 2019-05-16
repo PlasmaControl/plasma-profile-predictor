@@ -12,14 +12,8 @@
 #ifndef PROFILE_PREDICTOR_H
 #define PROFILE_PREDICTOR_H
 
-/* Include files */
-#include <stddef.h>
-#include <stdlib.h>
-#include "rtwtypes.h"
-#include "profile_predictor_types.h"
-
 /* Function Declarations */
-extern void profile_predictor(const double input[256], double prediction[30]);
+extern void profile_predictor(const float input[256], float prediction[30]);
 extern void profile_predictor_initialize(void);
 extern void profile_predictor_terminate(void);
 
