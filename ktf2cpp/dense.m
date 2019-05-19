@@ -1,8 +1,4 @@
-function y = dense(x,A,b,relu)
-y = zeros(size(x));
+function y = dense(x,A,b)
+y = zeros(size(A,2));
 y = x*A+b;
-if relu
-    y = max(y,0);
-end
-
 end
