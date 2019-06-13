@@ -12,7 +12,7 @@ from utils.callbacks import TimingCallback
 
 import numpy as np
 
-output_dir='/global/homes/a/abbatej/plasma_profiles_predictor'
+output_dir='/global/homes/a/al34/plasma_profiles_predictor'
 output_file_name='merge_pca_6.h5' # will be formatted as {output_file_name}_{size of hidden layer}.h5
 model_name='lstm_cnn_merge.yaml'
 

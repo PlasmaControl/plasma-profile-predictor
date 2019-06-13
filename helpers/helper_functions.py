@@ -42,7 +42,6 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
 
     # extract all shots that are in the raw data so we can iterate over them
     shots = sorted(raw_data.keys())
-
     sigs = list(np.unique(sigs_0d+sigs_1d+sigs_predict))
 
     # first get the indices that contain all the data we need
@@ -51,11 +50,13 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     train_shots=[]
     val_shots=[]
     for shot in shots:
-        if set(sigs).issubset(raw_data[shot].keys()):
+       if set(sigs).issubset(raw_data[shot].keys()):
             all_shots.append(shot)
+           
     train_shots = all_shots[:int(len(all_shots)*train_frac)]
+    
     val_shots = all_shots[int(len(all_shots)*train_frac):int(len(all_shots)*(train_frac+val_frac))]
-
+    
     # smooth each signal
     data={}
     times=[]

@@ -1,11 +1,11 @@
 description: 'LSTM_CNN_MERGE'
-output_dir: $HOME/plasma_profiles_predictor/
+output_dir: '$HOME/plasma-profile-predictor/'
 
 data:
     name: lstm_cnn
-    input_dir_name: '/global/homes/a/abbatej/'
+    input_dir_name: '/global/homes/a/al34/data_files/'
     preprocess: True
-    sigs_0d: ['curr_target','pinj', 'ech']
+    sigs_0d: ['curr_target','pinj']
     sigs_1d: ['e_temp']
     sigs_predict: ['e_temp']
 

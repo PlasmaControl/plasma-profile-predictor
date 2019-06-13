@@ -58,7 +58,7 @@ def load_config(config_file):
 
 def main():
     """Main function"""
-
+    print("hi")
     # Initialization
     args = parse_args()
     rank, n_ranks = init_workers(args.distributed)
