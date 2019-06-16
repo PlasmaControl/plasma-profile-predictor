@@ -1,14 +1,16 @@
-INCL = -I ./frugally-deep/include -I ./eigen -I ./FunctionalPlus/include -I ./json/include
-FLAGS = -Wall -g 
-all: predictor clean
+FLAGS = -Ofast
+all: test_suite clean
 
 
 
-predictor: predictor.o
-	g++ $(FLAGS) -o predictor predictor.o $(INCL)
+test_suite: test1.o test1_test_suite.o
+	gcc $(FLAGS) -o test_suite test1_test_suite.o test1.o -lm
 
-predictor.o: predictor.cpp
-	g++ $(FLAGS) -c predictor.cpp $(INCL)
+test1_test_suite.o: test1_test_suite.c
+	gcc $(FLAGS) -c test1_test_suite.c
+
+test1.o: test1.c
+	gcc $(FLAGS) -c test1.c
 
 clean:
 	rm -f *.o
