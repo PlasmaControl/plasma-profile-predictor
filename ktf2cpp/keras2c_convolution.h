@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 
-void padding1d(float input[], float padded_input[], float fill[],
+void keras2c_pad1d(float input[], float padded_input[], float fill[],
 	       size_t in_height, size_t in_width, size_t pad_top,
 	       size_t pad_bottom) {
   /* pads array in height dimension. 
@@ -43,7 +43,7 @@ void padding1d(float input[], float padded_input[], float fill[],
 
 
 
-void convolution1d(float input[], float output[], float kernel[],
+void keras2c_conv1d(float input[], float output[], float kernel[],
 		   float bias[], size_t out_height, size_t out_width,
 		   size_t kernel_size, size_t padded_in_height,
 		   size_t in_width, size_t stride, size_t dilation,

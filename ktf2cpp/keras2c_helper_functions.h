@@ -4,8 +4,9 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
-void matmul(float C[], float A[], float B[], size_t outrows,
+void keras2c_matmul(float C[], float A[], float B[], size_t outrows,
 	    size_t outcols, size_t innerdim) {
   /* Just your basic 1d matrix multiplication. Takes in 1d arrays
  A and B, results get stored in C */
@@ -14,8 +15,7 @@ void matmul(float C[], float A[], float B[], size_t outrows,
   /*   Size C: outrows*outcols */
 
   // make sure output is empty
-  for (size_t i=0; i<outrows*outcols;i++) {
-    C[i] = 0;}
+  memset(C, 0, outrows*outcols*sizeof(C[0]));
   
   for (size_t i = 0 ; i < outrows; i++) {
     size_t outrowidx = i*outcols;
@@ -28,7 +28,7 @@ void matmul(float C[], float A[], float B[], size_t outrows,
   }
 }
 
-void affine_matmul(float C[], float A[], float B[], float d[], size_t outrows,
+void keras2c_affine_matmul(float C[], float A[], float B[], float d[], size_t outrows,
 	    size_t outcols, size_t innerdim) {
   /* Computes C = A*B + d, where d is a vector that is added to each
  row of A*B*/
@@ -38,8 +38,7 @@ void affine_matmul(float C[], float A[], float B[], float d[], size_t outrows,
   /*   Size d: outrows */
 
   // make sure output is empty
-  for (size_t i=0; i<outrows*outcols;i++) {
-    C[i] = 0;}
+  memset(C, 0, outrows*outcols*sizeof(C[0]));
   
   for (size_t i = 0 ; i < outrows; i++) {
     size_t outrowidx = i*outcols;
