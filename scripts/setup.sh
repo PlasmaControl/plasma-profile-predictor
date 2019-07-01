@@ -10,4 +10,4 @@ if [[ $NERSC_HOST == edison || $NERSC_HOST == cori ]]; then
 fi
 
 export HDF5_USE_FILE_LOCKING=FALSE
-module load tensorflow/intel-1.11.0-py36
+module load tensorflow/intel-1.13.1-py36

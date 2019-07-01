@@ -3,7 +3,7 @@ import os
 import re
 import numpy as np
 
-base_dir='/global/cscratch1/sd/abbatej/autoruns/delay_with_0d_lookahead_ech/'
+base_dir='/global/cscratch1/sd/abbatej/autoruns/delay_with_0d_lookahead/'
 
 for dir_name in os.listdir(base_dir):
     try:
