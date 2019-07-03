@@ -4,7 +4,7 @@ output_dir: $HOME/plasma_profiles_predictor/
 data:
     name: lstm_cnn
     input_dir_name: '/global/homes/a/abbatej/'
-    preprocess: True
+    preprocess: False
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
     sigs_predict: ['temp']
