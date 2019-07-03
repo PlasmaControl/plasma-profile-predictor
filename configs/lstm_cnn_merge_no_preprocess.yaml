@@ -1,11 +1,10 @@
 description: 'LSTM_CNN_MERGE'
-output_dir: '$HOME/plasma-profile-predictor/'
+output_dir: $HOME/plasma_profiles_predictor/
 
 data:
     name: lstm_cnn
-    input_dir_name: '/global/homes/a/al34/data_files/'
-    preprocess: True
-
+    input_dir_name: '/global/homes/a/abbatej/'
+    preprocess: False
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
     sigs_predict: ['temp']
@@ -16,9 +15,6 @@ data:
     delay: 5
     train_frac: .7
     val_frac: .2
-    
-    noised_signal: null
-    pad_1d_to: 0
 
 model:
     name: lstm_cnn_merge
@@ -43,9 +39,7 @@ model:
     num_final_layers: 0
     dense_final_activation: 'relu'
     dense_final_size: 40
-    recurrent_dropout: 0
-    rnn_dropout: 0
-    dense_dropout: 0
+
 optimizer:
     name: Adam
     lr: 0.001

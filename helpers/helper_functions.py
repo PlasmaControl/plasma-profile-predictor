@@ -16,7 +16,7 @@ def load_obj(name):
 
 # Gaussian normalization, return 0 if std is 0
 def normalize(obj, mean, std):
-    a = obj-mean
+    a=obj-mean
     b=std
     return np.divide(a, b, out=np.zeros_like(a), where=b!=0)
 
@@ -31,6 +31,11 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     if (n_components==0):
         sigs_1d=[]
     
+    def finalize_signal(sig):
+        sig[np.isnan(sig)]=0
+        sig[np.isinf(sig)]=0
+        return np.array(sig)
+        
     # average over the previous avg_window timesteps 
     def smooth_signal(sig, avg_window):
         #do nothing:
@@ -40,9 +45,12 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
         else:
             return np.array([np.mean(sig[ind-avg_window:ind],axis=0) for ind in range(avg_window, len(sig))])
 
+    import time
+    time_before=time.time()
     # load in the raw data
-    with open(dirname+'final_data.pkl', 'rb') as f: 
+    with open(dirname+'small_final_data.pkl', 'rb') as f: 
         raw_data=pickle.load(f, encoding='latin1')
+    print('Loading data: {}s'.format(time.time()-time_before))
 
     # extract all shots that are in the raw data so we can iterate over them
     #shots = sorted(raw_data.keys())
@@ -57,6 +65,8 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     all_shots=[]
     train_shots=[]
     val_shots=[]
+
+    time_before=time.time()
     for shot in shots:
        if set(sigs).issubset(raw_data[shot].keys()):
             all_shots.append(shot)
@@ -74,17 +84,18 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     
     #train_shots = all_shots[::2]
     #val_shots = all_shots[1::2]
-    
-    
+
+    print('Creating shot list (check whether data contains necessary sigs - loop over shots): {}s'.format(time.time()-time_before))
     
     # smooth each signal
+    time_before=time.time()
     data={}
-    times=[]
     for shot in all_shots:
         data[shot]={}
         # add all signals and also the time 
         for sig in (sigs+['time']):
-            data[shot][sig] = smooth_signal(raw_data[shot][sig],avg_window)
+            data[shot][sig] = finalize_signal(raw_data[shot][sig])
+    print('Dumping data into new dictionary from data dictionary (loop over shots, sigs): {}s'.format(time.time()-time_before))
 
     # remove shots with empty  arrays
     count=0
@@ -100,13 +111,15 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                 break
     print('Removed {} shots with empty arrays'.format(count))
 
-    # get means and stds for normalization
+    time_before=time.time()
     means={}
     stds={}
     for sig in sigs:
-        means[sig] = np.nanmean(np.array([np.nanmean(data[shot][sig], axis=0) for shot in train_shots]),axis=0)
+        #print('shot {}, sig {}'.format(shot,sig))
+        means[sig] = np.nanmean(np.array([np.nanmean(data[shot][sig],axis=0) for shot in train_shots]),axis=0)
         stds[sig] = np.nanstd(np.array([np.nanmean(data[shot][sig],axis=0) for shot in train_shots]),axis=0)
-        
+    print('Getting means and stds: {}s'.format(time.time()-time_before))
+
     # function for creating data using the raw and the means / stds
     def make_final_data(my_shots):
         final_data=[]
@@ -179,7 +192,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                     #final_target[-1].append(np.mean(normalize(data[shot][sig][end_time+delay], means[sig], stds[sig])))
 
                     # for predicting DIFFERENCES
-                    
+
 
                     # for predicting MEAN, DIFFERENCES
                     #final_target[-1].append(np.mean(normalize(data[shot][sig][end_time+delay], means[sig], stds[sig])-
@@ -216,13 +229,19 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
         print("Number of timesteps in data:\n {}".format(count))
         return (np.array(final_data), np.array(final_target), np.array(shot_indices), np.array(times))
 
+    time_before=time.time()
     train_tuple = make_final_data(train_shots)
+    print('Putting training data into right shape: {}s'.format(time.time()-time_before))
+
     train_data = train_tuple[0]
     train_target = train_tuple[1]
     train_indices = train_tuple[2]
     train_time = train_tuple[3]
 
+    time_before=time.time()
     val_tuple = make_final_data(val_shots)
+    print('Putting training data into right shape: {}s'.format(time.time()-time_before))
+
     val_data = val_tuple[0]
     val_target = val_tuple[1]
     val_indices = val_tuple[2]

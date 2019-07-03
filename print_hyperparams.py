@@ -3,7 +3,10 @@ import os
 import re
 import numpy as np
 
+
 base_dir='/global/cscratch1/sd/al34/autoruns/different_padding'
+#base_dir='/global/cscratch1/sd/abbatej/autoruns/delay_with_0d_lookahead/'
+
 for dir_name in os.listdir(base_dir):
     try:
         def load_config(base_file):

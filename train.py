@@ -140,7 +140,7 @@ def main():
         #                                           patience=5))
         callbacks.append(keras.callbacks.ModelCheckpoint(filepath=os.path.join(output_dir, 'model.h5'),
                                                          monitor='val_mean_absolute_error',
-                                                         save_best_only=True,
+                                                         save_best_only=False,
                                                          verbose=2))
 
 
