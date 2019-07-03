@@ -10,4 +10,4 @@
 root_dir=$HOME/plasma-profile-predictor
 . $root_dir/scripts/setup.sh
 config=$root_dir/configs/lstm_cnn_merge.yaml
-srun -l python $root_dir/train.py $config --distributed
+srun -l python $root_dir/train.py $config --distribute -v

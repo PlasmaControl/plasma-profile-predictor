@@ -15,6 +15,9 @@ data:
     delay: 2
     train_frac: .7
     val_frac: .2
+    
+    noised_signal: null
+    pad_1d_to: 0
 
 model:
     name: lstm_cnn_merge
@@ -39,7 +42,9 @@ model:
     num_final_layers: 0
     dense_final_activation: 'relu'
     dense_final_size: 40
-
+    recurrent_dropout: 0
+    rnn_dropout: 0
+    dense_dropout: 0
 optimizer:
     name: Adam
     lr: 0.001

@@ -3,6 +3,9 @@ import numpy as np
 import copy 
 from sklearn import decomposition
 
+import random
+from random import sample
+
 def save_obj(obj, name):
     with open(name+'.pkl','wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
@@ -21,7 +24,8 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                         n_components=8,
                         avg_window=10, lookback=10, 
                         delay=1, train_frac=.05, val_frac=.05,
-                        save_data=False):
+                        save_data=False, noised_signal = None, sigma = 0.5, 
+                        noised_signal_complete = None, sigma_complete = 1, pad_1d_to = 0):
 
     # n_components 0 means we don't want to include 1d signal in the input at all
     if (n_components==0):
@@ -41,7 +45,11 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
         raw_data=pickle.load(f, encoding='latin1')
 
     # extract all shots that are in the raw data so we can iterate over them
-    shots = sorted(raw_data.keys())
+    #shots = sorted(raw_data.keys())
+    
+    with open(dirname+'shuffled_raw_shots', 'rb') as f: 
+        shots=pickle.load(f, encoding='latin1')
+    
     sigs = list(np.unique(sigs_0d+sigs_1d+sigs_predict))
 
     # first get the indices that contain all the data we need
@@ -52,10 +60,22 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     for shot in shots:
        if set(sigs).issubset(raw_data[shot].keys()):
             all_shots.append(shot)
-           
+            
+            
+#     import pdb
+#     pdb.set_trace()
+    
+#     train_shots = random.sample(all_shots, int(len(all_shots)*train_frac)) 
+#     val_shots = list(np.setdiff1d(all_shots,train_shots))                         
+    
     train_shots = all_shots[:int(len(all_shots)*train_frac)]
     
     val_shots = all_shots[int(len(all_shots)*train_frac):int(len(all_shots)*(train_frac+val_frac))]
+    
+    #train_shots = all_shots[::2]
+    #val_shots = all_shots[1::2]
+    
+    
     
     # smooth each signal
     data={}
@@ -93,27 +113,73 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
         final_target=[]
         shot_indices=[]
         times=[]
+       
         
         shot_indices.append(0) #always start the first shot at 0
-        for shot in my_shots:
+        for shot in my_shots: 
+            # i is a debuger for noise
+            i = 0
+            count = 0 # count counts how many total timesteps there are
+            # i also gets incremented when padding in prediction mode
+            i = i + 1
             num_timesteps=len(data[shot][sigs[0]])
+             # normalize each sig for each timestep for each shot
+            for cur_time in range(num_timesteps):
+                for sig in sigs:
+                    data[shot][sig][cur_time] = normalize(data[shot][sig][cur_time], means[sig], stds[sig])
+            
             
             all_timesteps=range(lookback, num_timesteps-delay)
             shot_indices.append(shot_indices[-1]+len(all_timesteps))
+            
+            # first get the targets done before noising things up
+            for end_time in all_timesteps:
+                count += 1
+                final_target.append([])
+                for sig in sigs_predict:
+                    final_target[-1].extend((data[shot][sig][end_time+delay])-
+                                           (data[shot][sig][end_time]))
+            
+    
+            # noise data along curve
+            if noised_signal is not None:
+                if i == 1: 
+                    print("noising data along curve for " + noised_signal + " with " + str(sigma))
+                
+                for cur_time in range(num_timesteps):
+                    data[shot][noised_signal][cur_time] = data[shot][noised_signal][cur_time] + np.random.normal(0,sigma, data[shot][noised_signal][cur_time].shape)
+            else:
+                if i ==1:
+                    print("data is not being noised along curve")
+                    
+            # noise data COMPLETELY
+            if noised_signal_complete is not None:
+                if i == 1: 
+                    print("noising data COMPLETELY " + noised_signal_complete + " with " + str(sigma_complete))
+                
+                for cur_time in range(num_timesteps):
+                    data[shot][noised_signal_complete][cur_time] = np.random.normal(0,sigma_complete, data[shot][noised_signal_complete][cur_time].shape)
+            else:
+                if i ==1:
+                    print("data is not being noised completely")
+                    
+                    
+                    
+            
+            
             
             for end_time in all_timesteps:
                 times.append(data[shot]['time'][end_time])
                 
                 final_data.append([])
-                final_target.append([])
                 
-                for sig in sigs_predict:
+                
+                
                     # for MEAN:
                     #final_target[-1].append(np.mean(normalize(data[shot][sig][end_time+delay], means[sig], stds[sig])))
 
                     # for predicting DIFFERENCES
-                    final_target[-1].extend(normalize(data[shot][sig][end_time+delay], means[sig], stds[sig])-
-                                           normalize(data[shot][sig][end_time], means[sig], stds[sig]))
+                    
 
                     # for predicting MEAN, DIFFERENCES
                     #final_target[-1].append(np.mean(normalize(data[shot][sig][end_time+delay], means[sig], stds[sig])-
@@ -127,15 +193,18 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                 for time in range(end_time-lookback,end_time+1+delay):
                     final_data[-1].append([])
                     for sig in sigs_0d:
-                        new_sig = normalize(data[shot][sig][time], means[sig], stds[sig])
+                        new_sig = (data[shot][sig][time])
                         final_data[-1][-1].append(new_sig)
                     
                     for sig in sigs_1d:
                         # pad with 0s once we start going into prediction mode
                         if (time>end_time):
-                            new_sig = np.zeros(data[shot][sig][time].shape)
+                            if i == 1:
+                                print("padding 1d sigs in prediction mode to " + str(pad_1d_to))
+                                i += 1
+                            new_sig = np.zeros(data[shot][sig][time].shape) + pad_1d_to
                         else:
-                            new_sig = normalize(data[shot][sig][time], means[sig], stds[sig])
+                            new_sig = (data[shot][sig][time])
 
                         # for just MEAN:
                         #final_data[-1][-1].append(np.mean(new_sig))
@@ -144,6 +213,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                         final_data[-1][-1].extend(new_sig)
                 
         shot_indices.pop() #we added 0 to beginning, so exclude the last element
+        print("Number of timesteps in data:\n {}".format(count))
         return (np.array(final_data), np.array(final_target), np.array(shot_indices), np.array(times))
 
     train_tuple = make_final_data(train_shots)
@@ -199,6 +269,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     ##############################
     # save train and val inputs and outputs
     if save_data:
+        print("saving data to " + dirname + "...")
         with open(dirname+'train_data.pkl', 'wb') as f: 
             pickle.dump(train_data, f)
         with open(dirname+'train_target.pkl', 'wb') as f: 
@@ -225,6 +296,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
             pickle.dump(train_time, f)
         with open(dirname+'val_time.pkl', 'wb') as f: 
             pickle.dump(val_time, f)
+        print("data saved to " + dirname)
         ##############################
         # END SAVING ALL INFO
         ##############################

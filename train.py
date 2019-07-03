@@ -150,6 +150,9 @@ def main():
 
     # Train the model
     steps_per_epoch = len(train_gen) // n_ranks 
+#     import pdb
+#     pdb.set_trace()
+    
     history = model.fit_generator(train_gen,
                                   epochs=train_config['n_epochs'],
                                   steps_per_epoch=steps_per_epoch,

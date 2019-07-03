@@ -8,7 +8,7 @@ def build_model(num_sigs_0d, num_sigs_1d, num_sigs_predict, rho_length_in, rho_l
                 dense_cnn_size, dense_cnn_activation, num_dense_cnn_layers,
                 dense_pre_size, dense_pre_activation, num_pre_layers,
                 rnn_type, rnn_size, rnn_activation,
-                dense_final_size, dense_final_activation, num_final_layers):
+                dense_final_size, dense_final_activation, num_final_layers, recurrent_dropout, rnn_dropout, dense_dropout):
 
     if (rnn_type=='LSTM'):
         rnn_layer = layers.LSTM
@@ -43,13 +43,16 @@ def build_model(num_sigs_0d, num_sigs_1d, num_sigs_predict, rho_length_in, rho_l
     # Pre-RNN dense layer
     for i in range(num_pre_layers):
         final_input = layers.Dense(dense_pre_size, activation=dense_pre_activation)(final_input)
+        final_input = layers.Dropout(dense_dropout)(final_input)
 
     # RNN layer
-    output = rnn_layer(rnn_size, activation=rnn_activation)(final_input)
+    output = rnn_layer(rnn_size, activation=rnn_activation, recurrent_dropout = recurrent_dropout, dropout = rnn_dropout)(final_input)
 
     # Post-RNN layer
     for i in range(num_final_layers):
         output = layers.Dense(dense_final_size, activation=dense_final_activation)(output)
+        output = layers.Dropout(dense_dropout)(output)
+
     output = layers.Dense(num_sigs_predict*rho_length_out)(output)
     model = models.Model(inputs=my_input, outputs=output)
 

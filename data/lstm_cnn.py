@@ -30,15 +30,15 @@ class RnnDataset(Sequence):
         return self.data[inds], self.target[inds]
 
 def get_datasets(batch_size, input_dir_name, preprocess, sigs_0d, sigs_1d, sigs_predict,
-                 n_components, avg_window, lookback, delay,
-                 train_frac, val_frac):
+                 n_components, avg_window, lookback, delay, noised_signal,
+                 train_frac, val_frac, pad_1d_to):
 
     if (preprocess):
         data_package = helper_functions.preprocess_data(input_dir_name, 
                                   sigs_0d, sigs_1d, sigs_predict,
                                   n_components, avg_window, 
                                   lookback, delay,
-                                  train_frac, val_frac, False)
+                                  train_frac, val_frac, False, pad_1d_to = pad_1d_to)
         print('baseline maes:\n'+str(np.mean(abs(data_package['val_target']),axis=0)))
         print('baseline mae average:\n'+str(np.mean(abs(data_package['val_target']))))
 

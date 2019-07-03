@@ -3,7 +3,7 @@ import os
 import re
 import numpy as np
 
-base_dir='/global/cscratch1/sd/al34/autoruns/lookback_with_0d_lookahead'
+base_dir='/global/cscratch1/sd/al34/autoruns/different_padding'
 for dir_name in os.listdir(base_dir):
     try:
         def load_config(base_file):
