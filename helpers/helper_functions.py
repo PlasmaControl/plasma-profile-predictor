@@ -53,10 +53,10 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     print('Loading data: {}s'.format(time.time()-time_before))
 
     # extract all shots that are in the raw data so we can iterate over them
-    #shots = sorted(raw_data.keys())
+    shots = sorted(raw_data.keys())
     
-    with open(dirname+'shuffled_raw_shots', 'rb') as f: 
-        shots=pickle.load(f, encoding='latin1')
+#     with open(dirname+'shuffled_raw_shots', 'rb') as f: 
+#         shots=pickle.load(f, encoding='latin1')
     
     sigs = list(np.unique(sigs_0d+sigs_1d+sigs_predict))
 
@@ -96,7 +96,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
         for sig in (sigs+['time']):
             data[shot][sig] = finalize_signal(raw_data[shot][sig])
     print('Dumping data into new dictionary from data dictionary (loop over shots, sigs): {}s'.format(time.time()-time_before))
-
+ 
     # remove shots with empty  arrays
     count=0
     for shot in (all_shots):
@@ -122,19 +122,21 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
 
     # function for creating data using the raw and the means / stds
     def make_final_data(my_shots):
+        import time
+        time_very_beg = time.time()
         final_data=[]
         final_target=[]
         shot_indices=[]
         times=[]
-       
+        i = 0
+        count = 0
         
         shot_indices.append(0) #always start the first shot at 0
-        for shot in my_shots: 
-            # i is a debuger for noise
-            i = 0
-            count = 0 # count counts how many total timesteps there are
-            # i also gets incremented when padding in prediction mode
-            i = i + 1
+
+        
+        time_before=time.time()
+        # time for normalization: 
+        for shot in my_shots:
             num_timesteps=len(data[shot][sigs[0]])
              # normalize each sig for each timestep for each shot
             for cur_time in range(num_timesteps):
@@ -144,14 +146,49 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
             
             all_timesteps=range(lookback, num_timesteps-delay)
             shot_indices.append(shot_indices[-1]+len(all_timesteps))
-            
-            # first get the targets done before noising things up
+        print('Normalizing time: {}s'.format(time.time()-time_before))
+
+
+        time_before=time.time()
+        # time to do targets
+        for shot in my_shots:
+            num_timesteps=len(data[shot][sigs[0]])
+            all_timesteps=range(lookback, num_timesteps-delay)
+             # first get the targets done before noising things up
             for end_time in all_timesteps:
                 count += 1
                 final_target.append([])
                 for sig in sigs_predict:
                     final_target[-1].extend((data[shot][sig][end_time+delay])-
                                            (data[shot][sig][end_time]))
+        print('Target time: {}s'.format(time.time()-time_before))
+
+
+        time_before=time.time()
+        # time to do data
+        for shot in my_shots: 
+            # i is a debuger for noise
+            
+            count = 0 # count counts how many total timesteps there are
+            # i also gets incremented when padding in prediction mode
+            i = i + 1
+            num_timesteps=len(data[shot][sigs[0]])
+             # normalize each sig for each timestep for each shot
+            # for cur_time in range(num_timesteps):
+            #     for sig in sigs:
+            #         data[shot][sig][cur_time] = normalize(data[shot][sig][cur_time], means[sig], stds[sig])
+            
+            
+            all_timesteps=range(lookback, num_timesteps-delay)
+            # shot_indices.append(shot_indices[-1]+len(all_timesteps))
+            
+            # # first get the targets done before noising things up
+            # for end_time in all_timesteps:
+            #     count += 1
+            #     final_target.append([])
+            #     for sig in sigs_predict:
+            #         final_target[-1].extend((data[shot][sig][end_time+delay])-
+            #                                (data[shot][sig][end_time]))
             
     
             # noise data along curve
@@ -203,30 +240,34 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
 
                 # start lookback steps behind, then add the current signal ("end_time"). For 0d, fill in the rest of the values
                 # up through delay. For 1d, fill in with 0s
-                for time in range(end_time-lookback,end_time+1+delay):
+                for mytime in range(end_time-lookback,end_time+1+delay):
                     final_data[-1].append([])
                     for sig in sigs_0d:
-                        new_sig = (data[shot][sig][time])
+                        new_sig = (data[shot][sig][mytime])
                         final_data[-1][-1].append(new_sig)
                     
                     for sig in sigs_1d:
                         # pad with 0s once we start going into prediction mode
-                        if (time>end_time):
+                        if (mytime>end_time):
                             if i == 1:
                                 print("padding 1d sigs in prediction mode to " + str(pad_1d_to))
                                 i += 1
-                            new_sig = np.zeros(data[shot][sig][time].shape) + pad_1d_to
+                            new_sig = np.zeros(data[shot][sig][mytime].shape) + pad_1d_to
                         else:
-                            new_sig = (data[shot][sig][time])
+                            new_sig = (data[shot][sig][mytime])
 
                         # for just MEAN:
                         #final_data[-1][-1].append(np.mean(new_sig))
 
                         # regular:
                         final_data[-1][-1].extend(new_sig)
-                
+        
+       
+        print('Data time: {}s'.format(time.time()-time_before))     
         shot_indices.pop() #we added 0 to beginning, so exclude the last element
-        print("Number of timesteps in data:\n {}".format(count))
+        #print("Number of timesteps in data:\n {}".format(count))
+        print('Total time for make final data: {}s'.format(time.time()-time_very_beg))     
+
         return (np.array(final_data), np.array(final_target), np.array(shot_indices), np.array(times))
 
     time_before=time.time()
@@ -240,7 +281,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
 
     time_before=time.time()
     val_tuple = make_final_data(val_shots)
-    print('Putting training data into right shape: {}s'.format(time.time()-time_before))
+    print('Putting validation data into right shape: {}s'.format(time.time()-time_before))
 
     val_data = val_tuple[0]
     val_target = val_tuple[1]

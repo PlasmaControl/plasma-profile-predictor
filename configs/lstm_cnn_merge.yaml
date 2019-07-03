@@ -3,7 +3,7 @@ output_dir: '$HOME/plasma-profile-predictor/'
 
 data:
     name: lstm_cnn
-    input_dir_name: '/global/homes/a/al34/data_files/'
+    input_dir_name: '/global/homes/a/al34/new_data_files/'
     preprocess: True
 
     sigs_0d: ['curr','pinj']
