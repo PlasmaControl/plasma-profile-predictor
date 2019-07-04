@@ -46,6 +46,6 @@ optimizer:
 
 training:
     batch_size: 128
-    n_epochs: 1
+    n_epochs: 50
     loss: 'mean_squared_error'
     metrics: [mae]

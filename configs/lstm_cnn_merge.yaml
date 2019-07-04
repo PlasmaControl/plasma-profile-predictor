@@ -4,7 +4,7 @@ output_dir: '$HOME/plasma-profile-predictor/'
 data:
     name: lstm_cnn
     input_dir_name: '/global/homes/a/al34/data_files/'
-    preprocess: True
+    preprocess: False
 
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
@@ -17,7 +17,7 @@ data:
     train_frac: .7
     val_frac: .2
     
-    noised_signal: null
+    noised_signal: None
     pad_1d_to: 0
 
 model:

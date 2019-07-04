@@ -53,10 +53,10 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
     print('Loading data: {}s'.format(time.time()-time_before))
 
     # extract all shots that are in the raw data so we can iterate over them
-    #shots = sorted(raw_data.keys())
+    shots = sorted(raw_data.keys())
     
-    with open(dirname+'shuffled_raw_shots', 'rb') as f: 
-        shots=pickle.load(f, encoding='latin1')
+    # with open(dirname+'shuffled_raw_shots', 'rb') as f: 
+    #     shots=pickle.load(f, encoding='latin1')
     
     sigs = list(np.unique(sigs_0d+sigs_1d+sigs_predict))
 
@@ -163,7 +163,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                     data[shot][noised_signal][cur_time] = data[shot][noised_signal][cur_time] + np.random.normal(0,sigma, data[shot][noised_signal][cur_time].shape)
             else:
                 if i ==1:
-                    print("data is not being noised along curve")
+                    pass#print("data is not being noised along curve")
                     
             # noise data COMPLETELY
             if noised_signal_complete is not None:
@@ -174,7 +174,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                     data[shot][noised_signal_complete][cur_time] = np.random.normal(0,sigma_complete, data[shot][noised_signal_complete][cur_time].shape)
             else:
                 if i ==1:
-                    print("data is not being noised completely")
+                    pass#print("data is not being noised completely")
                     
                     
                     
@@ -213,7 +213,7 @@ def preprocess_data(dirname, sigs_0d, sigs_1d, sigs_predict,
                         # pad with 0s once we start going into prediction mode
                         if (time>end_time):
                             if i == 1:
-                                print("padding 1d sigs in prediction mode to " + str(pad_1d_to))
+                                #print("padding 1d sigs in prediction mode to " + str(pad_1d_to))
                                 i += 1
                             new_sig = np.zeros(data[shot][sig][time].shape) + pad_1d_to
                         else:

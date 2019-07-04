@@ -30,9 +30,10 @@ class RnnDataset(Sequence):
         return self.data[inds], self.target[inds]
 
 def get_datasets(batch_size, input_dir_name, preprocess, sigs_0d, sigs_1d, sigs_predict,
-                 n_components, avg_window, lookback, delay, noised_signal,
-                 train_frac, val_frac, pad_1d_to):
-
+                 n_components, avg_window, lookback, delay, 
+                 train_frac, val_frac,
+                 noised_signal=None, pad_1d_to=0):
+    
     if (preprocess):
         data_package = helper_functions.preprocess_data(input_dir_name, 
                                   sigs_0d, sigs_1d, sigs_predict,
