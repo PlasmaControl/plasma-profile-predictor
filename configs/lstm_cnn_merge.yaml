@@ -17,7 +17,7 @@ data:
     train_frac: .7
     val_frac: .2
     
-    noised_signal: null
+    noised_signal: None
     pad_1d_to: 0
 
 model:

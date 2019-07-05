@@ -1,16 +1,17 @@
 import numpy as np
 from helpers import helper_functions
 from keras.utils import Sequence
+import os
 
 class RnnDataset(Sequence):
-    def __init__(self, batch_size, input_dir_name, train_or_val='train', 
+    def __init__(self, batch_size, processed_data_dirname, train_or_val='train', 
                  shuffle='False', data_package=None):
         self.batch_size = batch_size
         self.shuffle = shuffle
 
         if data_package is None:
-            self.data = np.array(helper_functions.load_obj(input_dir_name+train_or_val+'_data'))
-            self.target = np.array(helper_functions.load_obj(input_dir_name+train_or_val+'_target'))
+            self.data = helper_functions.load_obj(os.path.join(processed_data_dirname,'{}_data'.format(train_or_val)))
+            self.target = helper_functions.load_obj(os.path.join(processed_data_dirname,'{}_target'.format(train_or_val)))
         else:
             self.data = data_package['{}_data'.format(train_or_val)]
             self.target = data_package['{}_target'.format(train_or_val)]
@@ -29,12 +30,14 @@ class RnnDataset(Sequence):
             
         return self.data[inds], self.target[inds]
 
-def get_datasets(batch_size, input_dir_name, preprocess, sigs_0d, sigs_1d, sigs_predict,
-                 n_components, avg_window, lookback, delay, noised_signal,
-                 train_frac, val_frac, pad_1d_to):
-
+def get_datasets(batch_size, input_filename, output_dirname, preprocess, sigs_0d, sigs_1d, sigs_predict,
+                 n_components, avg_window, lookback, delay, 
+                 train_frac, val_frac,
+                 noised_signal=None, pad_1d_to=0):
+    
     if (preprocess):
-        data_package = helper_functions.preprocess_data(input_dir_name, 
+        data_package = helper_functions.preprocess_data(input_filname,
+                                                        output_dirname,
                                   sigs_0d, sigs_1d, sigs_predict,
                                   n_components, avg_window, 
                                   lookback, delay,
@@ -46,13 +49,13 @@ def get_datasets(batch_size, input_dir_name, preprocess, sigs_0d, sigs_1d, sigs_
         data_package = None
 
     train_iter = RnnDataset(batch_size=batch_size,
-                            input_dir_name=input_dir_name,
+                            processed_data_dirname=output_dirname,
                             shuffle='True',
                             train_or_val='train',
                             data_package=data_package)
 
     valid_iter = RnnDataset(batch_size=batch_size,
-                            input_dir_name=input_dir_name,
+                            processed_data_dirname=output_dirname,
                             shuffle='False',
                             train_or_val='val',
                             data_package=data_package)

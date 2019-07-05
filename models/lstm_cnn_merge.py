@@ -8,7 +8,7 @@ def build_model(num_sigs_0d, num_sigs_1d, num_sigs_predict, rho_length_in, rho_l
                 dense_cnn_size, dense_cnn_activation, num_dense_cnn_layers,
                 dense_pre_size, dense_pre_activation, num_pre_layers,
                 rnn_type, rnn_size, rnn_activation,
-                dense_final_size, dense_final_activation, num_final_layers, recurrent_dropout, rnn_dropout, dense_dropout):
+                dense_final_size, dense_final_activation, num_final_layers, recurrent_dropout=0, rnn_dropout=0, dense_dropout=0):
 
     if (rnn_type=='LSTM'):
         rnn_layer = layers.LSTM
