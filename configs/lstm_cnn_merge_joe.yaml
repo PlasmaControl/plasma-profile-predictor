@@ -3,8 +3,8 @@ output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
     name: lstm_cnn
-    input_filename: /global/homes/a/abbatej/small_final_data
-    output_dirname: /global/cscratch1/sd/abbatej/small_data/
+    input_filename: /global/homes/a/abbatej/final_data/
+    output_dirname: /global/cscratch1/sd/abbatej/data/
     preprocess: False
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
@@ -46,7 +46,7 @@ optimizer:
     lr: 0.001
 
 training:
-    batch_size: 128
+    batch_size: 512
     n_epochs: 50
     loss: 'mean_squared_error'
     metrics: [mae]

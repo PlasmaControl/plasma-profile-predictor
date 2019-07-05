@@ -100,6 +100,7 @@ def preprocess_data(input_filename, output_dirname, sigs_0d, sigs_1d, sigs_predi
             final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,delay+1)],axis=1)
         final_input_0d=np.concatenate([final_input[sig][:,:,np.newaxis] for sig in sigs_0d],axis=2)
         final_input_1d=np.concatenate([final_input[sig] for sig in sigs_1d],axis=2)
+        final_input_1d[:,-delay:,:]=pad_1d_to
         input_data[subset]=np.concatenate([final_input_0d,final_input_1d],axis=2)
         
     if save_data:
