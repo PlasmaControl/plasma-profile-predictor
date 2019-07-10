@@ -15,7 +15,7 @@ import numpy as np
 output_dir=os.path.join(os.getenv("HOME"),'plasma-profile-predictor')
 
 output_file_name='test_model_small.h5' 
-model_name='lstm_cnn_merge_joe.yaml'
+model_name='trend_plus_actuators.yaml'
 
 def load_config(config_file):
     with open(config_file) as f:
@@ -25,17 +25,13 @@ def load_config(config_file):
 config=load_config('configs/'+model_name)
 train_config = config['training']
 
-if (type(config['data']['n_components']) is int):
-    rho_length_in = config['data']['n_components']
-else:
-    rho_length_in = config['model']['rho_length_out']
+#if (type(config['data']['n_components']) is int):
+#    rho_length_in = config['data']['n_components']
+#else:
+rho_length_in = config['model']['rho_length_out']
 
 model = get_model(rho_length_in=rho_length_in, 
-                  num_sigs_0d=len(config['data']['sigs_0d']),
-                  num_sigs_1d=len(config['data']['sigs_1d']),
-                  num_sigs_predict=len(config['data']['sigs_predict']),
-                  lookback=config['data']['lookback'],
-                  delay=config['data']['delay'],
+                  **config['data_and_model'],
                   **config['model'])
 
 rank=0
@@ -49,7 +45,7 @@ opt = get_optimizer(n_ranks=n_ranks, distributed=False,
 model.compile(loss=train_config['loss'], optimizer=opt,
               metrics=train_config['metrics'])
 train_gen, valid_gen = get_datasets(batch_size=train_config['batch_size'],
-                                    **config['data'])
+                                    **config['data_and_model'],**config['data'])
 
 steps_per_epoch = len(train_gen) // n_ranks
 

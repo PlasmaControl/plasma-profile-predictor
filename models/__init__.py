@@ -21,5 +21,8 @@ def get_model(name, **model_args):
     elif name == 'lstm_cnn_merge':
         from .lstm_cnn_merge import build_model
         return build_model(**model_args)
+    elif name == 'trend_plus_actuators':
+        from .trend_plus_actuators import build_model
+        return build_model(**model_args)
     else:
         raise ValueError('Model %s unknown' % name)

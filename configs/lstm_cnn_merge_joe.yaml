@@ -3,8 +3,8 @@ output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
     name: lstm_cnn
-    input_filename: /global/homes/a/abbatej/final_data/
-    output_dirname: /global/cscratch1/sd/abbatej/data/
+    input_filename: /global/cscratch1/sd/abbatej/small_data/final_data
+    output_dirname: /global/cscratch1/sd/abbatej/small_data/
     preprocess: False
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
@@ -12,8 +12,8 @@ data:
 
     n_components: None
     avg_window: 1
-    lookback: 10
-    delay: 5
+    lookback: 5
+    delay: 4
     train_frac: .7
     val_frac: .2
 

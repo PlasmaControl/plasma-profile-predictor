@@ -1,0 +1,39 @@
+description: 'TREND_PLUS_ACTUATORS'
+output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
+
+data:
+    name: trend_plus_actuators
+    input_filename: /global/cscratch1/sd/abbatej/small_data/final_data
+    output_dirname: /global/cscratch1/sd/abbatej/small_data/
+    preprocess: False
+    train_frac: .7
+    val_frac: .2
+
+data_and_model:
+    sigs_0d: ['curr','pinj']
+    sigs_1d: ['thomson_temp','thomson_dens']
+    sigs_predict: ['temp']
+
+    lookback: 5
+    delay: 4
+
+model:
+    name: trend_plus_actuators
+    rho_length_out: 65
+
+    dense_0d_size: 10
+    dense_0d_activation: 'relu'
+
+    rnn_type: 'LSTM'
+    rnn_size: 10
+    rnn_activation: 'relu'
+
+optimizer:
+    name: Adam
+    lr: 0.001
+
+training:
+    batch_size: 128
+    n_epochs: 1
+    loss: 'mean_squared_error'
+    metrics: [mae]

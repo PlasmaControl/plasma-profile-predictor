@@ -92,17 +92,13 @@ def main():
                                         **config['data'])
 
     # Build the model
-    if (type(config['data']['n_components']) is int):
-        rho_length_in = config['data']['n_components']
-    else:
-        rho_length_in = config['model']['rho_length_out']
+    # if (type(config['data']['n_components']) is int):
+    #     rho_length_in = config['data']['n_components']
+    # else:
+    rho_length_in = config['model']['rho_length_out']
 
     model = get_model(rho_length_in=rho_length_in, 
-                      num_sigs_0d=len(config['data']['sigs_0d']),
-                      num_sigs_1d=len(config['data']['sigs_1d']),
-                      num_sigs_predict=len(config['data']['sigs_predict']),
-                      lookback=config['data']['lookback'],
-                      delay=config['data']['delay'],
+                      **config['data_and_model'],
                       **config['model'])
     # Configure optimizer
     opt = get_optimizer(n_ranks=n_ranks, distributed=args.distributed,
