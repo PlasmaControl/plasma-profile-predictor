@@ -89,6 +89,7 @@ def main():
 
     # Load the data
     train_gen, valid_gen = get_datasets(batch_size=train_config['batch_size'],
+                                        **config['data_and_model'],
                                         **config['data'])
 
     # Build the model

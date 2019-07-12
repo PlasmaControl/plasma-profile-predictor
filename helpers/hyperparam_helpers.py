@@ -23,13 +23,8 @@ def make_folder_contents(input_conf, input_script, output_dir, changes_array):
     driver=os.path.join(output_dir, 'driver.sh')
     with open(input_script, 'r') as f:
         script = f.read()
+
     with open(driver, 'w') as f:
         script=re.sub('config=.*','config='+conf, script)
         script=re.sub('#SBATCH -o.*', '#SBATCH -o {}'.format(os.path.join(output_dir,'log.out')), script)
         f.write(script)
-
-
-#output_dir=os.path.join('/global/cscratch1/sd/abbatej/autoruns',subfolder,new_dirname)
-#make_new_conf(input_conf, input_script, output_dir, changes_array)
-
-#os.system('sbatch '+os.path.join(output_dir,'driver.sh'))

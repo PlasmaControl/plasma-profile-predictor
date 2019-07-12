@@ -2,20 +2,22 @@ description: 'LSTM_CNN_MERGE'
 output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
-    name: lstm_cnn
+    name: trend_plus_actuators
     input_filename: /global/cscratch1/sd/abbatej/small_data/final_data
     output_dirname: /global/cscratch1/sd/abbatej/small_data/
     preprocess: False
+
+    train_frac: .7
+    val_frac: .2
+    separated: False
+
+data_and_model:
     sigs_0d: ['curr','pinj']
     sigs_1d: ['thomson_temp','thomson_dens']
     sigs_predict: ['temp']
 
-    n_components: None
-    avg_window: 1
     lookback: 5
     delay: 4
-    train_frac: .7
-    val_frac: .2
 
 model:
     name: lstm_cnn_merge
@@ -47,6 +49,6 @@ optimizer:
 
 training:
     batch_size: 512
-    n_epochs: 50
+    n_epochs: 1
     loss: 'mean_squared_error'
     metrics: [mae]

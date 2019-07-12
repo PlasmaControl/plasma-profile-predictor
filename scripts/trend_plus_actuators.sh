@@ -3,7 +3,7 @@
 #SBATCH -C knl
 #SBATCH -N 4
 #SBATCH -q regular
-#SBATCH -t 1:00:00
+#SBATCH -t 3:00:00
 #SBATCH -o log_no_preprocess.out
 #SBATCH -A m3194
 

@@ -3,18 +3,18 @@ output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/abbatej/small_data/final_data
-    output_dirname: /global/cscratch1/sd/abbatej/small_data/
-    preprocess: False
+    input_filename: /global/cscratch1/sd/abbatej/data_50ms/final_data
+    output_dirname: /global/cscratch1/sd/abbatej/data_50ms/
+    preprocess: True
     train_frac: .7
     val_frac: .2
 
 data_and_model:
     sigs_0d: ['curr','pinj']
-    sigs_1d: ['thomson_temp','thomson_dens']
+    sigs_1d: ['thomson_temp']
     sigs_predict: ['temp']
 
-    lookback: 5
+    lookback: 7
     delay: 4
 
 model:
@@ -27,13 +27,18 @@ model:
     rnn_type: 'LSTM'
     rnn_size: 10
     rnn_activation: 'relu'
+    num_rnn_layers: 5
+
+    num_final_layers: 5
+    dense_final_size: 10
+    dense_final_activation: 'relu'
 
 optimizer:
     name: Adam
     lr: 0.001
 
 training:
-    batch_size: 128
-    n_epochs: 1
+    batch_size: 256
+    n_epochs: 50
     loss: 'mean_squared_error'
     metrics: [mae]

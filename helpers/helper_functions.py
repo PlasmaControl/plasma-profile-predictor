@@ -19,8 +19,11 @@ def preprocess_data(input_filename, output_dirname,
                     noised_signal_complete = None, sigma_complete = 1):
     
     # Gaussian normalization, return 0 if std is 0
-    def normalize(obj, mean, std):
-        a=obj-mean
+    def normalize(obj, mean, std, maxs, mins):
+        if True: 
+            a=obj-mins
+        else:
+            a=obj-mean
         b=std
         return np.divide(a, b, out=np.zeros_like(a), where=b!=0)
     
@@ -70,13 +73,18 @@ def preprocess_data(input_filename, output_dirname,
 
     means={}
     stds={}
+    mins={}
+    maxs={}
+
     for sig in sigs:
         means[sig]=np.mean(data_all_times[sig][indices['train']],axis=0)
         stds[sig]=np.std(data_all_times[sig][indices['train']],axis=0)
+        mins[sig]=np.amin(data_all_times[sig][indices['train']],axis=0)
+        maxs[sig]=np.amax(data_all_times[sig][indices['train']],axis=0)
 
     data_all_times_normed={}
     for sig in sigs:
-        data_all_times_normed[sig]=normalize(data_all_times[sig],means[sig],stds[sig])
+        data_all_times_normed[sig]=normalize(data_all_times[sig],means[sig],stds[sig],maxs[sig],mins[sig])
 
     target={}
     input_data={}
@@ -109,7 +117,7 @@ def preprocess_data(input_filename, output_dirname,
         else:
             final_input_1d[:,-delay:,:]=pad_1d_to
             input_data[subset]=np.concatenate([final_input_0d,final_input_1d],axis=2)            
-        import pdb; pdb.set_trace()
+
     if save_data:
         for subset in subsets:
             save_obj(data_all_times['time'][indices[subset]], os.path.join(output_dirname,'{}_time'.format(subset)))
@@ -118,6 +126,8 @@ def preprocess_data(input_filename, output_dirname,
             save_obj(input_data[subset],os.path.join(output_dirname,'{}_data'.format(subset)))
         save_obj(means,os.path.join(output_dirname,'means'))
         save_obj(stds,os.path.join(output_dirname,'stds'))
+        save_obj(means,os.path.join(output_dirname,'mins'))
+        save_obj(means,os.path.join(output_dirname,'maxs'))
 
     else:
         return {'train_data': input_data['train'],

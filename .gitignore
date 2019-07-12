@@ -9,6 +9,7 @@ notebooks/core*
 out.log
 history.npz
 data/core*
+core*
 *test*
 *.h5
 *.pb

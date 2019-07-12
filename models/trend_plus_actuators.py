@@ -3,8 +3,9 @@ from keras import layers
 from keras.utils import plot_model
 
 def build_model(sigs_1d, sigs_0d, sigs_predict, rho_length_in, rho_length_out, lookback, delay,
-                rnn_type, rnn_size, rnn_activation, 
-                dense_0d_size, dense_0d_activation):
+                rnn_type, rnn_size, rnn_activation, num_rnn_layers,
+                dense_0d_size, dense_0d_activation,
+                dense_final_size, dense_final_activation, num_final_layers):
 
     if (rnn_type=='LSTM'):
         rnn_layer = layers.LSTM
@@ -20,11 +21,17 @@ def build_model(sigs_1d, sigs_0d, sigs_predict, rho_length_in, rho_length_out, l
     compressed_0d=layers.Dense(dense_0d_size)(permuted_0d)
     final_input_0d = layers.Flatten()(compressed_0d)
 
-    trend_1d=rnn_layer(rnn_size, activation=rnn_activation)(input_1d)
+    final_input_1d=input_1d
+    for i in range(num_rnn_layers-1):
+        final_input_1d=rnn_layer(rnn_size, activation=rnn_activation, return_sequences=True)(final_input_1d)
+    final_input_1d=rnn_layer(rnn_size, activation=rnn_activation)(final_input_1d)
 
-    concat=layers.Concatenate()([final_input_0d, trend_1d])
+    output=layers.Concatenate()([final_input_0d, final_input_1d])
 
-    output=layers.Dense(rho_length_out)(concat)
+    for i in range(num_final_layers):
+        output=layers.Dense(dense_final_size, activation=dense_final_activation)(output)
+
+    output=layers.Dense(rho_length_out*len(sigs_predict))(output)
 
     model = models.Model(inputs=[input_0d,input_1d], outputs=output)
 

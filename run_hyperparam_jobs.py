@@ -1,65 +1,32 @@
-
 from helpers.hyperparam_helpers import make_folder_contents
 import numpy as np
 import os
 
 import yaml
-input_conf='configs/lstm_cnn_merge.yaml'
-input_script='scripts/lstm_cnn_merge.sh'
+input_conf='configs/trend_plus_actuators.yaml'
+input_script='scripts/trend_plus_actuators.sh'
 
+subfolder='trend_plus_actuators_min_normalized'
 
-subfolder='different_padding'
+lookback_=np.arange(5,10)
+delay_=np.arange(2,7)
+rnn_size_=np.arange(10,80)
+dense_final_size_=np.arange(10,80)
+num_final_layers_=np.arange(1,4)
+num_rnn_layers_=np.arange(1,4)
 
-#all_changes = [(x,y,z) for x in [1,2,4] for y in ['linear','relu'] for z in ['linear','relu']]
+def choose_one(arr):
+    return int(np.random.choice(arr))
 
+for i in range(20):
+    new_dirname = str(i)
+    changes_array = [['data_and_model','lookback', choose_one(lookback_)],
+                     ['data_and_model','delay',choose_one(delay_)],
+                     ['model', 'rnn_size', choose_one(rnn_size_)],
+                     ['model', 'dense_final_size', choose_one(dense_final_size_)],
+                     ['model', 'num_final_layers', choose_one(num_final_layers_)],
+                     ['model', 'num_rnn_layers', choose_one(num_rnn_layers_)]]
 
-for pad_1d_to in [-100, -200]:
-    for num_final_layers in [0,2]:
-        for lookback in [3, 4]:
-            delay = 6
-#             lookback = 3
-
-            n_components = None
-
-            dense_pre_layers = 2
-            dense_pre_size = 30
-            rnn_size = 30
-
-    #         num_final_layers = 2
-
-            # if len(sigs)>0:
-            #     sig_name=sigs[-1]
-            # else:
-            #     sig_name='None'
-
-            new_dirname = 'ncomponents_{}_lookback_{}_prelayers_{}_size_{}_rnnsize_{}_delay_{}_numfinallayers_{}_pad1dto_{}'.format(n_components,
-                                                                                                            lookback, 
-                                                                                                            dense_pre_layers,
-                                                                                                            dense_pre_size,
-                                                                                                            rnn_size, delay, num_final_layers, pad_1d_to)
-
-
-            changes_array = [['data','lookback', lookback],
-                                            ['model','num_pre_layers',dense_pre_layers],
-                                            ['model','dense_pre_size',dense_pre_size],
-                                            ['model','rnn_size',rnn_size],
-                                            ['data','n_components',n_components],
-
-                                            ['data', 'delay', delay],
-                                            ['data', 'pad_1d_to', pad_1d_to],
-
-                                            ['model', 'num_final_layers', num_final_layers]]
-
-
-
-
-            # changes_array = [['model','num_final_layers',num_final_layers],
-            #                  ['model','dense_final_activation',dens_final_act],
-            #                  ['model','dense_final_size',dens_final_size]]
-
-
-
-
-            output_dir=os.path.join('/global/cscratch1/sd/al34/autoruns',subfolder,new_dirname)
-            make_folder_contents(input_conf, input_script, output_dir, changes_array)
-            os.system('sbatch {}'.format(os.path.join(output_dir,'driver.sh')))
+    output_dir=os.path.join('/global/cscratch1/sd/abbatej/autoruns',subfolder,new_dirname)
+    make_folder_contents(input_conf, input_script, output_dir, changes_array)
+    os.system('sbatch {}'.format(os.path.join(output_dir,'driver.sh')))
