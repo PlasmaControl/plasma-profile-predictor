@@ -20,7 +20,7 @@ def preprocess_data(input_filename, output_dirname,
     
     # Gaussian normalization, return 0 if std is 0
     def normalize(obj, mean, std, maxs, mins):
-        if True: 
+        if False: 
             a=obj-mins
         else:
             a=obj-mean
@@ -96,24 +96,25 @@ def preprocess_data(input_filename, output_dirname,
         target[subset]=np.concatenate([final_target[sig] for sig in sigs_predict],axis=1)
         
         final_input={}
-        
-        for sig in sigs_0d:
-            if separated:
-                final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(delay+1)],axis=1)
-            else:
-                final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,delay+1)],axis=1)
+        # only for if we want to append the 0d sigs to 1d sigs during the lookback steps (only applicable for separated)
+        final_input_appendage={}
 
-        for sig in sigs_1d:
-            if separated:
+        final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(delay+1)],axis=1)
+        for sig in sigs_0d:
+            final_input_appendage[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,1)],axis=1)
+                for sig in sigs_1d:
                 final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,1)],axis=1)
-            else: 
+        else:
+            for sig in sigs_0d:
+                final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,delay+1)],axis=1)
+            for sig in sigs_1d:
                 final_input[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,delay+1)],axis=1)
 
         final_input_0d=np.concatenate([final_input[sig][:,:,np.newaxis] for sig in sigs_0d],axis=2)
         final_input_1d=np.concatenate([final_input[sig] for sig in sigs_1d],axis=2)
 
         if separated:
-            input_data[subset]=[final_input_0d, final_input_1d] 
+            input_data[subset]=[final_input_0d, final_input_1d]
         else:
             final_input_1d[:,-delay:,:]=pad_1d_to
             input_data[subset]=np.concatenate([final_input_0d,final_input_1d],axis=2)            
