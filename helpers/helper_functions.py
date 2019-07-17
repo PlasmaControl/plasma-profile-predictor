@@ -15,7 +15,7 @@ def preprocess_data(input_filename, output_dirname,
                     lookback, delay=1, 
                     train_frac=.7, val_frac=.2,
                     separated=True, pad_1d_to=0,
-                    save_data=False, noised_signal = None, sigma = 0.5, 
+                    save_data=True, noised_signal = None, sigma = 0.5, 
                     noised_signal_complete = None, sigma_complete = 1):
     
     # Gaussian normalization, return 0 if std is 0
@@ -95,6 +95,8 @@ def preprocess_data(input_filename, output_dirname,
             final_target[sig]=data_all_times_normed[sig][indices[subset]+delay]-data_all_times_normed[sig][indices[subset]]
         target[subset]=np.concatenate([final_target[sig] for sig in sigs_predict],axis=1)
         
+        print("Target shape for {} data: {}".format(subset, target[subset].shape))
+        
 
         # alex's changes here
         pre_0d_dict = {}
@@ -112,11 +114,17 @@ def preprocess_data(input_filename, output_dirname,
         # might be better to store the individiual profiles in a dictionary so they can be called upon
         # individually if needed, inputting data into keras models as dictionaries can be worked out 
         # in the data generator 
-        pre_input_1d =np.concatenate([pre_1d_dict[sig][:,:,np.newaxis] for sig in sigs_1d],axis=2)
-
+#         pre_input_1d =np.concatenate([pre_1d_dict[sig][:,:,np.newaxis] for sig in sigs_1d],axis=2)
+        pre_input_1d = np.array([pre_1d_dict[sig] for sig in sigs_1d])
+    
         
 
         post_input_0d =np.concatenate([post_0d_dict[sig][:,:,np.newaxis] for sig in sigs_0d],axis=2)
+        
+        
+        print("Pre input 1d shape for {} data: {}".format(subset, pre_input_1d.shape))
+        print("Pre input 0d shape for {} data: {}".format(subset, pre_input_0d.shape))
+        print("Post input 0d shape for {} data: {}".format(subset, post_input_0d.shape))
 
         input_data[subset] = pre_input_0d, pre_input_1d, post_input_0d
         
