@@ -93,8 +93,8 @@ def preprocess_data(input_filename, output_dirname,
         final_target={}
         for sig in sigs_predict:
             final_target[sig]=data_all_times_normed[sig][indices[subset]+delay]-data_all_times_normed[sig][indices[subset]]
-        target[subset]=np.concatenate([final_target[sig] for sig in sigs_predict],axis=1)
-        
+        #target[subset]=np.concatenate([final_target[sig] for sig in sigs_predict],axis=1)
+        target[subset] = np.array([final_target[sig] for sig in sigs_predict])
         print("Target shape for {} data: {}".format(subset, target[subset].shape))
         
 
@@ -104,22 +104,17 @@ def preprocess_data(input_filename, output_dirname,
         pre_1d_dict = {}
         for sig in sigs_0d:
             pre_0d_dict[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,1)],axis=1)
-            post_0d_dict[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(0,delay+1)],axis=1)
+            post_0d_dict[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(1,delay+1)],axis=1)
         for sig in sigs_1d:
             pre_1d_dict[sig]=np.stack([data_all_times_normed[sig][indices[subset]+offset] for offset in range(-lookback,1)],axis=1)
 
         
-        pre_input_0d =np.concatenate([pre_0d_dict[sig][:,:,np.newaxis] for sig in sigs_0d],axis=2)
-        
-        # might be better to store the individiual profiles in a dictionary so they can be called upon
-        # individually if needed, inputting data into keras models as dictionaries can be worked out 
-        # in the data generator 
-#         pre_input_1d =np.concatenate([pre_1d_dict[sig][:,:,np.newaxis] for sig in sigs_1d],axis=2)
+        pre_input_0d = np.array([pre_0d_dict[sig] for sig in sigs_0d])
+
         pre_input_1d = np.array([pre_1d_dict[sig] for sig in sigs_1d])
     
-        
 
-        post_input_0d =np.concatenate([post_0d_dict[sig][:,:,np.newaxis] for sig in sigs_0d],axis=2)
+        post_input_0d = np.array([post_0d_dict[sig] for sig in sigs_0d])
         
         
         print("Pre input 1d shape for {} data: {}".format(subset, pre_input_1d.shape))

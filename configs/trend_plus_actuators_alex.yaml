@@ -4,14 +4,14 @@ output_dir: /global/homes/a/al34/plasma-profile-predictor/
 data:
     name: trend_plus_actuators
     input_filename: /global/cscratch1/sd/al34/data_50ms/half_final_data
-    output_dirname: /global/cscratch1/sd/al34/data_50ms/preprocessed_3split_in_press
+    output_dirname: /global/cscratch1/sd/al34/data_50ms/preprocessed_3split_pred_press
     preprocess: True
     train_frac: .7
     val_frac: .2
 
 data_and_model:
     sigs_0d: ['curr','pinj']
-    sigs_1d: ['press']
+    sigs_1d: ['press', 'temp']
     sigs_predict: ['press']
 
     lookback: 7

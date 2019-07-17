@@ -17,7 +17,7 @@ class RnnDataset(Sequence):
             self.target = data_package['{}_target'.format(train_or_val)]
 
     def __len__(self):
-        return int(len(self.target) / self.batch_size)
+        return int(len(self.target[1]) / self.batch_size)
 
     def __getitem__(self, idx):
         return self.__data_generation(idx)
