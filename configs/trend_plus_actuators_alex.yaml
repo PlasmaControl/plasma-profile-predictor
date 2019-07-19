@@ -3,22 +3,22 @@ output_dir: /global/homes/a/al34/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/al34/data_50ms/half_final_data
-    output_dirname: /global/cscratch1/sd/al34/data_50ms/preprocessed_3split_pred_press
-    preprocess: True
+    input_filename: /global/cscratch1/sd/al34/data_50ms/single_shot_repeated
+    output_dirname: /global/cscratch1/sd/al34/data_50ms/repeat_shots_model_check
+    preprocess: False
     train_frac: .7
     val_frac: .2
 
 data_and_model:
     sigs_0d: ['curr','pinj']
-    sigs_1d: ['press', 'temp']
-    sigs_predict: ['press']
+    sigs_1d: ['dens', 'temp', 'ffprime']
+    sigs_predict: ['dens']
 
-    lookback: 7
-    delay: 4
+    lookback: 4
+    delay: 2
 
 model:
-    name: trend_plus_actuators
+    name: joe_model
     rho_length_out: 65
 
     dense_0d_size: 10
@@ -38,7 +38,7 @@ optimizer:
     lr: 0.001
 
 training:
-    batch_size: 256
+    batch_size: 128
     n_epochs: 50
     loss: 'mean_squared_error'
     metrics: [mae]

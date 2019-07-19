@@ -94,8 +94,9 @@ def preprocess_data(input_filename, output_dirname,
         for sig in sigs_predict:
             final_target[sig]=data_all_times_normed[sig][indices[subset]+delay]-data_all_times_normed[sig][indices[subset]]
         #target[subset]=np.concatenate([final_target[sig] for sig in sigs_predict],axis=1)
-        target[subset] = np.array([final_target[sig] for sig in sigs_predict])
-        print("Target shape for {} data: {}".format(subset, target[subset].shape))
+        #target[subset] = np.array([final_target[sig] for sig in sigs_predict])
+        target[subset] = final_target
+        print("Sample Target shape for {} data: {}".format(subset, target[subset][sigs_predict[0]].shape))
         
 
         # alex's changes here
@@ -121,7 +122,7 @@ def preprocess_data(input_filename, output_dirname,
         print("Pre input 0d shape for {} data: {}".format(subset, pre_input_0d.shape))
         print("Post input 0d shape for {} data: {}".format(subset, post_input_0d.shape))
 
-        input_data[subset] = pre_input_0d, pre_input_1d, post_input_0d
+        input_data[subset] = {"previous_actuators": pre_0d_dict, "previous_profiles": pre_1d_dict, "future_actuators": post_0d_dict}
         
         ########################
             
@@ -152,6 +153,7 @@ def preprocess_data(input_filename, output_dirname,
         #     input_data[subset]=np.concatenate([final_input_0d,final_input_1d],axis=2)            
 
     if save_data:
+        print("Saving data to {}...".format(output_dirname))
         for subset in subsets:
             save_obj(data_all_times['time'][indices[subset]], os.path.join(output_dirname,'{}_time'.format(subset)))
             save_obj(data_all_times['shot'][indices[subset]], os.path.join(output_dirname,'{}_shot'.format(subset)))
