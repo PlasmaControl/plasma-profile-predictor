@@ -18,6 +18,8 @@ def preprocess_data(input_filename, output_dirname,
                     save_data=True, noised_signal = None, sigma = 0.5, 
                     noised_signal_complete = None, sigma_complete = 1):
     
+    print("Predicting: {}".format(sigs_predict[0]))
+    
     # Gaussian normalization, return 0 if std is 0
     def normalize(obj, mean, std, maxs, mins):
         if False: 
@@ -36,7 +38,8 @@ def preprocess_data(input_filename, output_dirname,
     data=load_obj(input_filename) #os.path.join(dirname,'final_data'))
 
     # extract all shots that are in the raw data so we can iterate over them
-    shots = sorted(data.keys())    
+    # shots = sorted(data.keys())    
+    shots = data.keys()
     sigs = list(np.unique(sigs_0d+sigs_1d+sigs_predict))
 
     # first get the indices that contain all the data we need
@@ -66,9 +69,16 @@ def preprocess_data(input_filename, output_dirname,
     def get_last_ind(arr,val):
         return np.searchsorted(arr,val,side='right') - delay
 
+    # for subset in subsets:
+    #     indices[subset]=[np.arange(get_first_ind(data_all_times['shot'],shot),get_last_ind(data_all_times['shot'],shot)+1) 
+    #                      for shot in subset_shots[subset]]
+    #     indices[subset]=np.concatenate(indices[subset])
+
+
     for subset in subsets:
-        indices[subset]=[np.arange(get_first_ind(data_all_times['shot'],shot),get_last_ind(data_all_times['shot'],shot)+1) 
-                         for shot in subset_shots[subset]]
+        # indices[subset]=[np.arange(get_first_ind(data_all_times['shot'],shot),get_last_ind(data_all_times['shot'],shot)+1)
+        #                  for shot in subset_shots[subset]]
+        indices[subset] = [np.where(shot == data_all_times['shot'])[0][lookback: -delay] for shot in subset_shots[subset]]
         indices[subset]=np.concatenate(indices[subset])
 
     means={}
@@ -76,11 +86,17 @@ def preprocess_data(input_filename, output_dirname,
     mins={}
     maxs={}
 
+    print("Normalizing the same across all rho points")
     for sig in sigs:
         means[sig]=np.mean(data_all_times[sig][indices['train']],axis=0)
         stds[sig]=np.std(data_all_times[sig][indices['train']],axis=0)
         mins[sig]=np.amin(data_all_times[sig][indices['train']],axis=0)
         maxs[sig]=np.amax(data_all_times[sig][indices['train']],axis=0)
+        means[sig]=np.mean(means[sig])
+        stds[sig]=np.mean(stds[sig])
+#         mins[sig]=np.amin(data_all_times[sig][indices['train']])
+#         maxs[sig]=np.amax(data_all_times[sig][indices['train']])
+
 
     data_all_times_normed={}
     for sig in sigs:
