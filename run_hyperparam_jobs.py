@@ -33,7 +33,7 @@ subfolder='data_50ms_trying_different_predictions'
     
     
 subfolder='data_50ms_trying_different_predictions'
-new_dirname = "predicting_dens_smaller_archi"
+new_dirname = "predicting_dens_all_normalized"
 changes_array = []
 
     
