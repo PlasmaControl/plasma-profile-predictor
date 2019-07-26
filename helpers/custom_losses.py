@@ -2,48 +2,120 @@ import keras.backend as K
 from helpers.normalization import denormalize_arr
 
 
-def denorm_mse_loss(param_dict):
-    """Denormed MSE loss
+def denorm_loss(param_dict, loss):
+    """Wrapper for denormed loss functions
 
     Denormalizes the signal before evaluating loss function, so that different 
     normalizations may be compared.
 
     Args:
-       param_dict (dict): Dictionary of normalization parameters for the signal.
+        param_dict: Dictionary of normalization parameters for the signal.
+        loss: Instance of keras loss function to be applied to denormed data.
 
     Returns:
-        lossfn: A loss function that takes in y_true and y_pred and returns 
+        denorm_loss: A loss function that takes in y_true and y_pred and returns 
             a scalar loss value
     """
-    def lossfn(y_true, y_pred):
-        denorm_y_true = K.variable(denormalize_arr(
-            y_true, param_dict), dtype='float32')
-        denorm_y_pred = K.variable(denormalize_arr(
-            y_pred, param_dict), dtype='float32')
-        return K.mean(K.square(denorm_y_pred - denorm_y_true), axis=-1)
-    return lossfn
+    method = param_dict['method']
+    eps = K.cast_to_floatx(K.epsilon())
+    for key, val in param_dict.items():
+        if type(val) in [int, float] or type(val).__module__ == 'numpy':
+            param_dict[key] = K.cast_to_floatx(val)
+    if method == 'StandardScaler':
+        def denorm_loss(y_true, y_pred):
+            denorm_pred = y_pred * \
+                K.maximum(param_dict['std'], eps) + param_dict['mean']
+            denorm_true = y_true * \
+                K.maximum(param_dict['std'], eps) + param_dict['mean']
+            return loss(denorm_true, denorm_pred)
+    elif method == 'MinMax':
+        def denorm_loss(y_true, y_pred):
+            denorm_pred = y_pred * \
+                K.maximum(
+                    (param_dict['armax']-param_dict['armin']), eps) + param_dict['armin']
+            denorm_true = y_true * \
+                K.maximum(
+                    (param_dict['armax']-param_dict['armin']), eps) + param_dict['armin']
+            return loss(denorm_true, denorm_pred)
+    elif method == 'MaxAbs':
+        def denorm_loss(y_true, y_pred):
+            denorm_pred = y_pred*K.maximum(param_dict['maxabs'], eps)
+            denorm_true = y_true*K.maximum(param_dict['maxabs'], eps)
+            return loss(denorm_true, denorm_pred)
+    elif method == 'RobustScaler':
+        def denorm_loss(y_true, y_pred):
+            denorm_pred = y_pred * \
+                K.maximum(param_dict['iqr'], eps) + param_dict['median']
+            denorm_true = y_true * \
+                K.maximum(param_dict['iqr'], eps) + param_dict['median']
+            return loss(denorm_true, denorm_pred)
+    elif method == 'PowerTransform':
+        lmbda = param_dict['lambda']
+        if len(lmbda) > 1:
+            raise NotImplementedError(
+                'still working power transform thats not uniform over a profile')
+        elif np.abs(lmbda) < eps:
+            def denorm_loss(y_true, y_pred):
+                denorm_true = y_true * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                denorm_pred = y_pred * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                true_posmask = K.cast(denorm_true >= 0, K.floatx)
+                true_negmask = K.cast(denorm_true < 0, K.floatx)
+                pred_posmask = K.cast(denorm_pred >= 0, K.floatx)
+                pred_negmask = K.cast(denorm_pred < 0, K.floatx)
+                denorm_true_pos = K.exp(denorm_true)-1
+                denorm_true_neg = 1 - K.pow(-(2 - lmbda) *
+                                            denorm_true + 1, 1 / (2 - lmbda))
+                denorm_pred_pos = K.exp(denorm_pred)-1
+                denorm_pred_neg = 1 - K.pow(-(2 - lmbda) *
+                                            denorm_pred + 1, 1 / (2 - lmbda))
+                denorm_true = true_posmask*denorm_true_pos + true_negmask*denorm_true_neg
+                denorm_pred = pred_posmask*denorm_pred_pos + pred_negmask*denorm_pred_neg
+                return loss(denorm_true, denorm_pred)
+        elif np.abs(lmbda-2) < eps:
+            def denorm_loss(y_true, y_pred):
+                denorm_true = y_true * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                denorm_pred = y_pred * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                true_posmask = K.cast(denorm_true >= 0, K.floatx)
+                true_negmask = K.cast(denorm_true < 0, K.floatx)
+                pred_posmask = K.cast(denorm_pred >= 0, K.floatx)
+                pred_negmask = K.cast(denorm_pred < 0, K.floatx)
+                denorm_true_pos = K.pow(denorm_true * lmbda + 1, 1 / lmbda) - 1
+                denorm_true_neg = 1 - K.exp(-denorm_true)
+                denorm_pred_pos = K.pow(denorm_pred * lmbda + 1, 1 / lmbda) - 1
+                denorm_pred_neg = 1 - K.exp(-denorm_pred)
+                denorm_true = true_posmask*denorm_true_pos + true_negmask*denorm_true_neg
+                denorm_pred = pred_posmask*denorm_pred_pos + pred_negmask*denorm_pred_neg
+                return loss(denorm_true, denorm_pred)
+        else:
+            def denorm_loss(y_true, y_pred):
+                denorm_true = y_true * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                denorm_pred = y_pred * \
+                    K.maximum(param_dict['std'], eps) + param_dict['mean']
+                true_posmask = K.cast(denorm_true >= 0, K.floatx)
+                true_negmask = K.cast(denorm_true < 0, K.floatx)
+                pred_posmask = K.cast(denorm_pred >= 0, K.floatx)
+                pred_negmask = K.cast(denorm_pred < 0, K.floatx)
+                denorm_true_pos = K.pow(denorm_true * lmbda + 1, 1 / lmbda) - 1
+                denorm_true_neg = 1 - K.pow(-(2 - lmbda) *
+                                            denorm_true + 1, 1 / (2 - lmbda))
+                denorm_pred_pos = K.pow(denorm_pred * lmbda + 1, 1 / lmbda) - 1
+                denorm_pred_neg = 1 - K.pow(-(2 - lmbda) *
+                                            denorm_pred + 1, 1 / (2 - lmbda))
+                denorm_true = true_posmask*denorm_true_pos + true_negmask*denorm_true_neg
+                denorm_pred = pred_posmask*denorm_pred_pos + pred_negmask*denorm_pred_neg
+                return loss(denorm_true, denorm_pred)
+    elif method is None or method == 'None':
+        def denorm_loss(y_true, y_pred):
+            return loss(y_true, y_pred)
+    else:
+        raise ValueError("Unknown normalization method")
 
-
-def denorm_mae_loss(param_dict):
-    """Denormed MAE loss
-
-    Denormalizes the signal before evaluating loss function, so that different 
-    normalizations may be compared.
-
-    Args:
-       param_dict (dict): Dictionary of normalization parameters for the signal.
-
-    Returns:
-        lossfn: A loss function that takes in y_true and y_pred and returns 
-            a scalar loss value
-    """
-    def lossfn(y_true, y_pred):
-        denorm_y_true = K.variable(denormalize_arr(
-            y_true, param_dict), dtype='float32')
-        denorm_y_pred = K.variable(denormalize_arr(
-            y_pred, param_dict), dtype='float32')
-        return K.mean(K.abs(denorm_y_pred - denorm_y_true), axis=-1)
-    return lossfn
+    return denorm_loss
 
 
 def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, predict_deltas):
@@ -60,21 +132,21 @@ def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, predict_deltas):
         predict_deltas (bool): Whether the model is predicting deltas or full profiles.
 
     Returns:
-        lossfn: A loss function that takes in y_true and y_pred and returns 
+        hinge_mse: A loss function that takes in y_true and y_pred and returns 
             a scalar loss value
     """
-    mse_weight_vector = K.variable(mse_weight_vector, dtype='float32')
-    hinge_weight = K.variable(hinge_weight, dtype='float32')
+    mse_weight_vector = K.constant(mse_weight_vector, dtype='float32')
+    hinge_weight = K.constant(hinge_weight, dtype='float32')
     # get the current input to the model for baseline comparison
     baseline = model.get_layer('input_' + sig).input[:, -1]
     if predict_deltas:
         # if predicting deltas, baseline is zero
         baseline = K.zeros_like(baseline)
 
-    def lossfn(y_true, y_pred):
+    def hinge_mse(y_true, y_pred):
         delta_true = y_true-baseline
         delta_pred = y_pred-baseline
         mse_loss = K.mean(K.square(y_pred-y_true)*mse_weight_vector, axis=-1)
-        hinge_loss = K.mean(K.maximum(-(delta_true * delta_pred), 0.), axis=-1)
+        hinge_loss = K.sum(K.maximum(-(delta_true * delta_pred), 0.), axis=-1)
         return mse_loss + hinge_weight*hinge_loss
-    return lossfn
+    return hinge_mse

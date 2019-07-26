@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import optimize
 from tqdm import tqdm
+import keras.backend as K
 
 
 def normalize_arr(data, method, uniform_over_profile=True):
@@ -10,8 +11,8 @@ def normalize_arr(data, method, uniform_over_profile=True):
         data: Numpy array. Array.shape[0] = samples
         method (str): One of `StandardScaler`, `MinMax`, `MaxAbs`,
             `RobustScaler`, `PowerTransform`.
-        uniform_over_profile (bool): 'True' uses the same normalization 
-            parameters over a whole profile, 'False' normalizes each spatial 
+        uniform_over_profile (bool): 'True' uses the same normalization
+            parameters over a whole profile, 'False' normalizes each spatial
             point separately.
 
     Returns:
@@ -85,13 +86,13 @@ def normalize_arr(data, method, uniform_over_profile=True):
             pos = x >= 0  # binary mask
 
             # when x >= 0
-            if abs(lmbda) < np.spacing(1.):
+            if abs(lmbda) < np.finfo(np.float32).eps:
                 out[pos] = np.log1p(x[pos])
             else:  # lmbda != 0
                 out[pos] = (np.power(x[pos] + 1, lmbda) - 1) / lmbda
 
             # when x < 0
-            if abs(lmbda - 2) > np.spacing(1.):
+            if abs(lmbda - 2) > np.finfo(np.float32).eps:
                 out[~pos] = - \
                     (np.power(-x[~pos] + 1, 2 - lmbda) - 1) / (2 - lmbda)
             else:  # lmbda == 2
@@ -150,12 +151,12 @@ def normalize(data, method, uniform_over_profile=True):
 
     Args:
         data: Numpy array or dictionary of numpy arrays. If a dictionary, all
-            arrays are normalized using the same method, but each array with 
+            arrays are normalized using the same method, but each array with
             respect to itself. Array.shape[0] = batches
         method (str): One of `StandardScaler`, `MinMax`, `MaxAbs`,
             `RobustScaler`, `PowerTransform`.
-        uniform_over_profile (bool): 'True' uses the same normalization 
-            parameters over a whole profile, 'False' normalizes each spatial 
+        uniform_over_profile (bool): 'True' uses the same normalization
+            parameters over a whole profile, 'False' normalizes each spatial
             point separately.
 
     Returns:
@@ -178,26 +179,30 @@ def denormalize_arr(data, param_dict):
     """Denormalizes data after training
 
     Args:
-        data: Numpy array of data to denorm. 
+        data: Numpy array of data to denorm.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing. Eg, mean, stddev, method, etc.
 
     Returns:
         data: Numpy array of denormalized data.
     """
+    eps = np.finfo('float32').eps
+    for key, val in param_dict.items():
+        if K.is_tensor(val):
+            val = np.array(K.eval(val))
     if param_dict['method'] == 'StandardScaler':
-        return data*np.maximum(param_dict['std'], np.finfo(np.float32).eps) \
-            + param_dict['mean']
+        return data*np.maximum(param_dict['std'], eps) + param_dict['mean']
     elif param_dict['method'] == 'MinMax':
-        return data*np.maximum((param_dict['armax']-param_dict['armin']),
-                               np.finfo(np.float32).eps) + param_dict['armin']
+        return data*np.maximum((param_dict['armax']-param_dict['armin']), eps)
+        + param_dict['armin']
     elif param_dict['method'] == 'MaxAbs':
-        return data*np.maximum(param_dict['maxabs'], np.finfo(np.float32).eps)
+        return data*np.maximum(param_dict['maxabs'], eps)
     elif param_dict['method'] == 'RobustScaler':
-        return data*np.maximum(param_dict['iqr'], np.finfo(np.float32).eps) \
-            + param_dict['median']
+        return data*np.maximum(param_dict['iqr'], eps) + param_dict['median']
     elif param_dict['method'] == 'PowerTransform':
-        def yeo_johnson_inverse_transform(x, lmbda):
+        y = data*np.maximum(param_dict['std'], eps) + param_dict['mean']
+
+        def np_yeo_johnson_inverse_transform(x, lmbda):
             """Return inverse-transformed input x following Yeo-Johnson inverse
             transform with parameter lambda. From Scipy
             """
@@ -205,13 +210,13 @@ def denormalize_arr(data, param_dict):
             pos = x >= 0
 
             # when x >= 0
-            if abs(lmbda) < np.spacing(1.):
+            if np.abs(lmbda) < np.finfo(np.float32).eps:
                 x_inv[pos] = np.exp(x[pos]) - 1
             else:  # lmbda != 0
                 x_inv[pos] = np.power(x[pos] * lmbda + 1, 1 / lmbda) - 1
 
             # when x < 0
-            if abs(lmbda - 2) > np.spacing(1.):
+            if np.abs(lmbda - 2) > np.finfo(np.float32).eps:
                 x_inv[~pos] = 1 - np.power(-(2 - lmbda) * x[~pos] + 1,
                                            1 / (2 - lmbda))
             else:  # lmbda == 2
@@ -219,13 +224,11 @@ def denormalize_arr(data, param_dict):
 
             return x_inv
 
-        y = data*np.maximum(param_dict['std'], np.finfo(np.float32).eps) \
-            + param_dict['mean']
         if param_dict['lambda'].size > 1:
             for i, l in enumerate(param_dict['lambda']):
-                y[:, i] = yeo_johnson_inverse_transform(y[:, i], l)
+                y[:, i] = np_yeo_johnson_inverse_transform(y[:, i], l)
         else:
-            y = yeo_johnson_inverse_transform(
+            y = np_yeo_johnson_inverse_transform(
                 y.flatten(), param_dict['lambda']).reshape(y.shape)
         return y
     elif param_dict['method'] is None or param_dict['method'] == 'None':
@@ -238,7 +241,7 @@ def denormalize(data, param_dict):
     """Denormalizes data after training
 
     Args:
-        data: Numpy array or dictionary of numpy arrays. 
+        data: Numpy array or dictionary of numpy arrays.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing. Eg, mean, stddev, method, etc.
 
@@ -257,7 +260,7 @@ def renormalize(data, param_dict):
     """Normalizes data using already determined parameters
 
     Args:
-        data: Numpy array or dictionary of numpy arrays of raw data. 
+        data: Numpy array or dictionary of numpy arrays of raw data.
         param_dict (dict): Dictionary of parameters used during normalization,
             Eg, mean, stddev, method, etc.
 
@@ -298,13 +301,13 @@ def renormalize(data, param_dict):
                 pos = x >= 0  # binary mask
 
                 # when x >= 0
-                if abs(lmbda) < np.spacing(1.):
+                if abs(lmbda) < np.finfo(np.float32).eps:
                     out[pos] = np.log1p(x[pos])
                 else:  # lmbda != 0
                     out[pos] = (np.power(x[pos] + 1, lmbda) - 1) / lmbda
 
                 # when x < 0
-                if abs(lmbda - 2) > np.spacing(1.):
+                if abs(lmbda - 2) > np.finfo(np.float32).eps:
                     out[~pos] = - \
                         (np.power(-x[~pos] + 1, 2 - lmbda) - 1) / (2 - lmbda)
                 else:  # lmbda == 2
