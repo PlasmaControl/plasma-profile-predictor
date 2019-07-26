@@ -1,7 +1,7 @@
 import keras
 import numpy as np
 from helpers.data_generator import process_data, DataGenerator
-from helpers.custom_losses import denorm_mse_loss, hinge_mse_loss
+from helpers.custom_losses import denorm_loss, hinge_mse_loss
 from models.LSTMConv2D import get_model_LSTMConv2D
 
 available_sigs = ['curr', 'thomson_temp', 'pinj_30L', 'pinj_30R', 'pinj_15R', 'pinj', 'ffprime', 'tinj', 'pinj_21L', 'pinj_15L', 'pinj_33L', 'ech',
@@ -25,7 +25,7 @@ sample_step = 5
 uniform_normalization = True
 train_frac = 0.7
 val_frac = 0.2
-nshots = 3000
+nshots = 300
 mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
 hinge_weight = 50
 batch_size = 128
@@ -50,9 +50,9 @@ model = get_model_LSTMConv2D(input_profile_names, target_profile_names,
 optimizer = keras.optimizers.Nadam()
 loss = {'target_temp': hinge_mse_loss(
     'temp', model, hinge_weight, mse_weight_vector, predict_deltas)}
-loss = 'mse'
-metrics = {'target_temp': denorm_mse_loss(param_dict['temp'])}
-metrics = ['mae']
+
+metrics = {'target_temp': denorm_loss(param_dict['temp'], keras.metrics.MAE)}
+
 
 checkpt = keras.callbacks.ModelCheckpoint(checkpt_filepath, monitor='val_mean_absolute_error',
                                           verbose=0, save_best_only=True,
