@@ -138,6 +138,3 @@ def get_datasets(batch_size, input_filename, output_dirname, preprocess,
                             sigs_predict = sigs_predict)
 
     return train_iter, valid_iter
-
-
-

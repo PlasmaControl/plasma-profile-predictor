@@ -27,5 +27,8 @@ def get_model(name, **model_args):
     elif name == 'joe_model':
         from .joe_architecture import build_model
         return build_model(**model_args)
+    elif name == 'dif_lookbacks':
+        from .dif_lookbacks import build_model
+        return build_model(**model_args)
     else:
         raise ValueError('Model %s unknown' % name)

@@ -3,22 +3,25 @@ output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/abbatej/data_full_zipfit/final_data
-    output_dirname: /global/cscratch1/sd/abbatej/data_full_zipfit/
-    preprocess: True
+    input_filename: /global/cscratch1/sd/abbatej/data_with_na/final_data_small
+    output_dirname: /global/cscratch1/sd/abbatej/data_with_na/
+
     train_frac: .7
     val_frac: .2
 
 data_and_model:
-    sigs_0d: ['curr','pinj', 'ech']
-    sigs_1d: ['dens', 'temp']
-    sigs_predict: ['dens']
-
-    lookback: 4
-    delay: 2
+    sigs_0d: ['curr','pinj']
+    sigs_1d: ['thomson_temp', 'thomson_dens']
+    sigs_predict: ['temp']
+    lookbacks: 
+        curr: 10
+        pinj: 10
+        temp: 2
+        dens: 2
+    delay: 4
 
 model:
-    name: joe_model
+    name: dif_lookbacks
     rho_length_out: 65
 
     dense_0d_size: 10

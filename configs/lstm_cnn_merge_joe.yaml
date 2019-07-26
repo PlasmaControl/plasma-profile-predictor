@@ -3,20 +3,21 @@ output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/abbatej/small_data/final_data
-    output_dirname: /global/cscratch1/sd/abbatej/small_data/
-    preprocess: False
+    input_filename: /global/cscratch1/sd/abbatej/data_with_na/final_data_batch_0
+    output_dirname: /global/cscratch1/sd/abbatej/data_with_na/
 
     train_frac: .7
     val_frac: .2
-    separated: False
 
 data_and_model:
     sigs_0d: ['curr','pinj']
-    sigs_1d: ['thomson_temp','thomson_dens']
+    sigs_1d: ['thomson_temp', 'thomson_dens']
     sigs_predict: ['temp']
-
-    lookback: 5
+    lookbacks: 
+        curr: 10
+        pinj: 10
+	thomson_temp: 2
+	thomson_dens: 2
     delay: 4
 
 model:
