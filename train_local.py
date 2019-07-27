@@ -1,11 +1,15 @@
+# from data.lstm_cnn import get_datasets
 import keras
 import numpy as np
 from helpers.data_generator import process_data, DataGenerator
 from helpers.custom_losses import denorm_loss, hinge_mse_loss
 from models.LSTMConv2D import get_model_LSTMConv2D
-
-available_sigs = ['curr', 'thomson_temp', 'pinj_30L', 'pinj_30R', 'pinj_15R', 'pinj', 'ffprime', 'tinj', 'pinj_21L', 'pinj_15L', 'pinj_33L', 'ech',
-                  'pinj_33R', 'press', 'rotation', 'thomson_dens', 'pinj_21R', 'idens', 'temp', 'gasA', 'gasC', 'gasB', 'gasE', 'gasD', 'dens', 'time', 'itemp']
+avail_profiles = ['dens', 'ffprime', 'idens', 'itemp', 'press', 'rotation',
+                  'temp', 'thomson_dens', 'thomson_temp']
+avail_actuators = ['curr', 'ech', 'gasA', 'gasB', 'gasC', 'gasD' 'gasE', 'pinj',
+                   'pinj_15L', 'pinj_15R', 'pinj_21L', 'pinj_21R', 'pinj_30L',
+                   'pinj_30R', 'pinj_33L', 'pinj_33R', 'tinj']
+available_sigs = avail_profiles + avail_actuators + ['time']
 
 input_profile_names = ['temp', 'dens', 'rotation']
 target_profile_names = ['temp']
@@ -23,14 +27,19 @@ window_length = 1
 window_overlap = 0
 sample_step = 5
 uniform_normalization = True
-train_frac = 0.7
+train_frac = 0.8
 val_frac = 0.2
-nshots = 300
+nshots = 1000
 mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
 hinge_weight = 50
 batch_size = 128
-epochs = 30
+epochs = 50
 verbose = 1
+assert(all(elem in available_sigs for elem in sig_names))
+# train_generator, val_generator = get_datasets(batch_size, rawdata_path, '.', True,
+#                                               actuator_names, input_profile_names,
+#                                               target_profile_names, 8, 1, lookback,
+#                                               lookahead, train_frac, val_frac)
 
 
 traindata, valdata, param_dict = process_data(rawdata_path, sig_names, normalization_method,
@@ -38,9 +47,11 @@ traindata, valdata, param_dict = process_data(rawdata_path, sig_names, normaliza
                                               lookahead, sample_step, uniform_normalization,
                                               train_frac, val_frac, nshots)
 train_generator = DataGenerator(traindata, batch_size, input_profile_names,
-                                actuator_names, target_profile_names, lookback, predict_deltas)
+                                actuator_names, target_profile_names, lookback,
+                                lookback, lookahead, predict_deltas)
 val_generator = DataGenerator(valdata, batch_size, input_profile_names,
-                              actuator_names, target_profile_names, lookback, predict_deltas)
+                              actuator_names, target_profile_names, lookback,
+                              lookback, lookahead, predict_deltas)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
 model = get_model_LSTMConv2D(input_profile_names, target_profile_names,
@@ -50,9 +61,10 @@ model = get_model_LSTMConv2D(input_profile_names, target_profile_names,
 optimizer = keras.optimizers.Nadam()
 loss = {'target_temp': hinge_mse_loss(
     'temp', model, hinge_weight, mse_weight_vector, predict_deltas)}
-
-metrics = {'target_temp': denorm_loss(param_dict['temp'], keras.metrics.MAE)}
-
+metrics = {'target_temp': denorm_loss(
+    param_dict['temp'], keras.metrics.MAE, predict_deltas, 'temp', model)}
+#loss = ['mse']
+#metrics = ['mae']
 
 checkpt = keras.callbacks.ModelCheckpoint(checkpt_filepath, monitor='val_mean_absolute_error',
                                           verbose=0, save_best_only=True,

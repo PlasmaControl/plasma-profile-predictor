@@ -8,13 +8,30 @@ from helpers.normalization import normalize
 
 
 class DataGenerator(Sequence):
-    def __init__(self, data, batch_size, profile_inputs, actuators, targets, lookback, predict_deltas):
+    def __init__(self, data, batch_size, profile_inputs, actuator_inputs, targets,
+                 profile_lookback, actuator_lookback, lookahead, predict_deltas):
+        """Make a data generator for training or validation data
+
+        Args:
+            data: dict of data arrays to draw from.
+            batch_size (int): size of each batch.
+            profile_inputs (str): List of names of profile inputs, as strings.
+            actuator_inputs (str): List of names of actuator inputs, as strings.        
+            targets (str): List of names of profile targets, as strings.
+            profile_lookback (int): Number of previous steps for profile data.
+            actuator_lookback (int): Number of previous steps for actuator data.
+            lookahead (int): How many steps ahead to predict (prediction window)
+            predict_deltas (bool): Whether to predict changes or full profiles.
+        """
+
         self.batch_size = batch_size
         self.data = data
         self.profile_inputs = profile_inputs
-        self.actuators = actuators
+        self.actuator_inputs = actuator_inputs
         self.targets = targets
-        self.lookback = lookback
+        self.profile_lookback = profile_lookback
+        self.actuator_lookback = actuator_lookback
+        self.lookahead = lookahead
         self.predict_deltas = predict_deltas
 
     def __len__(self):
@@ -26,17 +43,19 @@ class DataGenerator(Sequence):
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 0: self.lookback]
-        for sig in self.actuators:
+                                                 0: self.profile_lookback]
+        for sig in self.actuator_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
-                                                 (idx+1)*self.batch_size]
+                                                 (idx+1)*self.batch_size,
+                                                 0:self.actuator_lookback+self.lookahead]
         for sig in self.targets:
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
-                                                   (idx+1)*self.batch_size, -1]
+                                                   (idx+1)*self.batch_size,
+                                                   self.profile_lookback+self.lookahead-1]
             if self.predict_deltas:
                 targ['target_' + sig] -= self.data[sig][idx * self.batch_size:
                                                         (idx+1)*self.batch_size,
-                                                        self.lookback]
+                                                        self.profile_lookback-1]
         return inp, targ
 
 
@@ -82,12 +101,12 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                 rawdata = pickle.load(f, encoding='latin1')
         else:
             raise IOError("No such path to data file")
-    # find which shots have all the signals needed
     if 'time' not in sig_names:
         # should be there for all shots, used as reference length
         sig_names += ['time']
     print('Signals: ' + ', '.join(sig_names))
     usabledata = []
+    # find which shots have all the signals needed
     for shot in rawdata.keys():
         if set(sig_names).issubset(set(rawdata[shot].keys())) \
            and rawdata[shot]['time'].size > (lookback+lookahead):
@@ -95,10 +114,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     usabledata = np.array(usabledata)
     del rawdata
     gc.collect()
+    nshots = np.minimum(nshots, len(usabledata))
     print('Number of useable shots: ', str(len(usabledata)))
+    print('Number of shots used: ', str(nshots))
     usabledata = usabledata[np.random.permutation(len(usabledata))]
-    if nshots is not None:
-        usabledata = usabledata[:np.minimum(nshots, len(usabledata))]
+    usabledata = usabledata[:nshots]
     t = 0
     for shot in usabledata:
         t += shot['time'].size
@@ -130,17 +150,16 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization)
     nsamples = alldata['time'].shape[0]
-    print('Total number of samples: ', str(nsamples))
     inds = np.random.permutation(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac)
                        :int(nsamples*(val_frac+train_frac))]
-    print('Number of training samples: ', str(traininds.size))
-    print('Number of validation samples: ', str(valinds.size))
-
     traindata = {}
     valdata = {}
     for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]
+    print('Total number of samples: ', str(nsamples))
+    print('Number of training samples: ', str(traininds.size))
+    print('Number of validation samples: ', str(valinds.size))
     return traindata, valdata, normalization_params
