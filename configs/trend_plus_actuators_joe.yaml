@@ -1,10 +1,10 @@
 description: 'TREND_PLUS_ACTUATORS'
-output_dir: /global/homes/a/abbatej/plasma-profile-predictor/
+output_dir: Users/jabbate/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/abbatej/data_with_na/final_data_small
-    output_dirname: /global/cscratch1/sd/abbatej/data_with_na/
+    input_filename: /Users/jabbate/data/final_data
+    output_dirname: /Users/jabbate/data/
 
     train_frac: .7
     val_frac: .2
@@ -16,8 +16,8 @@ data_and_model:
     lookbacks: 
         curr: 10
         pinj: 10
-        temp: 2
-        dens: 2
+        thomson_temp: 1
+        thomson_dens: 1
     delay: 4
 
 model:

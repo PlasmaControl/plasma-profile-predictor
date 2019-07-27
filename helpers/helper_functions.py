@@ -19,8 +19,6 @@ def preprocess_data(input_filename, output_dirname,
                     noised_signal = None, sigma = 0.5, 
                     noised_signal_complete = None, sigma_complete = 1):
     
-    print("Predicting: {}".format(sigs_predict[0]))
-    
     # Gaussian normalization, return 0 if std is 0
     def normalize(obj, mean, std):
         a=obj-mean
@@ -34,7 +32,6 @@ def preprocess_data(input_filename, output_dirname,
 
     # load in the raw data
     data=load_obj(input_filename) #os.path.join(dirname,'final_data'))
-
     # extract all shots that are in the raw data so we can iterate over them
     # shots = sorted(data.keys())    
     shots = data.keys()
@@ -107,17 +104,17 @@ def preprocess_data(input_filename, output_dirname,
         for sig in sigs_predict:
             final_target[sig]=data_all_times[sig][indices[subset]+delay]-data_all_times[sig][indices[subset]]
         target[subset] = final_target
-        print("Sample Target shape for {} data: {}".format(subset, target[subset][sigs_predict[0]].shape))
+#        print("Sample Target shape for {} data: {}".format(subset, target[subset][sigs_predict[0]].shape))
 
         # alex's changes here
         pre_0d_dict = {}
         post_0d_dict = {}
         pre_1d_dict = {}
         for sig in sigs_0d:
-            pre_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
+            pre_0d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
             post_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(1,delay+1)],axis=1)
         for sig in sigs_1d:
-            pre_1d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
+            pre_1d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
 
         
         pre_input_0d = np.array([pre_0d_dict[sig] for sig in sigs_0d])
@@ -127,9 +124,9 @@ def preprocess_data(input_filename, output_dirname,
         post_input_0d = np.array([post_0d_dict[sig] for sig in sigs_0d])
         
         
-        print("Pre input 1d shape for {} data: {}".format(subset, pre_input_1d.shape))
-        print("Pre input 0d shape for {} data: {}".format(subset, pre_input_0d.shape))
-        print("Post input 0d shape for {} data: {}".format(subset, post_input_0d.shape))
+#         print("Pre input 1d shape for {} data: {}".format(subset, pre_input_1d.shape))
+#         print("Pre input 0d shape for {} data: {}".format(subset, pre_input_0d.shape))
+#         print("Post input 0d shape for {} data: {}".format(subset, post_input_0d.shape))
 
         input_data[subset] = {"previous_actuators": pre_0d_dict, "previous_profiles": pre_1d_dict, "future_actuators": post_0d_dict}
             

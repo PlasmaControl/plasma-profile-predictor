@@ -7,7 +7,7 @@ from data import get_datasets
 from models import get_model
 
 import keras
-from utils.optimizers import get_optimizer
+#from utils.optimizers import get_optimizer
 from utils.callbacks import TimingCallback
 
 import numpy as np
@@ -38,11 +38,11 @@ rank=0
 n_ranks=1
 
 # Configure optimizer
-opt = get_optimizer(n_ranks=n_ranks, distributed=False,
-                    **config['optimizer'])
+# opt = get_optimizer(n_ranks=n_ranks, distributed=False,
+#                     **config['optimizer'])
 
 # Compile the model
-model.compile(loss=train_config['loss'], optimizer=opt,
+model.compile(loss=train_config['loss'], optimizer=config['optimizer']['name'],#opt
               metrics=train_config['metrics'])
 train_gen, valid_gen = get_datasets(batch_size=train_config['batch_size'],
                                     **config['data_and_model'],**config['data'])
