@@ -3,15 +3,18 @@ from helpers.helper_functions import load_obj, save_obj, preprocess_data
 from keras.utils import Sequence
 import os
 
+
 class RnnDataset(Sequence):
-    def __init__(self, batch_size, processed_data_dirname, train_or_val='train', 
+    def __init__(self, batch_size, processed_data_dirname, train_or_val='train',
                  shuffle='False', data_package=None):
         self.batch_size = batch_size
         self.shuffle = shuffle
 
         if data_package is None:
-            self.data = load_obj(os.path.join(processed_data_dirname,'{}_data'.format(train_or_val)))
-            self.target = load_obj(os.path.join(processed_data_dirname,'{}_target'.format(train_or_val)))
+            self.data = load_obj(os.path.join(
+                processed_data_dirname, '{}_data'.format(train_or_val)))
+            self.target = load_obj(os.path.join(
+                processed_data_dirname, '{}_target'.format(train_or_val)))
         else:
             self.data = data_package['{}_data'.format(train_or_val)]
             self.target = data_package['{}_target'.format(train_or_val)]
@@ -23,26 +26,29 @@ class RnnDataset(Sequence):
         return self.__data_generation(idx)
 
     def __data_generation(self, idx, step=1):
-        if (self.shuffle==True):
-            inds=np.random.choice(len(self.data), size=self.batch_size)
+        if (self.shuffle == True):
+            inds = np.random.choice(len(self.data), size=self.batch_size)
         else:
-            inds=list(range(idx * self.batch_size, (idx + 1) * self.batch_size))
-            
+            inds = list(range(idx * self.batch_size,
+                              (idx + 1) * self.batch_size))
+
         return self.data[inds], self.target[inds]
 
-def get_datasets(batch_size, input_filename, output_dirname, preprocess, sigs_0d, sigs_1d, sigs_predict,
-                 n_components, avg_window, lookback, delay, 
-                 train_frac, val_frac,
-                 noised_signal=None, pad_1d_to=0):
-    
+
+def get_datasets(batch_size, input_filename, output_dirname, preprocess,
+                 sigs_0d, sigs_1d, sigs_predict, n_components, avg_window,
+                 lookback, delay, train_frac, val_frac, noised_signal=None, pad_1d_to=0):
+
     if (preprocess):
-        data_package = preprocess_data(input_filname,
+        data_package = preprocess_data(input_filename,
                                        output_dirname,
                                        sigs_0d, sigs_1d, sigs_predict,
                                        lookbacks, delay,
                                        train_frac, val_frac)
-        print('baseline maes:\n'+str(np.mean(abs(data_package['val_target']),axis=0)))
-        print('baseline mae average:\n'+str(np.mean(abs(data_package['val_target']))))
+        print('baseline maes:\n' +
+              str(np.mean(abs(data_package['val_target']), axis=0)))
+        print('baseline mae average:\n' +
+              str(np.mean(abs(data_package['val_target']))))
 
     else:
         data_package = None
