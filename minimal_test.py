@@ -14,8 +14,8 @@ import numpy as np
 
 output_dir=os.path.join(os.getenv("HOME"),'plasma-profile-predictor')
 
-output_file_name='test_model_small.h5' 
-model_name='trend_plus_actuators.yaml'
+output_file_name='test_model.h5' 
+model_name='trend_plus_actuators_joe.yaml'
 
 def load_config(config_file):
     with open(config_file) as f:
