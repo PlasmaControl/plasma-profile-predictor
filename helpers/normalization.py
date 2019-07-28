@@ -81,23 +81,19 @@ def normalize_arr(data, method, uniform_over_profile=True):
             """Return transformed input x following Yeo-Johnson transform with
             parameter lambda.
             """
-
             out = np.zeros_like(x)
             pos = x >= 0  # binary mask
-
             # when x >= 0
             if abs(lmbda) < np.finfo(np.float32).eps:
                 out[pos] = np.log1p(x[pos])
             else:  # lmbda != 0
                 out[pos] = (np.power(x[pos] + 1, lmbda) - 1) / lmbda
-
             # when x < 0
             if abs(lmbda - 2) > np.finfo(np.float32).eps:
                 out[~pos] = - \
                     (np.power(-x[~pos] + 1, 2 - lmbda) - 1) / (2 - lmbda)
             else:  # lmbda == 2
                 out[~pos] = -np.log1p(-x[~pos])
-
             return out
 
         def yeo_johnson_optimize(x):
@@ -105,19 +101,15 @@ def normalize_arr(data, method, uniform_over_profile=True):
             transform by MLE, for observed data x.
             Like for Box-Cox, MLE is done via the brent optimizer. From Scipy
             """
-
             def _neg_log_likelihood(lmbda):
                 """Return the negative log likelihood of the observed data x as a
                 function of lambda. From Scipy"""
                 x_trans = yeo_johnson_transform(x, lmbda)
                 n_samples = x.shape[0]
-
                 loglike = -n_samples / 2 * np.log(x_trans.var())
                 loglike += (lmbda - 1) * (np.sign(x) *
                                           np.log1p(np.abs(x))).sum()
-
                 return -loglike
-
             # choosing bracket -2, 2 like for boxcox
             return optimize.brent(_neg_log_likelihood, brack=(-2, 2))
         if uniform_over_profile or data.ndim < 3:
@@ -146,7 +138,7 @@ def normalize_arr(data, method, uniform_over_profile=True):
         raise ValueError("Unknown normalization method")
 
 
-def normalize(data, method, uniform_over_profile=True):
+def normalize(data, method, uniform_over_profile=True, verbose=1):
     """Normalizes data before training
 
     Args:
@@ -158,15 +150,18 @@ def normalize(data, method, uniform_over_profile=True):
         uniform_over_profile (bool): 'True' uses the same normalization
             parameters over a whole profile, 'False' normalizes each spatial
             point separately.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Normalized data.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
+    verbose = bool(verbose)
     if type(data) is dict:
         param_dict = {}
-        for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True):
+        for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
+                        disable=not verbose):
             data[key], p = normalize_arr(
                 data[key], method, uniform_over_profile)
             param_dict[key] = p
@@ -208,22 +203,18 @@ def denormalize_arr(data, param_dict):
             """
             x_inv = np.zeros_like(x)
             pos = x >= 0
-
             # when x >= 0
             if np.abs(lmbda) < np.finfo(np.float32).eps:
                 x_inv[pos] = np.exp(x[pos]) - 1
             else:  # lmbda != 0
                 x_inv[pos] = np.power(x[pos] * lmbda + 1, 1 / lmbda) - 1
-
             # when x < 0
             if np.abs(lmbda - 2) > np.finfo(np.float32).eps:
                 x_inv[~pos] = 1 - np.power(-(2 - lmbda) * x[~pos] + 1,
                                            1 / (2 - lmbda))
             else:  # lmbda == 2
                 x_inv[~pos] = 1 - np.exp(-x[~pos])
-
             return x_inv
-
         if param_dict['lambda'].size > 1:
             for i, l in enumerate(param_dict['lambda']):
                 y[:, i] = np_yeo_johnson_inverse_transform(y[:, i], l)
@@ -237,38 +228,44 @@ def denormalize_arr(data, param_dict):
         raise ValueError("Unknown normalization method")
 
 
-def denormalize(data, param_dict):
+def denormalize(data, param_dict, verbose=1):
     """Denormalizes data after training
 
     Args:
         data: Numpy array or dictionary of numpy arrays.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing. Eg, mean, stddev, method, etc.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Denormalized data.
     """
+    verbose = bool(verbose)
     if type(data) is dict:
-        for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True):
+        for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True,
+                        disable=not verbose):
             data[key] = denormalize_arr(data[key], param_dict[key])
         return data
     else:
         return denormalize_arr(data, param_dict)
 
 
-def renormalize(data, param_dict):
+def renormalize(data, param_dict, verbose=1):
     """Normalizes data using already determined parameters
 
     Args:
         data: Numpy array or dictionary of numpy arrays of raw data.
         param_dict (dict): Dictionary of parameters used during normalization,
             Eg, mean, stddev, method, etc.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Normalized data.
     """
+    verbose = bool(verbose)
     if type(data) is dict:
-        for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True):
+        for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
+                        disable=not verbose):
             data[key] = renormalize(data[key], param_dict[key])
         return data
     else:
@@ -296,25 +293,20 @@ def renormalize(data, param_dict):
                 """Return transformed input x following Yeo-Johnson transform with
                 parameter lambda.
                 """
-
                 out = np.zeros_like(x)
                 pos = x >= 0  # binary mask
-
                 # when x >= 0
                 if abs(lmbda) < np.finfo(np.float32).eps:
                     out[pos] = np.log1p(x[pos])
                 else:  # lmbda != 0
                     out[pos] = (np.power(x[pos] + 1, lmbda) - 1) / lmbda
-
                 # when x < 0
                 if abs(lmbda - 2) > np.finfo(np.float32).eps:
                     out[~pos] = - \
                         (np.power(-x[~pos] + 1, 2 - lmbda) - 1) / (2 - lmbda)
                 else:  # lmbda == 2
                     out[~pos] = -np.log1p(-x[~pos])
-
                 return out
-
             y = data
             if param_dict['lambda'].size > 1:
                 for i, l in enumerate(param_dict['lambda']):

@@ -3,6 +3,33 @@ from helpers.normalization import denormalize_arr
 import numpy as np
 
 
+def percent_correct_sign(sig, model, predict_deltas):
+    """Wrapper for metric to measure how often the prediction has the correct sign
+
+    Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
+
+    Returns:
+        sign_accuracy: A loss function that takes in y_true and y_pred and returns 
+            the percentage of the time the prediction has the correct sign.
+    """
+    # baseline = predict current value
+    if predict_deltas:
+        # if predicting deltas, baseline is zero
+        baseline = K.cast_to_floatx(0)
+    else:
+        # get the current input to the model for baseline comparison
+        baseline = model.get_layer('input_' + sig).input[:, -1]
+
+    def sign_accuracy(y_true, y_pred):
+        delta_true = y_true-baseline
+        delta_pred = y_pred-baseline
+        return K.mean(K.maximum(K.sign(delta_pred*delta_true), 0), axis=-1)
+    return sign_accuracy
+
+
 def denorm_loss(param_dict, loss, predict_deltas=False, sig=None, model=None):
     """Wrapper for denormed loss functions
 

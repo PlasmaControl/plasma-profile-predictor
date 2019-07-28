@@ -3,6 +3,7 @@ import numpy as np
 import gc
 from pathlib import Path
 from keras.utils import Sequence
+from keras.callbacks import TensorBoard
 from tqdm import tqdm
 from helpers.normalization import normalize
 
@@ -49,19 +50,61 @@ class DataGenerator(Sequence):
                                                  (idx+1)*self.batch_size,
                                                  0:self.actuator_lookback+self.lookahead]
         for sig in self.targets:
+            if self.predict_deltas:
+                baseline = self.data[sig][idx * self.batch_size:(idx+1)*self.batch_size,
+                                          self.profile_lookback-1]
+            else:
+                baseline = 0
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
-                                                   self.profile_lookback+self.lookahead-1]
-            if self.predict_deltas:
-                targ['target_' + sig] -= self.data[sig][idx * self.batch_size:
-                                                        (idx+1)*self.batch_size,
-                                                        self.profile_lookback-1]
+                                                   self.profile_lookback+self.lookahead-1] - baseline
+
         return inp, targ
+
+
+class TensorBoardWrapper(TensorBoard):
+    """Sets the self.validation_data property for use with TensorBoard callback.
+    Basically just grabs all the data from the generator and puts it in one array.
+    """
+
+    def __init__(self, generator, **kwargs):
+        super(TensorBoardWrapper, self).__init__(**kwargs)
+        self.generator = generator
+        self.gen_steps = len(self.generator)
+        self.input_names = self.generator.profile_inputs + self.generator.actuator_inputs
+        self.target_names = self.generator.targets
+        self.batch_size = self.generator.batch_size
+        self.sample_weights = np.ones(self.gen_steps*self.batch_size)
+
+    def on_epoch_end(self, epoch, logs):
+        inputs = {}
+        targets = {}
+        for sig in self.input_names:
+            inputs['input_' + sig] = []
+        for sig in self.target_names:
+            targets['target_' + sig] = []
+        for s in range(self.gen_steps):
+            inp, targ = self.generator[s]
+            for sig in self.input_names:
+                inputs['input_' + sig].append(inp['input_' + sig])
+            for sig in self.target_names:
+                targets['target_' + sig].append(targ['target_' + sig])
+
+        for key in inputs.keys():
+            inputs[key] = np.concatenate(inputs[key], axis=0)
+        for key in targets.keys():
+            targets[key] = np.concatenate(targets[key], axis=0)
+
+        self.validation_data = [inputs['input_' + sig] for sig in self.input_names] + [
+            targets['target_' + sig] for sig in self.target_names] + [self.sample_weights]
+
+        return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
 
 
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookback=5, lookahead=3, sample_step=5,
-                 uniform_normalization=True, train_frac=0.7, val_frac=0.2, nshots=None):
+                 uniform_normalization=True, train_frac=0.7, val_frac=0.2,
+                 nshots=None, verbose=1):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -85,6 +128,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             point separately.
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
     Returns:
         traindata (dict): Dictionary of numpy arrays, one entry for each signal.
             Each array has shape [nsamples,lookback+lookahead,signal_shape]
@@ -93,8 +137,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
+    verbose = bool(verbose)
     sig_names = list(np.unique(sig_names))
     if type(rawdata) is not dict:
+        if verbose:
+            print('Loading')
         abs_path = Path(rawdata).resolve()
         if abs_path.exists():
             with open(abs_path, 'rb') as f:
@@ -104,7 +151,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if 'time' not in sig_names:
         # should be there for all shots, used as reference length
         sig_names += ['time']
-    print('Signals: ' + ', '.join(sig_names))
+    if verbose:
+        print('Signals: ' + ', '.join(sig_names))
     usabledata = []
     # find which shots have all the signals needed
     for shot in rawdata.keys():
@@ -115,14 +163,16 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     del rawdata
     gc.collect()
     nshots = np.minimum(nshots, len(usabledata))
-    print('Number of useable shots: ', str(len(usabledata)))
-    print('Number of shots used: ', str(nshots))
+    if verbose:
+        print('Number of useable shots: ', str(len(usabledata)))
+        print('Number of shots used: ', str(nshots))
     usabledata = usabledata[np.random.permutation(len(usabledata))]
     usabledata = usabledata[:nshots]
-    t = 0
-    for shot in usabledata:
-        t += shot['time'].size
-    print('Total number of timesteps: ', str(t))
+    if verbose:
+        t = 0
+        for shot in usabledata:
+            t += shot['time'].size
+        print('Total number of timesteps: ', str(t))
 
     def binavg(array, start):
         """averages over bins"""
@@ -131,7 +181,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     alldata = {}
     for sig in sig_names:
         alldata[sig] = []  # initalize empty lists
-    for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True):
+    for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
+                     disable=not verbose):
         for sig in sig_names:
             temp = shot[sig]
             nbins = int(temp.shape[0]/(window_length-window_overlap))
@@ -145,21 +196,23 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                 alldata[sig].append(shotdata[i-lookback:i+lookahead])
     del usabledata
     gc.collect()
-    for sig in tqdm(sig_names, desc='Stacking', ascii=True, dynamic_ncols=True):
+    for sig in tqdm(sig_names, desc='Stacking', ascii=True, dynamic_ncols=True,
+                    disable=not verbose):
         alldata[sig] = np.stack(alldata[sig])
     alldata, normalization_params = normalize(
-        alldata, normalization_method, uniform_normalization)
+        alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
     inds = np.random.permutation(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)
-                       :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
-    for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True):
+    for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True,
+                    disable=not verbose):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]
-    print('Total number of samples: ', str(nsamples))
-    print('Number of training samples: ', str(traininds.size))
-    print('Number of validation samples: ', str(valinds.size))
+    if verbose:
+        print('Total number of samples: ', str(nsamples))
+        print('Number of training samples: ', str(traininds.size))
+        print('Number of validation samples: ', str(valinds.size))
     return traindata, valdata, normalization_params

@@ -1,5 +1,4 @@
-from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D
-from keras.layers import Dot, Add, Multiply, Concatenate, Reshape, Permute
+from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D
 from keras.models import Model
 import numpy as np
 
@@ -42,7 +41,7 @@ def get_model_LSTMConv2D(input_profile_names, target_profile_names,
     merged = [[] for i in range(num_profiles)]
     for i in range(num_profiles):
         for j in range(num_profiles):
-            merged[i].append(Dense(units=10, activation='relu')(profiles[i]))
+            merged[i].append(Dense(units=10, activation='relu')(profiles[j]))
         merged[i] = Add()(merged[i])
         # shape = (5, 32, 10)
     actuator_inputs = []
@@ -102,4 +101,54 @@ def get_model_LSTMConv2D(input_profile_names, target_profile_names,
         input_profile_names) if sig in target_profile_names]
 
     model = Model(inputs=profile_inputs + actuator_inputs, outputs=outputs)
+    return model
+
+
+def get_model_simple_LSTM(input_profile_names, target_profile_names,
+                          actuator_names, lookback, lookahead, profile_length):
+    profile_inshape = (lookback, profile_length)
+    actuator_inshape = (lookback + lookahead,)
+    num_profiles = len(input_profile_names)
+    num_targets = len(target_profile_names)
+    num_actuators = len(actuator_names)
+
+    profile_inputs = []
+    for i in range(num_profiles):
+        profile_inputs.append(
+            Input(profile_inshape, name='input_' + input_profile_names[i]))
+    if num_profiles > 1:
+        profiles = Concatenate(axis=-1)(profile_inputs)
+    else:
+        profiles = profile_inputs[0]
+    profiles = ZeroPadding1D(padding=(0, lookahead))(profiles)
+    actuator_inputs = []
+    actuators = []
+    for i in range(num_actuators):
+        actuator_inputs.append(
+            Input(actuator_inshape, name='input_' + actuator_names[i]))
+        actuators.append(Reshape((lookback+lookahead, 1))(actuator_inputs[i]))
+    if num_actuators > 1:
+        actuators = Concatenate(axis=-1)(actuators)
+    else:
+        actuators = actuators[0]
+    full = Concatenate(axis=-1)([actuators, profiles])
+    full = Dense(units=int(num_targets*profile_length*.8),
+                 activation='relu')(full)
+    full = Dense(units=int(num_targets*profile_length*.6),
+                 activation='relu')(full)
+    full = Dense(units=int(num_targets*profile_length*.4),
+                 activation='relu')(full)
+    full = LSTM(units=int(num_targets*profile_length*.6), activation='relu',
+                recurrent_activation='hard_sigmoid')(full)
+    full = Dense(units=int(num_targets*profile_length*.8),
+                 activation='relu')(full)
+    outputs = Dense(units=num_targets*profile_length, activation=None)(full)
+    outputs = Reshape((num_targets*profile_length, 1))(outputs)
+    targets = []
+    for i in range(num_targets):
+        targets.append(Cropping1D(cropping=(i*profile_length,
+                                            (num_targets-i-1)*profile_length))(outputs))
+        targets[i] = Reshape((profile_length,),
+                             name='target_' + target_profile_names[i])(targets[i])
+    model = Model(inputs=profile_inputs+actuator_inputs, outputs=targets)
     return model
