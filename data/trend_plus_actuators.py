@@ -39,20 +39,15 @@ class RnnDataset(Sequence):
             inds=np.random.choice(len(self.target[self.sigs_predict[0]]), size=self.batch_size)
         else:
             inds=list(range(idx * self.batch_size, (idx + 1) * self.batch_size))
-        
 
         generated_train_dict = {}
         generated_target_dict = {}
-        
         
         # TRAINING WORK***************************************************************************************************
 
         # combine the actuators together    
         future_actuators = np.concatenate(([self.data["future_actuators"][sig][inds, :, np.newaxis] for sig in self.sigs_0d]), axis =2)
         previous_actuators = np.concatenate(([self.data["previous_actuators"][sig][inds, :, np.newaxis] for sig in self.sigs_0d]), axis =2)
-        
-        
-        
         
 #         # if you want to lump actuators together (Rory's models) and have profile sigs separate. 
 #         #########################layer names: ----1d sig names, "all_actuators"
@@ -75,13 +70,15 @@ class RnnDataset(Sequence):
         # ---"all_previous_sigs", "future_actuators"
         
         # combine all profiles
-        prev_profiles = np.concatenate(([self.data["previous_profiles"][sig][inds] for sig in self.sigs_1d]), axis = 2)
-        prev_profiles = np.concatenate((prev_profiles, previous_actuators), axis = 2)
+        prev_profiles = np.stack([self.data["previous_profiles"][sig][inds][:,-1,:] for sig in self.sigs_1d],axis=2)
+        #prev_profiles = np.concatenate((prev_profiles, previous_actuators), axis = 2)
         
         # read data into the output dictionary
-        generated_train_dict["all_previous_sigs"] = prev_profiles
+        generated_train_dict["previous_actuators"] = previous_actuators
+        generated_train_dict["current_profiles"] = prev_profiles
+#        generated_train_dict["all_previous_sigs"] = prev_profiles
         
-        generated_train_dict["future_actuators"] = future_actuators
+#        generated_train_dict["future_actuators"] = future_actuators
         
         ###################################################
         
@@ -93,22 +90,23 @@ class RnnDataset(Sequence):
            
 
         # TARGET WORK ####################################
-        for index, sig in enumerate(self.sigs_predict):
-            generated_target_dict["target_{}".format(sig)] = self.target[sig][inds]
-
+#        for index, sig in enumerate(self.sigs_predict):
+#            generated_target_dict["target_{}".format(sig)] = self.target[sig][inds]
+        generated_target_dict["processed_profiles"] = np.stack([self.target[sig][inds] for sig in self.sigs_predict],axis=2)
     
             
         return generated_train_dict, generated_target_dict
 
-def get_datasets(batch_size, input_filename, output_dirname, preprocess, 
+def get_datasets(batch_size, input_filename, output_dirname, 
                  sigs_0d, sigs_1d, sigs_predict,
-                 lookback, delay, 
-                 train_frac, val_frac):
+                 lookbacks, delay, 
+                 train_frac, val_frac,
+                 preprocess=True):
     
     if (preprocess): 
         data_package = preprocess_data(input_filename, output_dirname, 
                                        sigs_0d, sigs_1d, sigs_predict,
-                                       lookback, delay,
+                                       lookbacks, delay,
                                        train_frac, val_frac, 
                                        save_data=False)
         # data_package = preprocess_data(input_filname,
