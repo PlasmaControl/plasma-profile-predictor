@@ -5,7 +5,7 @@ from keras import backend as K
 import numpy as np
 from helpers.data_generator import process_data, DataGenerator, TensorBoardWrapper
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_correct_sign
-from models.LSTMConv2D import get_model_LSTMConv2D, get_model_simple_LSTM
+from models.LSTMConv2D import get_model_LSTMConv2D, get_model_simple_LSTM, get_model_linear_systems
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 
 
@@ -25,7 +25,7 @@ avail_actuators = ['curr', 'ech', 'gasA', 'gasB', 'gasC', 'gasD' 'gasE', 'pinj',
                    'pinj_30R', 'pinj_33L', 'pinj_33R', 'tinj']
 available_sigs = avail_profiles + avail_actuators + ['time']
 
-runname = 'big_model_predict_full_hinge_loss_std_norm'
+runname = 'linear_systems_model_predict_full_hinge_loss_nonuniform_std_norm'
 input_profile_names = ['temp', 'dens', 'rotation']
 target_profile_names = ['temp']
 actuator_names = ['pinj', 'curr']
@@ -34,7 +34,6 @@ profile_lookback = 8
 actuator_lookback = 8
 lookahead = 3
 profile_length = 65
-final_profile_channels = 10
 rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
 sig_names = input_profile_names + target_profile_names + actuator_names
@@ -42,14 +41,14 @@ normalization_method = 'StandardScaler'
 window_length = 1
 window_overlap = 0
 sample_step = 5
-uniform_normalization = True
+uniform_normalization = False
 train_frac = 0.8
 val_frac = 0.2
-nshots = 1000
+nshots = 10000
 mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
 hinge_weight = 50
 batch_size = 128
-epochs = 50
+epochs = 100
 verbose = 1
 assert(all(elem in available_sigs for elem in sig_names))
 
@@ -65,13 +64,16 @@ val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               actuator_lookback, lookahead, predict_deltas)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
-model = get_model_LSTMConv2D(input_profile_names, target_profile_names,
-                             actuator_names, profile_lookback, lookahead, profile_length,
-                             final_profile_channels)
+# model = get_model_LSTMConv2D(input_profile_names, target_profile_names,
+#                              actuator_names, profile_lookback, lookahead, profile_length)
 # model = get_model_simple_LSTM(input_profile_names, target_profile_names,
 #                               actuator_names, profile_lookback, lookahead, profile_length)
+model = get_model_linear_systems(input_profile_names, target_profile_names,
+                                 actuator_names, profile_lookback, lookahead, profile_length)
+
+
 model.summary()
-optimizer = keras.optimizers.Nadam()
+optimizer = keras.optimizers.Adadelta()
 loss = []
 loss.append(hinge_mse_loss(
     'temp', model, hinge_weight, mse_weight_vector, predict_deltas))
@@ -90,7 +92,7 @@ callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
                                    verbose=1, mode='auto', min_delta=0.001,
                                    cooldown=1, min_lr=0))
 callbacks.append(TensorBoardWrapper(val_generator, log_dir=checkpt_dir + 'tensorboard_logs/' + runname,
-                                    histogram_freq=1, batch_size=batch_size, write_graph=True))
+                                    histogram_freq=1, batch_size=batch_size, write_graph=True, write_grads=True))
 
 model.compile(optimizer, loss, metrics)
 history = model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,

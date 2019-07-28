@@ -4,8 +4,7 @@ import numpy as np
 
 
 def get_model_LSTMConv2D(input_profile_names, target_profile_names,
-                         actuator_names, lookback, lookahead, profile_length,
-                         final_profile_channels):
+                         actuator_names, lookback, lookahead, profile_length):
 
     profile_inshape = (lookback, profile_length)
     actuator_inshape = (lookback + lookahead,)
@@ -21,21 +20,21 @@ def get_model_LSTMConv2D(input_profile_names, target_profile_names,
         profiles.append(Reshape((lookback, profile_length, 1))
                         (profile_inputs[i]))
         profiles[i] = Dense(units=5, activation='relu')(profiles[i])
-        profiles[i] = Conv2D(filters=5, kernel_size=(1, 3), strides=(1, 1), padding='same',
+        profiles[i] = Conv2D(filters=5, kernel_size=(1, 5), strides=(1, 1), padding='same',
                              activation='relu')(profiles[i])
-        profiles[i] = Dense(units=7, activation='relu')(profiles[i])
-        profiles[i] = Conv2D(filters=10, kernel_size=(1, 5), strides=(1, 1), padding='same',
+        # profiles[i] = Dense(units=7, activation='relu')(profiles[i])
+        profiles[i] = Conv2D(filters=10, kernel_size=(1, 10), strides=(1, 1), padding='same',
                              activation='relu')(profiles[i])
-        profiles[i] = Dense(units=15, activation='relu')(profiles[i])
-        profiles[i] = Conv2D(filters=20, kernel_size=(1, 7), strides=(1, 1), padding='same',
-                             activation='relu')(profiles[i])
-        profiles[i] = Reshape((lookback, profile_length, 1, 20))(profiles[i])
-        profiles[i] = ConvLSTM2D(filters=final_profile_channels, kernel_size=(1, 5),
+        # profiles[i] = Dense(units=15, activation='relu')(profiles[i])
+        # profiles[i] = Conv2D(filters=20, kernel_size=(1, 7), strides=(1, 1), padding='same',
+        #                      activation='relu')(profiles[i])
+        profiles[i] = Reshape((lookback, profile_length, 1, 10))(profiles[i])
+        profiles[i] = ConvLSTM2D(filters=10, kernel_size=(1, 7),
                                  strides=(1, 1), padding='same', activation='relu',
                                  recurrent_activation='hard_sigmoid',
                                  return_sequences=True)(profiles[i])
         profiles[i] = Reshape(
-            (lookback, profile_length, final_profile_channels))(profiles[i])
+            (lookback, profile_length, 10))(profiles[i])
         # shape = (5, 32, 10)
 
     merged = [[] for i in range(num_profiles)]
@@ -62,21 +61,21 @@ def get_model_LSTMConv2D(input_profile_names, target_profile_names,
     # shape = (num_actuators, lookback+lookahead, 10)
     prof_act = []
     for i in range(num_profiles):
-        prof_act.append(Dense(units=final_profile_channels,
+        prof_act.append(Dense(units=10,
                               activation='relu')(actuators))
-        prof_act[i] = Conv2D(filters=final_profile_channels,
+        prof_act[i] = Conv2D(filters=10,
                              kernel_size=(num_actuators, lookahead+1), strides=(1, 1),
                              padding='valid', activation='relu')(prof_act[i])
         # shape = (1,5,10)
         prof_act[i] = Reshape(
-            (lookback, final_profile_channels, 1))(prof_act[i])
+            (lookback, 10, 1))(prof_act[i])
         # shape = (5,10,1)
         prof_act[i] = Dense(units=profile_length,
                             activation='relu')(prof_act[i])
         # shape = (5,10,32)
         prof_act[i] = Permute((1, 3, 2))(prof_act[i])
         # shape = (5,32,10)
-        prof_act[i] = Dense(units=final_profile_channels,
+        prof_act[i] = Dense(units=10,
                             activation='relu')(prof_act[i])
 
     for i in range(num_profiles):
@@ -148,6 +147,62 @@ def get_model_simple_LSTM(input_profile_names, target_profile_names,
     for i in range(num_targets):
         targets.append(Cropping1D(cropping=(i*profile_length,
                                             (num_targets-i-1)*profile_length))(outputs))
+        targets[i] = Reshape((profile_length,),
+                             name='target_' + target_profile_names[i])(targets[i])
+    model = Model(inputs=profile_inputs+actuator_inputs, outputs=targets)
+    return model
+
+def get_model_linear_systems(input_profile_names, target_profile_names,
+                             actuator_names, lookback, lookahead, profile_length):
+
+    profile_inshape = (lookback, profile_length)
+    actuator_inshape = (lookback + lookahead,)
+    num_profiles = len(input_profile_names)
+    num_targets = len(target_profile_names)
+    num_actuators = len(actuator_names)
+
+    profile_inputs = []
+    for i in range(num_profiles):
+        profile_inputs.append(
+            Input(profile_inshape, name='input_' + input_profile_names[i]))
+    if num_profiles > 1:
+        profiles = Concatenate(axis=-1)(profile_inputs)
+    else:
+        profiles = profile_inputs[0]
+
+    actuator_inputs = []
+    actuators = []
+    for i in range(num_actuators):
+        actuator_inputs.append(
+            Input(actuator_inshape, name='input_' + actuator_names[i]))
+        actuators.append(Reshape((lookback+lookahead, 1))(actuator_inputs[i]))
+    if num_actuators > 1:
+        actuators = Concatenate(axis=-1)(actuators)
+    else:
+        actuators = actuators[0]
+
+    profile_response = Dense(int(profile_length/2*num_profiles), activation='relu')(profiles)
+    profile_response = Dense(int(profile_length/2*num_profiles), activation='relu')(profile_response)
+    profile_response = LSTM(int(profile_length/2*num_profiles), activation='relu',
+                            recurrent_activation='hard_sigmoid',
+                            return_sequences=True)(profile_response)
+    profile_response = Dense(int(profile_length/2*num_profiles), activation='relu')(profile_response)
+    
+    actuator_response = Dense(lookback, activation='relu')(actuators)
+    actuator_response = Dense(lookback, activation='relu')(actuator_response)
+    actuator_response = LSTM(lookback, activation='relu', recurrent_activation='hard_sigmoid',
+                             return_sequences=True)(actuator_response)
+    total_response = Dot(axes=(2, 1))([actuator_response, profile_response])
+    total_response = LSTM(int(profile_length/2*num_targets), activation='relu',
+                          recurrent_activation='hard_sigmoid')(total_response)
+    total_response = Dense(int(profile_length*.75*num_targets), activation='relu')(total_response)
+    total_response = Dense(profile_length*num_targets)(total_response)
+    total_response = Reshape((num_targets*profile_length, 1))(total_response)
+
+    targets = []
+    for i in range(num_targets):
+        targets.append(Cropping1D(cropping=(i*profile_length,
+                                            (num_targets-i-1)*profile_length))(total_response))
         targets[i] = Reshape((profile_length,),
                              name='target_' + target_profile_names[i])(targets[i])
     model = Model(inputs=profile_inputs+actuator_inputs, outputs=targets)
