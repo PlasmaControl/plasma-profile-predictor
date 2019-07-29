@@ -30,15 +30,18 @@ def percent_correct_sign(sig, model, predict_deltas):
     return sign_accuracy
 
 
-def denorm_loss(param_dict, loss, predict_deltas=False, sig=None, model=None):
+def denorm_loss(sig, model, param_dict, loss, predict_deltas):
     """Wrapper for denormed loss functions
 
     Denormalizes the signal before evaluating loss function, so that different 
     normalizations may be compared.
 
     Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
         param_dict: Dictionary of normalization parameters for the signal.
         loss: Instance of keras loss function to be applied to denormed data.
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
 
     Returns:
         denorm_loss: A loss function that takes in y_true and y_pred and returns 

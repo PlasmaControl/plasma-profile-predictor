@@ -34,6 +34,8 @@ class DataGenerator(Sequence):
         self.actuator_lookback = actuator_lookback
         self.lookahead = lookahead
         self.predict_deltas = predict_deltas
+        self.cur_shotnum = np.zeros(self.batch_size)
+        self.cur_times = np.zeros(self.batch_size)
 
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
@@ -41,6 +43,10 @@ class DataGenerator(Sequence):
     def __getitem__(self, idx):
         inp = {}
         targ = {}
+        self.cur_shotnum = data['shotnum'][idx * self.batch_size:
+                                           (idx+1)*self.batch_size]
+        self.cur_times = data['time'][idx * self.batch_size:
+                                      (idx+1)*self.batch_size]
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -151,11 +157,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if 'time' not in sig_names:
         # should be there for all shots, used as reference length
         sig_names += ['time']
+    if 'shotnum' not in sig_names:
+        sig_names += ['shotnum']
     if verbose:
         print('Signals: ' + ', '.join(sig_names))
     usabledata = []
     # find which shots have all the signals needed
     for shot in rawdata.keys():
+        rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].size)*shot
         if set(sig_names).issubset(set(rawdata[shot].keys())) \
            and rawdata[shot]['time'].size > (lookback+lookahead):
             usabledata.append(rawdata[shot])
@@ -179,7 +188,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         return np.mean(array[start:start+window_length], axis=0)
 
     alldata = {}
-    for sig in sig_names:
+    for sig in sig_names + ['shotnum']:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose):
@@ -204,7 +213,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     nsamples = alldata['time'].shape[0]
     inds = np.random.permutation(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True,

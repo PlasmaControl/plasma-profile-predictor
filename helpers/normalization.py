@@ -162,9 +162,10 @@ def normalize(data, method, uniform_over_profile=True, verbose=1):
         param_dict = {}
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose):
-            data[key], p = normalize_arr(
-                data[key], method, uniform_over_profile)
-            param_dict[key] = p
+            if key not in ['time', 'shotnum']:
+                data[key], p = normalize_arr(
+                    data[key], method, uniform_over_profile)
+                param_dict[key] = p
         return data, param_dict
     else:
         return normalize_arr(data, method, uniform_over_profile)
@@ -244,7 +245,8 @@ def denormalize(data, param_dict, verbose=1):
     if type(data) is dict:
         for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose):
-            data[key] = denormalize_arr(data[key], param_dict[key])
+            if key not in ['time', 'shotnum']:
+                data[key] = denormalize_arr(data[key], param_dict[key])
         return data
     else:
         return denormalize_arr(data, param_dict)
@@ -266,7 +268,8 @@ def renormalize(data, param_dict, verbose=1):
     if type(data) is dict:
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose):
-            data[key] = renormalize(data[key], param_dict[key])
+            if key not in ['time', 'shotnum']:
+                data[key] = renormalize(data[key], param_dict[key])
         return data
     else:
         # first remove all inf/nan
