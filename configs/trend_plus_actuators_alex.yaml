@@ -1,44 +1,47 @@
-description: 'TREND_PLUS_ACTUATORS'
-output_dir: /global/homes/a/al34/plasma-profile-predictor/
+description: "TREND_PLUS_ACTUATORS"
+output_dir: /Users/alex/Desktop/ML/plasma-profile-predictor
 
 data:
-    name: trend_plus_actuators
-    input_filename: /global/cscratch1/sd/al34/data_50ms/half_final_data
-    output_dirname: /global/cscratch1/sd/al34/data_50ms/pred_dens_same_normalization
-    preprocess: False
-    train_frac: .7
-    val_frac: .2
+  name: trend_plus_actuators
+  input_filename: /Users/alex/Desktop/ML/small_final_data
+  output_dirname: /Users/alex/Desktop/ML/plasma-profile-predictor/data
+
+  train_frac: .7
+  val_frac: .2
 
 data_and_model:
-    sigs_0d: ['curr','pinj', 'ech']
-    sigs_1d: ['dens', 'temp']
-    sigs_predict: ['dens']
-
-    lookback: 4
-    delay: 2
+  sigs_0d: ["curr", "pinj"]
+  sigs_1d: ["thomson_temp", "thomson_dens"]
+  sigs_predict: ["temp"]
+  lookbacks:
+    curr: 10
+    pinj: 10
+    thomson_temp: 1
+    thomson_dens: 1
+  delay: 4
 
 model:
-    name: joe_model
-    rho_length_out: 65
+  name: dif_lookbacks
+  rho_length_out: 65
 
-    dense_0d_size: 10
-    dense_0d_activation: 'relu'
+  dense_0d_size: 10
+  dense_0d_activation: "relu"
 
-    rnn_type: 'LSTM'
-    rnn_size: 10
-    rnn_activation: 'relu'
-    num_rnn_layers: 5
+  rnn_type: "LSTM"
+  rnn_size: 10
+  rnn_activation: "relu"
+  num_rnn_layers: 5
 
-    num_final_layers: 5
-    dense_final_size: 10
-    dense_final_activation: 'relu'
+  num_final_layers: 5
+  dense_final_size: 10
+  dense_final_activation: "relu"
 
 optimizer:
-    name: Adam
-    lr: 0.001
+  name: Adam
+  lr: 0.001
 
 training:
-    batch_size: 256
-    n_epochs: 50
-    loss: 'mean_squared_error'
-    metrics: [mae]
+  batch_size: 256
+  n_epochs: 50
+  loss: "mean_squared_error"
+  metrics: [mae]
