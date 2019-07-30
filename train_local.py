@@ -41,7 +41,8 @@ predict_deltas = False
 profile_lookback = 1
 actuator_lookback = 8
 lookahead = 3
-profile_length = 65
+profile_downsample = 2
+profile_length = int(np.ceil(65/profile_downsample))
 std_activation = 'relu'
 rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
@@ -56,7 +57,7 @@ val_frac = 0.2
 nshots = 1000
 mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
 hinge_weight = 50
-batch_size = 64
+batch_size = 64*ngpu
 epochs = 100
 verbose = 1
 runname = 'model-' + model_type + \
@@ -82,11 +83,11 @@ traindata, valdata, param_dict = process_data(rawdata_path, sig_names,
 train_generator = DataGenerator(traindata, batch_size, input_profile_names,
                                 actuator_names, target_profile_names,
                                 profile_lookback, actuator_lookback, lookahead,
-                                predict_deltas)
+                                predict_deltas, profile_downsample)
 val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               actuator_names, target_profile_names,
                               profile_lookback, actuator_lookback, lookahead,
-                              predict_deltas)
+                              predict_deltas, profile_downsample)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
 model = models[model_type](input_profile_names, target_profile_names,

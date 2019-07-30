@@ -10,7 +10,8 @@ from helpers.normalization import normalize
 
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_inputs, actuator_inputs, targets,
-                 profile_lookback, actuator_lookback, lookahead, predict_deltas):
+                 profile_lookback, actuator_lookback, lookahead, predict_deltas,
+                 profile_downsample):
         """Make a data generator for training or validation data
 
         Args:
@@ -23,6 +24,7 @@ class DataGenerator(Sequence):
             actuator_lookback (int): Number of previous steps for actuator data.
             lookahead (int): How many steps ahead to predict (prediction window)
             predict_deltas (bool): Whether to predict changes or full profiles.
+            profile_downsample (int): How much to downsample the profile data.
         """
 
         self.batch_size = batch_size
@@ -34,6 +36,7 @@ class DataGenerator(Sequence):
         self.actuator_lookback = actuator_lookback
         self.lookahead = lookahead
         self.predict_deltas = predict_deltas
+        self.profile_downsample = profile_downsample
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
 
@@ -50,7 +53,11 @@ class DataGenerator(Sequence):
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 self.actuator_lookback-self.profile_lookback: max(self.profile_lookback, self.actuator_lookback)]
+                                                 self.actuator_lookback
+                                                 - self.profile_lookback:
+                                                 max(self.profile_lookback,
+                                                     self.actuator_lookback),
+                                                 ::self.profile_downsample]
         for sig in self.actuator_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -63,7 +70,10 @@ class DataGenerator(Sequence):
                 baseline = 0
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
-                                                   max(self.profile_lookback, self.actuator_lookback)+self.lookahead-1] - baseline
+                                                   max(self.profile_lookback,
+                                                       self.actuator_lookback)
+                                                   + self.lookahead-1,
+                                                   ::self.profile_downsample] - baseline
 
         return inp, targ
 
@@ -174,7 +184,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     nsamples = alldata['time'].shape[0]
     inds = np.random.permutation(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True,
