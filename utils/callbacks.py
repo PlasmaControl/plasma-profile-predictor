@@ -61,7 +61,7 @@ class TensorBoardWrapper(TensorBoard):
             targets[key] = np.concatenate(targets[key], axis=0)
 
         self.validation_data = [inputs['input_' + sig] for sig in self.input_names] + [
-            targets['target_' + sig] for sig in self.target_names] + [self.sample_weights]
+            targets['target_' + sig] for sig in self.target_names] + [self.sample_weights for _ in range(len(self.target_names))] 
 
         return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
 

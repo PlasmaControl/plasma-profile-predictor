@@ -4,7 +4,7 @@ import tensorflow as tf
 from keras import backend as K
 import numpy as np
 from helpers.data_generator import process_data, DataGenerator
-from helpers.custom_losses import denorm_loss, hinge_mse_loss
+from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
 from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
@@ -35,7 +35,7 @@ models = {'simple_lstm': get_model_simple_lstm,
 
 model_type = 'conv2d'
 input_profile_names = ['temp', 'dens', 'rotation', 'press', 'itemp', 'ffprime']
-target_profile_names = ['temp']
+target_profile_names = ['temp','dens','press']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
 predict_deltas = False
 profile_lookback = 1
@@ -50,14 +50,14 @@ sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
 window_overlap = 0
-sample_step = 4
+sample_step = 3
 uniform_normalization = True
 train_frac = 0.8
 val_frac = 0.2
-nshots = 1000
+nshots = 10000
 mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
 hinge_weight = 50
-batch_size = 64*ngpu
+batch_size = 128*ngpu
 epochs = 100
 verbose = 1
 runname = 'model-' + model_type + \
@@ -108,8 +108,7 @@ for sig in target_profile_names:
                                               keras.metrics.MAE, predict_deltas))
     metrics['target_'+sig].append(percent_correct_sign(sig, model,
                                                        predict_deltas))
-    metrics['target_'+sig].append(keras.metrics.MAE)
-    metrics['target_'+sig].append(baseline_MAE(sig, model, predict_deltas))
+    metrics['target_'+sig].append(percent_baseline_error(sig, model, predict_deltas))
 
 callbacks = []
 callbacks.append(ModelCheckpoint(checkpt_dir+runname+'.h5', monitor='val_loss',
@@ -126,7 +125,7 @@ callbacks.append(TensorBoardWrapper(val_generator, log_dir=checkpt_dir +
 
 model.compile(optimizer, loss, metrics)
 history = model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,
-                              epochs=epochs, verbose=verbose, callbacks=callbacks,
+                              epochs=epochs, verbose=2, callbacks=callbacks,
                               validation_data=val_generator, validation_steps=val_steps,
                               max_queue_size=10, workers=4, use_multiprocessing=False)
 
