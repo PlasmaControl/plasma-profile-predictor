@@ -17,26 +17,37 @@ def build_model(sigs_1d, sigs_0d, sigs_predict, rho_length_in, rho_length_out, l
     num_actuators = len(sigs_0d)
     num_sigs_1d = len(sigs_1d)
     num_sigs_predict = len(sigs_predict)
+
     previous_actuators=layers.Input(shape=(lookbacks[sigs_0d[0]]+1,num_actuators), name="previous_actuators")
+    future_actuators=layers.Input(shape=(delay,num_actuators),name="future_actuators")
+
     actuator_effect = rnn_layer(rho_length_in, activation=rnn_activation)(previous_actuators)
     actuator_effect = layers.Reshape(target_shape=(rho_length_in,1))(actuator_effect)
-    
-    current_profiles=layers.Input(shape=(rho_length_in,num_sigs_1d), name="current_profiles")
-    current_profiles_processed=layers.Concatenate()([current_profiles,actuator_effect])
 
-    current_profiles_processed=layers.Conv1D(filters=num_sigs_predict, kernel_size=20,
+    future_actuator_effect = rnn_layer(rho_length_in, activation=rnn_activation)(future_actuators)
+    future_actuator_effect = layers.Reshape(target_shape=(rho_length_in,1))(future_actuator_effect)
+    
+    current_profiles=layers.Input(shape=(rho_length_in,num_sigs_1d), name="previous_profiles")
+    #take out for the other version
+
+    current_profiles_processed=layers.Concatenate()([current_profiles,actuator_effect,future_actuator_effect])
+    current_profiles_processed=layers.Conv1D(filters=20, kernel_size=5,
                                              padding='same', activation='relu')(current_profiles_processed)
-    current_profiles_processed=layers.Conv1D(filters=num_sigs_predict, kernel_size=10,
+    current_profiles_processed=layers.Conv1D(filters=10, kernel_size=10,
                                              padding='same', activation='relu')(current_profiles_processed)
-    current_profiles_processed=layers.Conv1D(filters=num_sigs_predict, kernel_size=2,
-                                             padding='same', activation='relu', 
+    current_profiles_processed=layers.Conv1D(filters=1, kernel_size=20,
+                                             padding='same', activation='linear', 
                                              name='processed_profiles')(current_profiles_processed)
+    
+    
+    
+
 
 #     current_profiles,current_profiles_processed={},{}
 #     for sig in sigs_1d:
 #         current_profiles[sig]=layers.Input(shape=(rho_length_in,1),"current_profile_{}".format(sig))
 #         current_profiles_processed[sig]=layers.Conv1D(filters=3,kernel_size=4)(current_profiles[sig])
-    model=models.Model(inputs=[previous_actuators,current_profiles], 
+    model=models.Model(inputs=[previous_actuators,current_profiles,future_actuators], 
                        outputs=[current_profiles_processed])
 
 #    model=models.Model(inputs=[previous_actuators]+list(current_profiles.values()), 

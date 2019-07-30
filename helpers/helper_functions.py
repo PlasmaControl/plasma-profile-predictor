@@ -1,6 +1,12 @@
 import pickle
 import numpy as np
 import os
+import yaml
+
+def load_config(config_file):
+    with open(config_file) as f:
+        config = yaml.load(f)
+    return config
 
 def save_obj(obj, name):
     with open('{}.pkl'.format(name),'wb') as f:
@@ -42,7 +48,7 @@ def preprocess_data(input_filename, output_dirname,
     all_shots=[]
     for shot in shots:
        if set(sigs).issubset(data[shot].keys()):
-           if all([data[shot][sig].size!=0 for sig in sigs]):
+           if all([data[shot][sig].size!=0 and ~np.all(np.isnan(data[shot][sig])) for sig in sigs]):
                all_shots.append(shot)
 
     def get_non_nan_inds(arr):
@@ -111,11 +117,13 @@ def preprocess_data(input_filename, output_dirname,
         post_0d_dict = {}
         pre_1d_dict = {}
         for sig in sigs_0d:
-            pre_0d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
+            pre_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
             post_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(1,delay+1)],axis=1)
         for sig in sigs_1d:
-            pre_1d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
-
+            if lookbacks[sig]==0:
+                pre_1d_dict[sig]=data_all_times[sig][indices[subset]]
+            else:
+                pre_1d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
         
         pre_input_0d = np.array([pre_0d_dict[sig] for sig in sigs_0d])
 
@@ -139,8 +147,6 @@ def preprocess_data(input_filename, output_dirname,
             save_obj(input_data[subset],os.path.join(output_dirname,'{}_data'.format(subset)))
         save_obj(means,os.path.join(output_dirname,'means'))
         save_obj(stds,os.path.join(output_dirname,'stds'))
-        save_obj(means,os.path.join(output_dirname,'mins'))
-        save_obj(means,os.path.join(output_dirname,'maxs'))
 
     else:
         return {'train_data': input_data['train'],
