@@ -81,17 +81,18 @@ def get_model_conv2d(input_profile_names, target_profile_names,
         prof_act.append(Conv2D(filters=max_channels, kernel_size=(1, 15), strides=(1, 1),
                                padding='same', activation=std_activation)(merged))
         # shape = (1,length,max_channels)
-        prof_act[i] = Conv2D(filters=int(max_channels/2), kernel_size=(1, 15),
+        prof_act[i] = Conv2D(filters=int(max_channels/2), kernel_size=(1, 7),
                              strides=(1, 1), padding='same', activation=std_activation)(prof_act[i])
         prof_act[i] = Conv2D(filters=int(max_channels/4), kernel_size=(1, 10),
                              strides=(1, 1), padding='same', activation=std_activation)(prof_act[i])
-        prof_act[i] = Conv2D(filters=int(max_channels/8), kernel_size=(1, 7),
+        prof_act[i] = Conv2D(filters=int(max_channels/8), kernel_size=(1, 15),
                              strides=(1, 1), padding='same', activation=std_activation)(prof_act[i])
         prof_act[i] = Conv2D(filters=1, kernel_size=(1, 5), strides=(1, 1),
                              padding='same', activation=None)(prof_act[i])
         # shape = (1,length,1)
-        prof_act[i] = Reshape((profile_length,), name='target_' +
-                              target_profile_names[i])(prof_act[i])
+        prof_act[i] = Reshape((profile_length,))(prof_act[i])
+        prof_act[i] = Dense(units=profile_length, activation=None, name='target_' +
+                            target_profile_names[i])(prof_act[i])
     model = Model(inputs=profile_inputs + actuator_inputs, outputs=prof_act)
     return model
 

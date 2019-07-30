@@ -30,6 +30,31 @@ def percent_correct_sign(sig, model, predict_deltas):
     return sign_accuracy
 
 
+def baseline_MAE(sig, model, predict_deltas):
+    """Wrapper for metric to measure the accuracy of predicting baseline
+
+    Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
+
+    Returns:
+        BL_MAE: A loss function that takes in y_true and y_pred and returns 
+            the percentage error wrt to predicting baseline
+    """
+    # baseline = predict current value
+    if predict_deltas:
+        # if predicting deltas, baseline is zero
+        baseline = K.cast_to_floatx(0)
+    else:
+        # get the current input to the model for baseline comparison
+        baseline = model.get_layer('input_' + sig).input[:, -1]
+
+    def BL_MAE(y_true, y_pred):
+        return K.mean(K.abs(y_true-baseline), axis=-1)
+    return BL_MAE
+
+
 def denorm_loss(sig, model, param_dict, loss, predict_deltas):
     """Wrapper for denormed loss functions
 

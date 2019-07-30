@@ -43,14 +43,14 @@ class DataGenerator(Sequence):
     def __getitem__(self, idx):
         inp = {}
         targ = {}
-        self.cur_shotnum = data['shotnum'][idx * self.batch_size:
+        self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
+                                                (idx+1)*self.batch_size]
+        self.cur_times = self.data['time'][idx * self.batch_size:
                                            (idx+1)*self.batch_size]
-        self.cur_times = data['time'][idx * self.batch_size:
-                                      (idx+1)*self.batch_size]
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 0: self.profile_lookback]
+                                                 self.actuator_lookback-self.profile_lookback: max(self.profile_lookback, self.actuator_lookback)]
         for sig in self.actuator_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -58,53 +58,14 @@ class DataGenerator(Sequence):
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][idx * self.batch_size:(idx+1)*self.batch_size,
-                                          self.profile_lookback-1]
+                                          max(self.profile_lookback, self.actuator_lookback)-1]
             else:
                 baseline = 0
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
-                                                   self.profile_lookback+self.lookahead-1] - baseline
+                                                   max(self.profile_lookback, self.actuator_lookback)+self.lookahead-1] - baseline
 
         return inp, targ
-
-
-class TensorBoardWrapper(TensorBoard):
-    """Sets the self.validation_data property for use with TensorBoard callback.
-    Basically just grabs all the data from the generator and puts it in one array.
-    """
-
-    def __init__(self, generator, **kwargs):
-        super(TensorBoardWrapper, self).__init__(**kwargs)
-        self.generator = generator
-        self.gen_steps = len(self.generator)
-        self.input_names = self.generator.profile_inputs + self.generator.actuator_inputs
-        self.target_names = self.generator.targets
-        self.batch_size = self.generator.batch_size
-        self.sample_weights = np.ones(self.gen_steps*self.batch_size)
-
-    def on_epoch_end(self, epoch, logs):
-        inputs = {}
-        targets = {}
-        for sig in self.input_names:
-            inputs['input_' + sig] = []
-        for sig in self.target_names:
-            targets['target_' + sig] = []
-        for s in range(self.gen_steps):
-            inp, targ = self.generator[s]
-            for sig in self.input_names:
-                inputs['input_' + sig].append(inp['input_' + sig])
-            for sig in self.target_names:
-                targets['target_' + sig].append(targ['target_' + sig])
-
-        for key in inputs.keys():
-            inputs[key] = np.concatenate(inputs[key], axis=0)
-        for key in targets.keys():
-            targets[key] = np.concatenate(targets[key], axis=0)
-
-        self.validation_data = [inputs['input_' + sig] for sig in self.input_names] + [
-            targets['target_' + sig] for sig in self.target_names] + [self.sample_weights]
-
-        return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
 
 
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
@@ -164,7 +125,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     usabledata = []
     # find which shots have all the signals needed
     for shot in rawdata.keys():
-        rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].size)*shot
+        rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sig_names).issubset(set(rawdata[shot].keys())) \
            and rawdata[shot]['time'].size > (lookback+lookahead):
             usabledata.append(rawdata[shot])
@@ -188,7 +149,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         return np.mean(array[start:start+window_length], axis=0)
 
     alldata = {}
-    for sig in sig_names + ['shotnum']:
+    for sig in sig_names:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose):
