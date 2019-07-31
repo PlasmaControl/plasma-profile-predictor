@@ -3,26 +3,35 @@ output_dir: Users/jabbate/plasma-profile-predictor/
 
 data:
     name: trend_plus_actuators
-    input_filename: /Users/jabbate/data/final_data
+    input_filename: /Users/jabbate/data/final_data_medium
     output_dirname: /Users/jabbate/data/
 
     train_frac: .7
     val_frac: .2
 
+    stride: 2
+    preprocess: True
+
 data_and_model:
-    sigs_0d: ['curr','pinj']
-    sigs_1d: ['thomson_temp', 'thomson_dens']
+    sigs_0d: ['curr','pinj','gasA']
+    sigs_1d: ['thomson_temp', 'thomson_dens','press']
     sigs_predict: ['temp']
     lookbacks: 
         curr: 10
         pinj: 10
-        thomson_temp: 1
-        thomson_dens: 1
+        gasA: 10
+        ech: 10
+        thomson_temp: 0
+        thomson_dens: 0
+        temp: 0
+        dens: 0
+        press: 0
+        ffprime: 0
     delay: 4
 
 model:
     name: dif_lookbacks
-    rho_length_out: 65
+    rho_length_out: 33
 
     dense_0d_size: 10
     dense_0d_activation: 'relu'

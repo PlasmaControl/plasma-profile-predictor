@@ -72,7 +72,7 @@ class TensorBoardWrapper(TensorBoard):
                                [inputs['input_past_' + sig] for sig in self.actuator_inputs] + \
                                [inputs['input_future_' + sig] for sig in self.actuator_inputs] + \
                                [targets['target_' + sig]
-                                   for sig in self.target_names] + [self.sample_weights]
+                                   for sig in self.target_names] + [self.sample_weights for _ in range(len(self.target_names))]
 
         return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
 

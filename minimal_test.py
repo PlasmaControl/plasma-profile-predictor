@@ -5,6 +5,7 @@ import yaml
 import os
 from data import get_datasets
 from models import get_model
+from helpers.helper_functions import load_config
 
 import keras
 #from utils.optimizers import get_optimizer
@@ -16,11 +17,6 @@ output_dir=os.path.join(os.getenv("HOME"),'plasma-profile-predictor')
 
 output_file_name='test_model.h5' 
 model_name='trend_plus_actuators_joe.yaml'
-
-def load_config(config_file):
-    with open(config_file) as f:
-        config = yaml.load(f)
-    return config
 
 config=load_config('configs/'+model_name)
 train_config = config['training']

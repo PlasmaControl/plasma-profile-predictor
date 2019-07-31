@@ -1,6 +1,12 @@
 import pickle
 import numpy as np
 import os
+import yaml
+
+def load_config(config_file):
+    with open(config_file) as f:
+        config = yaml.load(f)
+    return config
 
 def save_obj(obj, name):
     with open('{}.pkl'.format(name),'wb') as f:
@@ -13,11 +19,13 @@ def load_obj(name):
 def preprocess_data(input_filename, output_dirname, 
                     sigs_0d, sigs_1d, sigs_predict,
                     lookbacks, delay, 
+                    stride=1,
                     train_frac=.7, val_frac=.2,
                     save_data=False,
                     separated=True, pad_1d_to=0,
                     noised_signal = None, sigma = 0.5, 
-                    noised_signal_complete = None, sigma_complete = 1):
+                    noised_signal_complete = None, sigma_complete = 1,
+                    name=None, preprocess=None):
     
     # Gaussian normalization, return 0 if std is 0
     def normalize(obj, mean, std):
@@ -41,9 +49,9 @@ def preprocess_data(input_filename, output_dirname,
     # (both train and validation)
     all_shots=[]
     for shot in shots:
-       if set(sigs).issubset(data[shot].keys()):
-           if all([data[shot][sig].size!=0 for sig in sigs]):
-               all_shots.append(shot)
+        if set(sigs).issubset(data[shot].keys()):
+            if all([data[shot][sig].size!=0 and ~np.all(np.isnan(data[shot][sig])) for sig in sigs]):
+                all_shots.append(shot)
 
     def get_non_nan_inds(arr):
         if len(arr.shape)==1:
@@ -85,6 +93,7 @@ def preprocess_data(input_filename, output_dirname,
 
     print("Normalizing the same across all rho points")
     for sig in sigs:
+        data_all_times[sig][np.where(np.isinf(data_all_times[sig]))]=np.nan
         means[sig]=np.nanmean(data_all_times[sig][indices['train']],axis=0)
         stds[sig]=np.nanstd(data_all_times[sig][indices['train']],axis=0)
         # For normalizing all by the same amount
@@ -94,6 +103,8 @@ def preprocess_data(input_filename, output_dirname,
     for sig in sigs:
         data_all_times[sig]=normalize(data_all_times[sig],means[sig],stds[sig])
         data_all_times[sig]=remove_nans(data_all_times[sig])
+    for sig in sigs_1d+sigs_predict:
+        data_all_times[sig]=data_all_times[sig][:,::stride]
 
     target={}
     input_data={}
@@ -111,11 +122,13 @@ def preprocess_data(input_filename, output_dirname,
         post_0d_dict = {}
         pre_1d_dict = {}
         for sig in sigs_0d:
-            pre_0d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
+            pre_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
             post_0d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(1,delay+1)],axis=1)
         for sig in sigs_1d:
-            pre_1d_dict[sig]=np.stack(np.squeeze([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)]),axis=1)
-
+            if lookbacks[sig]==0:
+                pre_1d_dict[sig]=data_all_times[sig][indices[subset]]
+            else:
+                pre_1d_dict[sig]=np.stack([data_all_times[sig][indices[subset]+offset] for offset in range(-lookbacks[sig],1)],axis=1)
         
         pre_input_0d = np.array([pre_0d_dict[sig] for sig in sigs_0d])
 
@@ -139,8 +152,6 @@ def preprocess_data(input_filename, output_dirname,
             save_obj(input_data[subset],os.path.join(output_dirname,'{}_data'.format(subset)))
         save_obj(means,os.path.join(output_dirname,'means'))
         save_obj(stds,os.path.join(output_dirname,'stds'))
-        save_obj(means,os.path.join(output_dirname,'mins'))
-        save_obj(means,os.path.join(output_dirname,'maxs'))
 
     else:
         return {'train_data': input_data['train'],
