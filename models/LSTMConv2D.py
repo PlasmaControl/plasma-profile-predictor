@@ -8,7 +8,8 @@ def get_model_conv2d(input_profile_names, target_profile_names,
                      lookahead, profile_length, std_activation):
 
     profile_inshape = (profile_lookback, profile_length)
-    actuator_inshape = (actuator_lookback + lookahead,)
+    past_actuator_inshape = (actuator_lookback,)
+    future_actuator_inshape = (lookahead,)
     num_profiles = len(input_profile_names)
     num_targets = len(target_profile_names)
     num_actuators = len(actuator_names)
@@ -39,13 +40,17 @@ def get_model_conv2d(input_profile_names, target_profile_names,
         num_profiles*max_channels)))(profiles)
     # shape = (length, channels)
 
-    actuator_inputs = []
+    actuator_future_inputs = []
+    actuator_past_inputs = []
     actuators = []
     for i in range(num_actuators):
-        actuator_inputs.append(
-            Input(actuator_inshape, name='input_' + actuator_names[i]))
-        actuators.append(
-            Reshape((actuator_lookback+lookahead, 1))(actuator_inputs[i]))
+        actuator_future_inputs.append(
+            Input(future_actuator_inshape, name='input_future_' + actuator_names[i]))
+        actuator_past_inputs.append(
+            Input(past_actuator_inshape, name='input_past_' + actuator_names[i]))
+        actuators.append(Concatenate(
+            axis=-1)([actuator_past_inputs[i], actuator_future_inputs[i]]))
+        actuators[i] = Reshape((actuator_lookback+lookahead, 1))(actuators[i])
     actuators = Concatenate(axis=-1)(actuators)
     # shaoe = (time, num_actuators)
     actuators = Dense(units=int(num_profiles*max_channels/8),
@@ -92,7 +97,8 @@ def get_model_conv2d(input_profile_names, target_profile_names,
         # shape = (1,length,1)
         prof_act[i] = Reshape((profile_length,), name='target_' +
                               target_profile_names[i])(prof_act[i])
-    model = Model(inputs=profile_inputs + actuator_inputs, outputs=prof_act)
+    model = Model(inputs=profile_inputs + actuator_past_inputs +
+                  actuator_future_inputs, outputs=prof_act)
     return model
 
 

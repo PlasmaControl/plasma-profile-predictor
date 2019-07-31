@@ -36,7 +36,8 @@ class TensorBoardWrapper(TensorBoard):
         super(TensorBoardWrapper, self).__init__(**kwargs)
         self.generator = generator
         self.gen_steps = len(self.generator)
-        self.input_names = self.generator.profile_inputs + self.generator.actuator_inputs
+        self.profile_inputs = self.generator.profile_inputs
+        self.actuator_inputs = self.generator.actuator_inputs
         self.target_names = self.generator.targets
         self.batch_size = self.generator.batch_size
         self.sample_weights = np.ones(self.gen_steps*self.batch_size)
@@ -44,14 +45,21 @@ class TensorBoardWrapper(TensorBoard):
     def on_epoch_end(self, epoch, logs):
         inputs = {}
         targets = {}
-        for sig in self.input_names:
+        for sig in self.profile_inputs:
             inputs['input_' + sig] = []
+        for sig in self.actuator_inputs:
+            inputs['input_future_' + sig] = []
+            inputs['input_past_' + sig] = []
         for sig in self.target_names:
             targets['target_' + sig] = []
         for s in range(self.gen_steps):
             inp, targ = self.generator[s]
-            for sig in self.input_names:
+            for sig in self.profile_inputs:
                 inputs['input_' + sig].append(inp['input_' + sig])
+            for sig in self.actuator_inputs:
+                inputs['input_past_' + sig].append(inp['input_past_' + sig])
+                inputs['input_future_' +
+                       sig].append(inp['input_future_' + sig])
             for sig in self.target_names:
                 targets['target_' + sig].append(targ['target_' + sig])
 
@@ -60,8 +68,11 @@ class TensorBoardWrapper(TensorBoard):
         for key in targets.keys():
             targets[key] = np.concatenate(targets[key], axis=0)
 
-        self.validation_data = [inputs['input_' + sig] for sig in self.input_names] + [
-            targets['target_' + sig] for sig in self.target_names] + [self.sample_weights]
+        self.validation_data = [inputs['input_' + sig] for sig in self.profile_inputs] + \
+                               [inputs['input_past_' + sig] for sig in self.actuator_inputs] + \
+                               [inputs['input_future_' + sig] for sig in self.actuator_inputs] + \
+                               [targets['target_' + sig]
+                                   for sig in self.target_names] + [self.sample_weights]
 
         return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
 

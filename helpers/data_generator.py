@@ -7,10 +7,12 @@ from keras.callbacks import TensorBoard
 from tqdm import tqdm
 from helpers.normalization import normalize
 
+# split present and future actuators
+
 
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_inputs, actuator_inputs, targets,
-                 profile_lookback, actuator_lookback, lookahead, predict_deltas,
+                 lookbacks, lookahead, predict_deltas,
                  profile_downsample):
         """Make a data generator for training or validation data
 
@@ -32,13 +34,17 @@ class DataGenerator(Sequence):
         self.profile_inputs = profile_inputs
         self.actuator_inputs = actuator_inputs
         self.targets = targets
-        self.profile_lookback = profile_lookback
-        self.actuator_lookback = actuator_lookback
+        self.lookbacks = lookbacks
         self.lookahead = lookahead
         self.predict_deltas = predict_deltas
         self.profile_downsample = profile_downsample
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
+        max_lookback = 0
+        for val in lookbacks.values():
+            if val > max_lookback:
+                max_lookback = val
+        self.max_lookback = max_lookback
 
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
@@ -53,33 +59,31 @@ class DataGenerator(Sequence):
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 self.actuator_lookback
-                                                 - self.profile_lookback:
-                                                 max(self.profile_lookback,
-                                                     self.actuator_lookback),
+                                                 0:self.lookbacks[sig],
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
-            inp['input_' + sig] = self.data[sig][idx * self.batch_size:
-                                                 (idx+1)*self.batch_size,
-                                                 0:self.actuator_lookback+self.lookahead]
+            inp['input_past_' + sig] = self.data[sig][idx * self.batch_size:
+                                                      (idx+1)*self.batch_size,
+                                                      0:self.lookbacks[sig]]
+            inp['input_future_' + sig] = self.data[sig][idx * self.batch_size:
+                                                        (idx+1)*self.batch_size,
+                                                        self.lookbacks[sig]:
+                                                        self.lookbacks[sig]+self.lookahead]
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][idx * self.batch_size:(idx+1)*self.batch_size,
-                                          max(self.profile_lookback, self.actuator_lookback)-1]
+                                          self.lookbacks[sig]-1, ::self.profile_downsample]
             else:
                 baseline = 0
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
-                                                   max(self.profile_lookback,
-                                                       self.actuator_lookback)
-                                                   + self.lookahead-1,
-                                                   ::self.profile_downsample] - baseline
+                                                   -1, ::self.profile_downsample] - baseline
 
         return inp, targ
 
 
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
-                 window_overlap=0, lookback=5, lookahead=3, sample_step=5,
+                 window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
                  nshots=None, verbose=1):
     """Organize data into correct format for training
@@ -95,7 +99,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             `RobustScaler`, `PowerTransform`.
         window_length (int): Number of samples to average over in each bin/window.
         window_overlap (int): How many timesteps to overlap windows.  
-        lookback (int): How many window lengths for lookback.
+        lookbacks (dict of int): How many window lengths for lookback for each sig.
         lookahead (int): How many window lengths to predict into the future.
         sample_step (int): How much to offset sequential training sequences. 
             Step of 1 means sample[i] and sample[i+1] will be offset by 1, with 
@@ -125,19 +129,19 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                 rawdata = pickle.load(f, encoding='latin1')
         else:
             raise IOError("No such path to data file")
-    if 'time' not in sig_names:
-        # should be there for all shots, used as reference length
-        sig_names += ['time']
-    if 'shotnum' not in sig_names:
-        sig_names += ['shotnum']
+    sigsplustime = sig_names + ['time', 'shotnum']
     if verbose:
         print('Signals: ' + ', '.join(sig_names))
     usabledata = []
     # find which shots have all the signals needed
+    max_lookback = 0
+    for val in lookbacks.values():
+        if val > max_lookback:
+            max_lookback = val
     for shot in rawdata.keys():
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
-        if set(sig_names).issubset(set(rawdata[shot].keys())) \
-           and rawdata[shot]['time'].size > (lookback+lookahead):
+        if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
+           and rawdata[shot]['time'].size > (max_lookback+lookahead):
             usabledata.append(rawdata[shot])
     usabledata = np.array(usabledata)
     del rawdata
@@ -158,12 +162,34 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         """averages over bins"""
         return np.mean(array[start:start+window_length], axis=0)
 
+    def get_non_nan_inds(arr):
+        if len(arr.shape) == 1:
+            return np.where(~np.isnan(arr))[0]
+        else:
+            return np.where(np.any(~np.isnan(arr), axis=1))[0]
+
+    def get_first_index(shot):
+        input_max = max([get_non_nan_inds(shot[sig])[0] +
+                         lookbacks[sig] for sig in sig_names])
+        output_max = max([get_non_nan_inds(shot[sig])[0] -
+                          lookahead for sig in sig_names])
+        return max(input_max, output_max)
+
+    def get_last_index(shot):
+        partial_min = min([get_non_nan_inds(shot[sig])[-1]
+                           for sig in sig_names])
+        full_min = min([get_non_nan_inds(shot[sig])[-1] -
+                        lookahead for sig in sig_names])
+        return min(full_min, partial_min)
+
     alldata = {}
-    for sig in sig_names:
+    for sig in sigsplustime:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose):
-        for sig in sig_names:
+        first = get_first_index(shot)
+        last = get_last_index(shot)
+        for sig in sigsplustime:
             temp = shot[sig]
             nbins = int(temp.shape[0]/(window_length-window_overlap))
             shotdata = []
@@ -171,12 +197,16 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                 # populate array of binned/windowed data for each shot
                 shotdata.append(binavg(temp, i*(window_length-window_overlap)))
             shotdata = np.stack(shotdata)
-            for i in range(lookback, nbins-lookahead, sample_step):
+
+            for i in range(first, last, sample_step):
                 # group into arrays of input/output pairs
-                alldata[sig].append(shotdata[i-lookback:i+lookahead])
+                if sig not in ['time', 'shotnum']:
+                    alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
+                else:
+                    alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
     del usabledata
     gc.collect()
-    for sig in tqdm(sig_names, desc='Stacking', ascii=True, dynamic_ncols=True,
+    for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
         alldata[sig] = np.stack(alldata[sig])
     alldata, normalization_params = normalize(
@@ -184,10 +214,10 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     nsamples = alldata['time'].shape[0]
     inds = np.random.permutation(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
-    for sig in tqdm(sig_names, desc='Splitting', ascii=True, dynamic_ncols=True,
+    for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]

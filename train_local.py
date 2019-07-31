@@ -40,6 +40,16 @@ actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
 predict_deltas = False
 profile_lookback = 1
 actuator_lookback = 8
+lookbacks = {'temp': profile_lookback,
+             'dens': profile_lookback,
+             'rotation': profile_lookback,
+             'press': profile_lookback,
+             'itemp': profile_lookback,
+             'ffprime': profile_lookback,
+             'pinj': actuator_lookback,
+             'curr': actuator_lookback,
+             'tinj': actuator_lookback,
+             'gasA': actuator_lookback}
 lookahead = 3
 profile_downsample = 2
 profile_length = int(np.ceil(65/profile_downsample))
@@ -64,9 +74,9 @@ runname = 'model-' + model_type + \
           '_profiles-' + '-'.join(input_profile_names) + \
           '_act-' + '-'.join(actuator_names) + \
           '_targ-' + '-'.join(target_profile_names) + \
-          '_norm-' + normalization_method + \
           '_profLB-' + str(profile_lookback) + \
-          '_actLB-' + str(actuator_lookback) + \
+          '_actLB-' + str(actuator_lookback) +\
+          '_norm-' + normalization_method + \
           '_activ-' + std_activation + \
           '_nshots-' + str(nshots) + \
           strftime("_%d%b%y-%H-%M", localtime())
@@ -75,18 +85,17 @@ assert(all(elem in available_sigs for elem in sig_names))
 
 traindata, valdata, param_dict = process_data(rawdata_path, sig_names,
                                               normalization_method, window_length,
-                                              window_overlap, max(
-                                                  profile_lookback, actuator_lookback),
+                                              window_overlap, lookbacks,
                                               lookahead, sample_step,
                                               uniform_normalization, train_frac,
                                               val_frac, nshots)
 train_generator = DataGenerator(traindata, batch_size, input_profile_names,
                                 actuator_names, target_profile_names,
-                                profile_lookback, actuator_lookback, lookahead,
+                                lookbacks, lookahead,
                                 predict_deltas, profile_downsample)
 val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               actuator_names, target_profile_names,
-                              profile_lookback, actuator_lookback, lookahead,
+                              lookbacks, lookahead,
                               predict_deltas, profile_downsample)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
@@ -141,6 +150,7 @@ analysis_params = {'rawdata': rawdata_path,
                    'actuator_lookback': actuator_lookback,
                    'lookahead': lookahead,
                    'profile_length': profile_length,
+                   'profile_downsample': profile_downsample,
                    'std_activation': std_activation,
                    'window_length': window_length,
                    'window_overlap': window_overlap,
