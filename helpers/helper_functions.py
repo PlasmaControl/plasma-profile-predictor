@@ -19,11 +19,13 @@ def load_obj(name):
 def preprocess_data(input_filename, output_dirname, 
                     sigs_0d, sigs_1d, sigs_predict,
                     lookbacks, delay, 
+                    stride=1,
                     train_frac=.7, val_frac=.2,
                     save_data=False,
                     separated=True, pad_1d_to=0,
                     noised_signal = None, sigma = 0.5, 
-                    noised_signal_complete = None, sigma_complete = 1):
+                    noised_signal_complete = None, sigma_complete = 1,
+                    name=None, preprocess=None):
     
     # Gaussian normalization, return 0 if std is 0
     def normalize(obj, mean, std):
@@ -47,9 +49,9 @@ def preprocess_data(input_filename, output_dirname,
     # (both train and validation)
     all_shots=[]
     for shot in shots:
-       if set(sigs).issubset(data[shot].keys()):
-           if all([data[shot][sig].size!=0 and ~np.all(np.isnan(data[shot][sig])) for sig in sigs]):
-               all_shots.append(shot)
+        if set(sigs).issubset(data[shot].keys()):
+            if all([data[shot][sig].size!=0 and ~np.all(np.isnan(data[shot][sig])) for sig in sigs]):
+                all_shots.append(shot)
 
     def get_non_nan_inds(arr):
         if len(arr.shape)==1:
@@ -91,6 +93,7 @@ def preprocess_data(input_filename, output_dirname,
 
     print("Normalizing the same across all rho points")
     for sig in sigs:
+        data_all_times[sig][np.where(np.isinf(data_all_times[sig]))]=np.nan
         means[sig]=np.nanmean(data_all_times[sig][indices['train']],axis=0)
         stds[sig]=np.nanstd(data_all_times[sig][indices['train']],axis=0)
         # For normalizing all by the same amount
@@ -100,6 +103,8 @@ def preprocess_data(input_filename, output_dirname,
     for sig in sigs:
         data_all_times[sig]=normalize(data_all_times[sig],means[sig],stds[sig])
         data_all_times[sig]=remove_nans(data_all_times[sig])
+    for sig in sigs_1d+sigs_predict:
+        data_all_times[sig]=data_all_times[sig][:,::stride]
 
     target={}
     input_data={}

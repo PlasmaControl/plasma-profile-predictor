@@ -93,12 +93,13 @@ def get_datasets(batch_size, input_filename, output_dirname,
                  sigs_0d, sigs_1d, sigs_predict,
                  lookbacks, delay, 
                  train_frac, val_frac,
-                 preprocess=True):
+                 stride,
+                 preprocess=True, name=None):
     
     if (preprocess): 
         data_package = preprocess_data(input_filename, output_dirname, 
                                        sigs_0d, sigs_1d, sigs_predict,
-                                       lookbacks, delay,
+                                       lookbacks, delay, stride,
                                        train_frac, val_frac, 
                                        save_data=False)
         # data_package = preprocess_data(input_filname,
