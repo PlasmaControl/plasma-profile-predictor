@@ -3,15 +3,93 @@ from helpers.normalization import denormalize_arr
 import numpy as np
 
 
-def denorm_loss(param_dict, loss, predict_deltas=False, sig=None, model=None):
+def percent_correct_sign(sig, model, predict_deltas):
+    """Wrapper for metric to measure how often the prediction has the correct sign
+
+    Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
+
+    Returns:
+        sign_accuracy: A loss function that takes in y_true and y_pred and returns 
+            the percentage of the time the prediction has the correct sign.
+    """
+    # baseline = predict current value
+    if predict_deltas:
+        # if predicting deltas, baseline is zero
+        baseline = K.cast_to_floatx(0)
+    else:
+        # get the current input to the model for baseline comparison
+        baseline = model.get_layer('input_' + sig).input[:, -1]
+
+    def sgn_acc(y_true, y_pred):
+        delta_true = y_true-baseline
+        delta_pred = y_pred-baseline
+        return K.mean(K.maximum(K.sign(delta_pred*delta_true), 0), axis=-1)
+    return sgn_acc
+
+def percent_baseline_error(sig, model, predict_deltas):
+    """Wrapper for metric to compare model MAE to baseline MAE
+
+    Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
+
+    Returns:
+        sign_accuracy: A loss function that takes in y_true and y_pred and returns 
+            the percentage of the time the prediction has the correct sign.
+    """
+    if predict_deltas:
+        # if predicting deltas, baseline is zero
+        baseline = K.cast_to_floatx(0)
+    else:
+        # get the current input to the model for baseline comparison
+        baseline = model.get_layer('input_' + sig).input[:, -1]
+    def perBLMAE(y_true, y_pred):
+        BLerr = K.maximum(K.mean(K.abs(y_true-baseline),axis=-1), K.cast_to_floatx(K.epsilon()))
+        MAE = K.mean(K.abs(y_true-y_pred),axis=-1)
+        return K.minimum(MAE/BLerr, 1)
+    return perBLMAE
+    
+def baseline_MAE(sig, model, predict_deltas):
+    """Wrapper for metric to measure the accuracy of predicting baseline
+
+    Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
+
+    Returns:
+        BL_MAE: A loss function that takes in y_true and y_pred and returns 
+            the percentage error wrt to predicting baseline
+    """
+    # baseline = predict current value
+    if predict_deltas:
+        # if predicting deltas, baseline is zero
+        baseline = K.cast_to_floatx(0)
+    else:
+        # get the current input to the model for baseline comparison
+        baseline = model.get_layer('input_' + sig).input[:, -1]
+
+    def BL_MAE(y_true, y_pred):
+        return K.mean(K.abs(y_true-baseline), axis=-1)
+    return BL_MAE
+
+
+def denorm_loss(sig, model, param_dict, loss, predict_deltas):
     """Wrapper for denormed loss functions
 
     Denormalizes the signal before evaluating loss function, so that different 
     normalizations may be compared.
 
     Args:
+        sig (str): Name of the signal that the loss is applied to.
+        model: Model that is being trained
         param_dict: Dictionary of normalization parameters for the signal.
         loss: Instance of keras loss function to be applied to denormed data.
+        predict_deltas (bool): Whether the model is predicting deltas or full profiles.
 
     Returns:
         denorm_loss: A loss function that takes in y_true and y_pred and returns 
@@ -125,7 +203,12 @@ def denorm_loss(param_dict, loss, predict_deltas=False, sig=None, model=None):
             return loss(y_true+baseline, y_pred+baseline)
     else:
         raise ValueError("Unknown normalization method")
-    denorm_loss.__name__ = 'denorm_' + loss.__name__
+    if loss.__name__ == 'mean_absolute_error':
+        denorm_loss.__name__ = 'denorm_MAE'
+    elif loss.__name__ == 'mean_squared_error':
+        denorm_loss.__name__ = 'denorm_MSE'
+    else:
+        denorm_loss.__name__ = 'denorm_' + loss.__name__
     return denorm_loss
 
 
