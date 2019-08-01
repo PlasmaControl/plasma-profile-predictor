@@ -161,7 +161,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     def binavg(array, start):
         """averages over bins"""
         return np.mean(array[start:start+window_length], axis=0)
-
+    
+    # check if each sig is not completely nan
+    def is_valid(shot):
+        for sig in sigsplustime:
+            if np.isnan(shot[sig]).all():
+                return False
+        return True
+    
     def get_non_nan_inds(arr):
         if len(arr.shape) == 1:
             return np.where(~np.isnan(arr))[0]
@@ -183,10 +190,16 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         return min(full_min, partial_min)
 
     alldata = {}
+    shots_with_complete_nan = []
     for sig in sigsplustime:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose):
+        # check to see if each sig in the shot is not completely nan
+        if not is_valid(shot):
+            shots_with_complete_nan.append(np.unique(shot["shotnum"]))
+            continue
+        
         first = get_first_index(shot)
         last = get_last_index(shot)
         for sig in sigsplustime:
@@ -204,6 +217,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
                 else:
                     alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
+    print("Shots with Complete NaN: " + ', '.join(str(e) for e in shots_with_complete_nan))
     del usabledata
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
