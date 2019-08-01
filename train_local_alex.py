@@ -60,7 +60,7 @@ std_activation = 'relu'
 rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = '/Users/alex/Desktop/ML'
+checkpt_dir = '/Users/alex/Desktop/ML/'
 
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
