@@ -128,6 +128,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             with open(abs_path, 'rb') as f:
                 rawdata = pickle.load(f, encoding='latin1')
         else:
+            print(abs_path)
             raise IOError("No such path to data file")
     sigsplustime = sig_names + ['time', 'shotnum']
     if verbose:

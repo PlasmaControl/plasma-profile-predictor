@@ -8,6 +8,7 @@ from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
 from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
+from models.LSTMConv1D import build_lstmconv1d_joe
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from time import strftime, localtime
@@ -31,9 +32,10 @@ available_sigs = avail_profiles + avail_actuators + ['time']
 models = {'simple_lstm': get_model_simple_lstm,
           'lstm_conv2d': get_model_lstm_conv2d,
           'conv2d': get_model_conv2d,
-          'linear_systems': get_model_linear_systems}
+          'linear_systems': get_model_linear_systems,
+           'conv1d' : build_lstmconv1d_joe}
 
-model_type = 'conv2d'
+model_type = 'conv1d'
 input_profile_names = ['temp', 'dens', 'rotation', 'ffprime']
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
@@ -57,11 +59,10 @@ std_activation = 'relu'
 # rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 
 #rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
-rawdata_path = '/global/homes/a/al34/final_data_compressed.pkl'
+rawdata_path = '/global/u2/a/al34/final_data_compressed.pkl'
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = '/global/homes/a/al34/run_results/'
-
+checkpt_dir = "/global/u2/a/al34/run_results/"
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
@@ -106,9 +107,14 @@ val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               predict_deltas, profile_downsample)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
+# model = models[model_type](input_profile_names, target_profile_names,
+#                            actuator_names, profile_lookback, actuator_lookback,
+#                            lookahead, profile_length, std_activation)
 model = models[model_type](input_profile_names, target_profile_names,
-                           actuator_names, profile_lookback, actuator_lookback,
+                           actuator_names, lookbacks,
                            lookahead, profile_length, std_activation)
+
+
 
 model.summary()
 if ngpu > 1:
@@ -155,6 +161,7 @@ analysis_params = {'rawdata': rawdata_path,
                    'predict_deltas': predict_deltas,
                    'profile_lookback': profile_lookback,
                    'actuator_lookback': actuator_lookback,
+                   'lookbacks': lookbacks,
                    'lookahead': lookahead,
                    'profile_length': profile_length,
                    'profile_downsample': profile_downsample,
