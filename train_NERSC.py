@@ -23,8 +23,13 @@ config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
 session = tf.Session(config=config)
 K.set_session(session)
 
-avail_profiles = ['dens', 'ffprime', 'idens', 'itemp', 'press', 'rotation',
-                  'temp', 'thomson_dens', 'thomson_temp']
+efit_type='EFITRT1'
+
+#for efit_type in ['EFITRT1','EFITRT2','EFIT01','EFIT02']:
+#for cer_type in ['cerreal','cerquick','cerauto']:
+avail_profiles = ['ffprime_{}'.format(efit_type), 'press_{}'.format(efit_type), 'ffprime_{}'.format(efit_type), 'pprime_{}'.format(efit_type),
+                  'dens', 'temp', 'idens', 'itemp', 'rotation',
+                  'thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type)]
 avail_actuators = ['curr', 'ech', 'gasA', 'gasB', 'gasC', 'gasD' 'gasE', 'pinj',
                    'pinj_15L', 'pinj_15R', 'pinj_21L', 'pinj_21R', 'pinj_30L',
                    'pinj_30R', 'pinj_33L', 'pinj_33R', 'tinj']
@@ -33,10 +38,10 @@ models = {'simple_lstm': get_model_simple_lstm,
           'lstm_conv2d': get_model_lstm_conv2d,
           'conv2d': get_model_conv2d,
           'linear_systems': get_model_linear_systems,
-           'conv1d' : build_lstmconv1d_joe}
+          'conv1d' : build_lstmconv1d_joe}
 
 model_type = 'conv1d'
-input_profile_names = ['temp', 'dens', 'rotation', 'ffprime']
+input_profile_names = ['temp', 'dens', 'rotation', 'ffprime_{}'.format(efit_type)]
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
 predict_deltas = False
@@ -45,9 +50,9 @@ actuator_lookback = 8
 lookbacks = {'temp': profile_lookback,
              'dens': profile_lookback,
              'rotation': profile_lookback,
-             'press': profile_lookback,
+             'press_{}'.format(efit_type): profile_lookback,
              'itemp': profile_lookback,
-             'ffprime': profile_lookback,
+             'ffprime_{}'.format(efit_type): profile_lookback,
              'pinj': actuator_lookback,
              'curr': actuator_lookback,
              'tinj': actuator_lookback,
@@ -59,10 +64,10 @@ std_activation = 'relu'
 # rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 
 #rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
-rawdata_path = '/global/u2/a/al34/final_data_compressed.pkl'
+rawdata_path = '/global/cscratch1/sd/abbatej/data_cer/final_data_small.pkl'
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = "/global/u2/a/al34/run_results/"
+checkpt_dir = "/global/cscratch1/sd/abbatej/run_results/"
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
