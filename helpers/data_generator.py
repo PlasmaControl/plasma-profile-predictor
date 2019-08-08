@@ -118,6 +118,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
+    
     verbose = bool(verbose)
     sig_names = list(np.unique(sig_names))
     if type(rawdata) is not dict:
@@ -151,6 +152,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
+    np.random.seed(0)
     usabledata = usabledata[np.random.permutation(len(usabledata))]
     usabledata = usabledata[:nshots]
     if verbose:
