@@ -40,7 +40,7 @@ models = {'simple_lstm': get_model_simple_lstm,
           'linear_systems': get_model_linear_systems,
           'conv1d' : build_lstmconv1d_joe}
 
-model_type = 'conv1d'
+model_type = 'conv2d'
 input_profile_names = ['temp', 'dens', 'rotation', 'ffprime_{}'.format(efit_type)]
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
@@ -63,11 +63,12 @@ profile_length = int(np.ceil(65/profile_downsample))
 std_activation = 'relu'
 # rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 
-#rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
-rawdata_path = '/global/cscratch1/sd/abbatej/data_cer/final_data_small.pkl'
+rawdata_path = '/global/homes/a/al34/final_data_compressed.pkl'
+# rawdata_path = '/global/cscratch1/sd/abbatej/data_cer/final_data_small.pkl'
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = "/global/cscratch1/sd/abbatej/run_results/"
+# checkpt_dir = "/global/cscratch1/sd/abbatej/run_results/"
+checkpt_dir = "/global/homes/a/al34/hyperparams/"
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
