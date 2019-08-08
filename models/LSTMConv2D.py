@@ -14,7 +14,7 @@ def get_model_conv2d_hyperparam(input_profile_names, target_profile_names,
     num_profiles = len(input_profile_names)
     num_targets = len(target_profile_names)
     num_actuators = len(actuator_names)
-    max_channels = 32
+    max_channels = 16
 
     profile_inputs = []
     profiles = []
@@ -38,7 +38,7 @@ def get_model_conv2d_hyperparam(input_profile_names, target_profile_names,
         profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(profile_lookback, 1),
                           strides=(1, 1), padding='valid', activation=std_activation)(profiles)
     profiles = Reshape((profile_length, int(
-        num_profiles*max_channels/2)))(profiles)
+        num_profiles*max_channels)))(profiles)
     # shape = (length, channels)
 
     actuator_future_inputs = []
@@ -64,9 +64,9 @@ def get_model_conv2d_hyperparam(input_profile_names, target_profile_names,
     #                    padding='causal', activation=std_activation)(actuators)
     actuators = Dense(units=int(num_profiles*max_channels/2),
                       activation=std_activation)(actuators)
-    actuators = LSTM(units=int(num_profiles*max_channels/2), activation=std_activation,
+    actuators = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
                      recurrent_activation='hard_sigmoid')(actuators)
-    actuators = Reshape((int(num_profiles*max_channels/2), 1))(actuators)
+    actuators = Reshape((int(num_profiles*max_channels), 1))(actuators)
     # shape = (channels, 1)
     actuators = Dense(units=int(profile_length/4),
                       activation=std_activation)(actuators)
