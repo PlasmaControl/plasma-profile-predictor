@@ -127,7 +127,6 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         if abs_path.exists():
             with open(abs_path, 'rb') as f:
                 rawdata = pickle.load(f, encoding='latin1')
-            import pdb;pdb.set_trace()
         else:
             print(abs_path)
             raise IOError("No such path to data file")
