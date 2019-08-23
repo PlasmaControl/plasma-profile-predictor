@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH -J lstm_cnn_merge
+#SBATCH -J log_1_10000
 #SBATCH -C knl
-#SBATCH -N 2
+#SBATCH -N 1
 #SBATCH -q regular
-#SBATCH -t 0:20:00
-#SBATCH -o log
+#SBATCH -t 48:00:00
+#SBATCH -o log_1_10000
 #SBATCH -A m3194
 
 root_dir=$HOME/plasma-profile-predictor
 . $root_dir/scripts/setup.sh
-srun -l python $root_dir/train_NERSC_parallel_hvd.py
+python $root_dir/train_NERSC_1.py
 

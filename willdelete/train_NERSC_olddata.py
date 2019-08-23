@@ -7,7 +7,7 @@ from helpers.data_generator import process_data, DataGenerator
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
-from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
+from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d, get_model_conv2d_hyperparam
 from models.LSTMConv1D import build_lstmconv1d_joe
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -27,9 +27,12 @@ efit_type='EFITRT1'
 
 #for efit_type in ['EFITRT1','EFITRT2','EFIT01','EFIT02']:
 #for cer_type in ['cerreal','cerquick','cerauto']:
-avail_profiles = ['ffprime_{}'.format(efit_type), 'press_{}'.format(efit_type), 'ffprime_{}'.format(efit_type), 'pprime_{}'.format(efit_type),
-                  'dens', 'temp', 'idens', 'itemp', 'rotation',
-                  'thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type)]
+# avail_profiles = ['ffprime_{}'.format(efit_type), 'press_{}'.format(efit_type), 'ffprime_{}'.format(efit_type), 'pprime_{}'.format(efit_type),
+#                   'dens', 'temp', 'idens', 'itemp', 'rotation',
+#                   'thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type)]
+
+avail_profiles = ['dens', 'ffprime', 'idens', 'itemp', 'press', 'rotation',
+                  'temp', 'thomson_dens', 'thomson_temp']
 avail_actuators = ['curr', 'ech', 'gasA', 'gasB', 'gasC', 'gasD' 'gasE', 'pinj',
                    'pinj_15L', 'pinj_15R', 'pinj_21L', 'pinj_21R', 'pinj_30L',
                    'pinj_30R', 'pinj_33L', 'pinj_33R', 'tinj']
@@ -38,21 +41,35 @@ models = {'simple_lstm': get_model_simple_lstm,
           'lstm_conv2d': get_model_lstm_conv2d,
           'conv2d': get_model_conv2d,
           'linear_systems': get_model_linear_systems,
-          'conv1d' : build_lstmconv1d_joe}
+          'conv1d' : build_lstmconv1d_joe,
+        'conv2dhyper': get_model_conv2d_hyperparam}
 
 model_type = 'conv2d'
-input_profile_names = ['temp', 'dens', 'rotation', 'ffprime_{}'.format(efit_type)]
+# input_profile_names = ['temp', 'dens', 'rotation', 'ffprime_{}'.format(efit_type)]
+input_profile_names = ['temp', 'dens', 'rotation', 'press', 'itemp', 'ffprime']
+
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
 predict_deltas = False
 profile_lookback = 1
 actuator_lookback = 8
+# lookbacks = {'temp': profile_lookback,
+#              'dens': profile_lookback,
+#              'rotation': profile_lookback,
+#              'press_{}'.format(efit_type): profile_lookback,
+#              'itemp': profile_lookback,
+#              'ffprime_{}'.format(efit_type): profile_lookback,
+#              'pinj': actuator_lookback,
+#              'curr': actuator_lookback,
+#              'tinj': actuator_lookback,
+#              'gasA': actuator_lookback}
+
 lookbacks = {'temp': profile_lookback,
              'dens': profile_lookback,
              'rotation': profile_lookback,
-             'press_{}'.format(efit_type): profile_lookback,
+             'press': profile_lookback,
              'itemp': profile_lookback,
-             'ffprime_{}'.format(efit_type): profile_lookback,
+             'ffprime': profile_lookback,
              'pinj': actuator_lookback,
              'curr': actuator_lookback,
              'tinj': actuator_lookback,
@@ -62,11 +79,13 @@ profile_downsample = 2
 profile_length = int(np.ceil(65/profile_downsample))
 std_activation = 'relu'
 # rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
-#rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
-rawdata_path = '/global/cscratch1/sd/abbatej/data_with_na/final_data.pkl'
+
+#rawdata_path = '/global/homes/a/al34/final_data_compressed.pkl'
+rawdata_path = '/global/homes/a/abbatej/final_data_old.pkl'
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = "/global/cscratch1/sd/abbatej/run_results/"
+checkpt_dir = "/global/homes/a/abbatej/run_results/"
+#checkpt_dir = "/global/homes/a/al34/hyperparams/"
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
@@ -82,7 +101,18 @@ hinge_weight = 50
 batch_size = 128
 epochs = 100
 verbose = 1
-runname = 'model-' + model_type + \
+# runname = 'model-' + model_type + \
+#           '_profiles-' + '-'.join(input_profile_names) + \
+#           '_act-' + '-'.join(actuator_names) + \
+#           '_targ-' + '-'.join(target_profile_names) + \
+#           '_profLB-' + str(profile_lookback) + \
+#           '_actLB-' + str(actuator_lookback) +\
+#           '_norm-' + normalization_method + \
+#           '_activ-' + std_activation + \
+#           '_nshots-' + str(nshots) + \
+#           strftime("_%d%b%y-%H-%M", localtime())
+
+runname = 'baseline_model-' + model_type + \
           '_profiles-' + '-'.join(input_profile_names) + \
           '_act-' + '-'.join(actuator_names) + \
           '_targ-' + '-'.join(target_profile_names) + \
@@ -92,6 +122,7 @@ runname = 'model-' + model_type + \
           '_activ-' + std_activation + \
           '_nshots-' + str(nshots) + \
           strftime("_%d%b%y-%H-%M", localtime())
+
 
 assert(all(elem in available_sigs for elem in sig_names))
 
@@ -111,12 +142,12 @@ val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               predict_deltas, profile_downsample)
 steps_per_epoch = len(train_generator)
 val_steps = len(val_generator)
-# model = models[model_type](input_profile_names, target_profile_names,
-#                            actuator_names, profile_lookback, actuator_lookback,
-#                            lookahead, profile_length, std_activation)
 model = models[model_type](input_profile_names, target_profile_names,
                            actuator_names, profile_lookback, actuator_lookback,
                            lookahead, profile_length, std_activation)
+# model = models[model_type](input_profile_names, target_profile_names,
+#                            actuator_names, lookbacks,
+#                            lookahead, profile_length, std_activation)
 
 
 

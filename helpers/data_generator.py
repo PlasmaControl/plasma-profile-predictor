@@ -11,17 +11,17 @@ from helpers.normalization import normalize
 
 
 class DataGenerator(Sequence):
-    def __init__(self, data, batch_size, profile_inputs, actuator_inputs, targets,
+    def __init__(self, data, batch_size, input_profile_names, actuator_names, target_profile_names,
                  lookbacks, lookahead, predict_deltas,
-                 profile_downsample):
+                 profile_downsample, **kwargs):
         """Make a data generator for training or validation data
 
         Args:
             data: dict of data arrays to draw from.
             batch_size (int): size of each batch.
-            profile_inputs (str): List of names of profile inputs, as strings.
-            actuator_inputs (str): List of names of actuator inputs, as strings.        
-            targets (str): List of names of profile targets, as strings.
+            input_profile_names (str): List of names of profile inputs, as strings.
+            actuator_names (str): List of names of actuator inputs, as strings.        
+            target_profile_names (str): List of names of profile targets, as strings.
             profile_lookback (int): Number of previous steps for profile data.
             actuator_lookback (int): Number of previous steps for actuator data.
             lookahead (int): How many steps ahead to predict (prediction window)
@@ -31,9 +31,9 @@ class DataGenerator(Sequence):
 
         self.batch_size = batch_size
         self.data = data
-        self.profile_inputs = profile_inputs
-        self.actuator_inputs = actuator_inputs
-        self.targets = targets
+        self.profile_inputs = input_profile_names
+        self.actuator_inputs = actuator_names
+        self.targets = target_profile_names
         self.lookbacks = lookbacks
         self.lookahead = lookahead
         self.predict_deltas = predict_deltas
@@ -85,7 +85,8 @@ class DataGenerator(Sequence):
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
-                 nshots=None, verbose=1):
+                 nshots=None, 
+                 randomize=True, verbose=1, flattop_only=True, **kwargs):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -110,6 +111,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
         verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
+        randomize (bool): whether to maintain shot and timestep order
+            
     Returns:
         traindata (dict): Dictionary of numpy arrays, one entry for each signal.
             Each array has shape [nsamples,lookback+lookahead,signal_shape]
@@ -118,6 +121,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
+    
     verbose = bool(verbose)
     sig_names = list(np.unique(sig_names))
     if type(rawdata) is not dict:
@@ -139,7 +143,10 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for val in lookbacks.values():
         if val > max_lookback:
             max_lookback = val
-    for shot in rawdata.keys():
+    
+    all_shots=sorted(list(rawdata.keys()))
+    
+    for shot in all_shots:
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
            and rawdata[shot]['time'].size > (max_lookback+lookahead):
@@ -151,7 +158,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
-    usabledata = usabledata[np.random.permutation(len(usabledata))]
+
+    np.random.seed(0)
+    if randomize:
+        usabledata = usabledata[np.random.permutation(len(usabledata))]
+        
     usabledata = usabledata[:nshots]
     if verbose:
         t = 0
@@ -168,6 +179,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         for sig in sigsplustime:
             if np.isnan(shot[sig]).all():
                 return False
+        if (flattop_only):
+            if (shot['t_ip_flat']==None or shot['ip_flat_duration']==None):
+                return False
         return True
     
     def get_non_nan_inds(arr):
@@ -181,14 +195,22 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                          lookbacks[sig] for sig in sig_names])
         output_max = max([get_non_nan_inds(shot[sig])[0] -
                           lookahead for sig in sig_names])
-        return max(input_max, output_max)
+        if (flattop_only) and (shot['t_ip_flat']!=None):
+            current_max = np.searchsorted(shot['time'],shot['t_ip_flat'],side='left')
+            return max(input_max, output_max, current_max)
+        else:
+            return max(input_max, output_max)
 
     def get_last_index(shot):
         partial_min = min([get_non_nan_inds(shot[sig])[-1]
                            for sig in sig_names])
         full_min = min([get_non_nan_inds(shot[sig])[-1] -
                         lookahead for sig in sig_names])
-        return min(full_min, partial_min)
+        if (flattop_only) and (shot['t_ip_flat']!=None) and (shot['ip_flat_duration']!= None):
+            current_min = np.searchsorted(shot['time'],shot['t_ip_flat']+shot['ip_flat_duration'],side='right')
+            return min(full_min, partial_min, current_min)
+        else:
+            return min(full_min, partial_min)
 
     alldata = {}
     shots_with_complete_nan = []
@@ -227,7 +249,12 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
-    inds = np.random.permutation(nsamples)
+    
+    if randomize:
+        inds = np.random.permutation(nsamples)
+    else:
+        inds = np.arange(nsamples)
+        
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}

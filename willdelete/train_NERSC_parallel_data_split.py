@@ -75,10 +75,10 @@ profile_length = int(np.ceil(65/profile_downsample))
 std_activation = 'relu'
 # rawdata_path = '/home/fouriest/SCHOOL/Princeton/PPPL/final_data.pkl'
 #rawdata_path = '/Users/alex/Desktop/ML/final_data_compressed.pkl'
-rawdata_path = '/global/cscratch1/sd/abbatej/data_cer/final_data_small.pkl'
+rawdata_path = '/global/cscratch1/sd/abbatej/data_cer_all/final_data_with_exclusions_{}.pkl'.format(rank)
 
 # checkpt_dir = '/home/fouriest/SCHOOL/Princeton/PPPL/'
-checkpt_dir = "/global/cscratch1/sd/abbatej/run_results/"
+checkpt_dir = "/global/homes/a/abbatej/plasma-profile-predictor"
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
 window_length = 1
@@ -127,7 +127,7 @@ val_steps = len(val_generator)
 #                            actuator_names, profile_lookback, actuator_lookback,
 #                            lookahead, profile_length, std_activation)
 model = models[model_type](input_profile_names, target_profile_names,
-                           actuator_names, lookbacks,
+                           actuator_names, profile_lookback, actuator_lookback,
                            lookahead, profile_length, std_activation)
 
 
@@ -135,7 +135,7 @@ model = models[model_type](input_profile_names, target_profile_names,
 model.summary()
 
 optimizer = keras.optimizers.Adadelta()
-if nranks > 1:
+if n_ranks > 1:
     optimizer = hvd.DistributedOptimizer(optimizer)
     
 loss = {}
@@ -160,9 +160,9 @@ if rank == 0:
     callbacks.append(ModelCheckpoint(checkpt_dir+runname+'.h5', monitor='val_loss',
                                      verbose=0, save_best_only=True,
                                      save_weights_only=False, mode='auto', period=1))
-    # callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
-    #                                    verbose=1, mode='auto', min_delta=0.001,
-    #                                    cooldown=1, min_lr=0))
+    callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
+                                       verbose=1, mode='auto', min_delta=0.001,
+                                       cooldown=1, min_lr=0))
     # callbacks.append(TensorBoardWrapper(val_generator, log_dir=checkpt_dir +
     #                                     'tensorboard_logs/'+runname, histogram_freq=1,
     #                                     batch_size=batch_size, write_graph=True, write_grads=True))

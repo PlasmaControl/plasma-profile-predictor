@@ -1,6 +1,0 @@
-0: /bin/sh: /usr/common/software/tensorflow/intel-tensorflow/1.13.1-py36/lib/libreadline.so.7: no version information available (required by /bin/sh)
-0: seg 0, mem 1: remap(0x555555810000,0x66000,0x66000,0x3,0x2aaada0e8000) failed, error 14
-srun: error: nid03871: task 0: Aborted
-srun: Terminating job step 23629592.0
-srun: error: nid03872: task 1: Terminated
-srun: Force Terminated job step 23629592.0

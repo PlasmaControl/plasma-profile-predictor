@@ -96,9 +96,9 @@ def denorm_loss(sig, model, param_dict, loss, predict_deltas):
             a scalar loss value
     """
     if predict_deltas:
-        baseline = model.get_layer('input_' + sig).input[:, -1]
+        baseline = K.cast_to_floatx(0) 
     else:
-        baseline = K.cast_to_floatx(0)
+        baseline = model.get_layer('input_' + sig).input[:, -1]
     method = param_dict['method']
     eps = K.cast_to_floatx(K.epsilon())
     for key, val in param_dict.items():
