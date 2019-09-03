@@ -258,8 +258,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
             continue
 
-        first = get_first_index(shot)
-        last = get_last_index(shot)
+        first = int(np.ceil(get_first_index(shot)/(window_length-window_overlap)))
+        last = int(np.floor(get_last_index(shot)/(window_length-window_overlap)))
         for sig in sigsplustime:
             temp = shot[sig]
             nbins = int(temp.shape[0]/(window_length-window_overlap))

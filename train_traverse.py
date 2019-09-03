@@ -14,7 +14,7 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 
 import os
 
-distributed=False
+distributed=True
 
 processed_filename_base='/scratch/gpfs/jabbate/full_data/' #full_data_include_current_ramps' 
 
@@ -62,7 +62,7 @@ val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               lookbacks, lookahead,
                               predict_deltas, profile_downsample)
 
-with tf.device('/cpu:0'):
+with tf.device('/gpu:0'):
     model = models[model_type](input_profile_names, target_profile_names,
                                actuator_names, profile_lookback, actuator_lookback,
                                lookahead, profile_length, std_activation)

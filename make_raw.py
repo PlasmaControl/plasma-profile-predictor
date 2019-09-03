@@ -21,13 +21,13 @@ input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.fo
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
 
-rawdata_path='/scratch/gpfs/jabbate/full_data/final_data.pkl'
+rawdata_path='/scratch/gpfs/jabbate/small_data/final_data.pkl'
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'StandardScaler'
-window_length = 1
+window_length = 3
 window_overlap = 0
 profile_lookback = 1
-actuator_lookback = 10
+actuator_lookback = 6
 lookbacks = {'thomson_dens_{}'.format(efit_type): profile_lookback,
              'thomson_temp_{}'.format(efit_type): profile_lookback,
              'temp': profile_lookback,
@@ -40,8 +40,8 @@ lookbacks = {'thomson_dens_{}'.format(efit_type): profile_lookback,
              'curr': actuator_lookback,
              'tinj': actuator_lookback,
              'gasA': actuator_lookback}
-lookahead = 8
-sample_step = 3
+lookahead = 3
+sample_step = 5
 uniform_normalization = True
 train_frac = 0.8
 val_frac = 0.2
