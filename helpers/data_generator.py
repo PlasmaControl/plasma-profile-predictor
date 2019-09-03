@@ -7,8 +7,6 @@ from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
 from tqdm import tqdm
 
-# split present and future actuators
-
 
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names, target_profile_names,
@@ -19,9 +17,9 @@ class DataGenerator(Sequence):
         Args:
             data: dict of data arrays to draw from.
             batch_size (int): size of each batch.
-            input_profile_names (str): List of names of profile inputs, as strings.
-            actuator_names (str): List of names of actuator inputs, as strings.        
-            target_profile_names (str): List of names of profile targets, as strings.
+            profile_inputs (str): List of names of profile inputs, as strings.
+            actuator_inputs (str): List of names of actuator inputs, as strings.
+            targets (str): List of names of profile targets, as strings.
             profile_lookback (int): Number of previous steps for profile data.
             actuator_lookback (int): Number of previous steps for actuator data.
             lookahead (int): How many steps ahead to predict (prediction window)
@@ -81,6 +79,48 @@ class DataGenerator(Sequence):
 
         return inp, targ
 
+    def get_data_by_shot_time(self, shots, times):
+        # shots: 1d list or array
+        # times: 1d list or array
+        if type(shots) is not np.ndarray:
+            shots = np.array(shots)
+        if type(times) is not np.ndarray:
+            times = np.array(times)
+        inds = np.array([])
+        for shot, time in zip(shots, times):
+            shot_inds = np.nonzero(self.data['shotnum'][:, 0] == shot)[0]
+            if len(shot_inds) < 1:
+                continue
+            ind = shot_inds[np.argmin(
+                np.abs(time-self.data['time'][shot_inds, self.max_lookback-1]))]
+            inds = np.append(inds, ind)
+        inds = inds.astype(int)
+
+        inp = {}
+        targ = {}
+        self.cur_shotnum = self.data['shotnum'][inds]
+        self.cur_times = self.data['time'][inds]
+
+        for sig in self.profile_inputs:
+            inp['input_' + sig] = self.data[sig][inds,
+                                                 0:self.lookbacks[sig],
+                                                 ::self.profile_downsample]
+        for sig in self.actuator_inputs:
+            inp['input_past_' + sig] = self.data[sig][inds,
+                                                      0:self.lookbacks[sig]]
+            inp['input_future_' + sig] = self.data[sig][inds,
+                                                        self.lookbacks[sig]:
+                                                        self.lookbacks[sig]+self.lookahead]
+        for sig in self.targets:
+            if self.predict_deltas:
+                baseline = self.data[sig][inds,
+                                          self.lookbacks[sig]-1, ::self.profile_downsample]
+            else:
+                baseline = 0
+            targ['target_' + sig] = self.data[sig][inds,
+                                                   -1, ::self.profile_downsample] - baseline
+        return inp, targ
+
 
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
@@ -120,7 +160,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
-    
+
     verbose = bool(verbose)
     sig_names = list(np.unique(sig_names))
     if type(rawdata) is not dict:
@@ -168,7 +208,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     def binavg(array, start):
         """averages over bins"""
         return np.mean(array[start:start+window_length], axis=0)
-    
+
     # check if each sig is not completely nan
     def is_valid(shot):
         for sig in sigsplustime:
@@ -178,7 +218,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             if (shot['t_ip_flat']==None or shot['ip_flat_duration']==None):
                 return False
         return True
-    
+
     def get_non_nan_inds(arr):
         if len(arr.shape) == 1:
             return np.where(~np.isnan(arr))[0]
@@ -217,7 +257,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         if not is_valid(shot):
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
             continue
-        
+
         first = get_first_index(shot)
         last = get_last_index(shot)
         for sig in sigsplustime:
@@ -235,7 +275,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
                 else:
                     alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
-    print("Shots with Complete NaN: " + ', '.join(str(e) for e in shots_with_complete_nan))
+    print("Shots with Complete NaN: " + ', '.join(str(e)
+                                                  for e in shots_with_complete_nan))
     del usabledata
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
@@ -248,7 +289,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     inds = np.arange(nsamples)
         
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
