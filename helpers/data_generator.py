@@ -4,8 +4,8 @@ import gc
 from pathlib import Path
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
-from tqdm import tqdm
 from helpers.normalization import normalize
+from tqdm import tqdm
 
 # split present and future actuators
 
@@ -86,7 +86,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
                  nshots=None, 
-                 randomize=True, verbose=1, flattop_only=True, **kwargs):
+                 verbose=1, flattop_only=True, **kwargs):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -111,7 +111,6 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
         verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
-        randomize (bool): whether to maintain shot and timestep order
             
     Returns:
         traindata (dict): Dictionary of numpy arrays, one entry for each signal.
@@ -158,10 +157,6 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
-
-    np.random.seed(0)
-    if randomize:
-        usabledata = usabledata[np.random.permutation(len(usabledata))]
         
     usabledata = usabledata[:nshots]
     if verbose:
@@ -250,10 +245,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
     
-    if randomize:
-        inds = np.random.permutation(nsamples)
-    else:
-        inds = np.arange(nsamples)
+    inds = np.arange(nsamples)
         
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
