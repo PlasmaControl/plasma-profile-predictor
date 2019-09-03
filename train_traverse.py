@@ -91,9 +91,9 @@ if not distributed:
     callbacks.append(ModelCheckpoint(checkpt_dir+runname+'.h5', monitor='val_loss',
                                      verbose=0, save_best_only=True,
                                      save_weights_only=False, mode='auto', period=1))
-    callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
-                                       verbose=1, mode='auto', min_delta=0.001,
-                                       cooldown=1, min_lr=0))
+callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
+                                   verbose=1, mode='auto', min_delta=0.001,
+                                   cooldown=1, min_lr=0))
 
 steps_per_epoch=len(train_generator)
 print('Train generator length: {}'.format(len(train_generator)))
