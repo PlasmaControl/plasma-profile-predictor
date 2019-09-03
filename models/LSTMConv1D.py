@@ -8,13 +8,13 @@ import numpy as np
 
 
 def build_lstmconv1d_joe(input_profile_names, target_profile_names,
-                actuator_names, lookbacks,
+                actuator_names, profile_lookback, actuator_lookback,
                 lookahead, profile_length, std_activation):
 
     rnn_layer = layers.LSTM
 
-    profile_inshape = (lookbacks[input_profile_names[0]], profile_length)
-    past_actuator_inshape = (lookbacks[actuator_names[0]],)
+    profile_inshape = (profile_lookback, profile_length) #(lookbacks[input_profile_names[0]], profile_length)
+    past_actuator_inshape = (actuator_lookback,) #(lookbacks[actuator_names[0]],)
     future_actuator_inshape = (lookahead,)
     num_profiles = len(input_profile_names)
     num_targets = len(target_profile_names)
@@ -58,7 +58,9 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
     for i in range(num_profiles):
         profile_inputs.append(
             Input(profile_inshape, name='input_' + input_profile_names[i]))
-        profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
+#         profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
+#                         (profile_inputs[i]))
+        profiles.append(Reshape((profile_lookback, profile_length, 1))
                         (profile_inputs[i]))
     current_profiles = Concatenate(axis=-1)(profiles)
     current_profiles = Reshape(
@@ -84,7 +86,8 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
         future_actuators.append(Reshape((lookahead, 1))
                                 (actuator_future_inputs[i]))
         previous_actuators.append(
-            Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
+            #Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
+            Reshape((actuator_lookback, 1))(actuator_past_inputs[i]))
 
     future_actuators = Concatenate(axis=-1)(future_actuators)
     previous_actuators = Concatenate(axis=-1)(previous_actuators)
@@ -123,14 +126,16 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
 
         current_profiles_processed_1 = layers.Conv1D(filters=8, kernel_size=2,
                                                      padding='same', activation='relu')(current_profiles_processed_0)
-        current_profiles_processed_2 = layers.Conv1D(filters=8, kernel_size=4,
+        current_profiles_processed_2 = layers.Conv1D(filters=16, kernel_size=4,
                                                      padding='same', activation='relu')(current_profiles_processed_1)
-        current_profiles_processed_3 = layers.Conv1D(filters=8, kernel_size=8,
+        current_profiles_processed_3 = layers.Conv1D(filters=16, kernel_size=8,
                                                      padding='same', activation='relu')(current_profiles_processed_2)
 
         final_output = layers.Concatenate()(
             [current_profiles_processed_1, current_profiles_processed_2, current_profiles_processed_3])
-        final_output = layers.Conv1D(filters=10, kernel_size=4,
+        final_output = layers.Conv1D(filters=16, kernel_size=4,
+                                     padding='same', activation='tanh')(final_output)
+        final_output = layers.Conv1D(filters=8, kernel_size=4,
                                      padding='same', activation='tanh')(final_output)
         final_output = layers.Conv1D(filters=1, kernel_size=4,
                                      padding='same', activation='linear')(final_output)
