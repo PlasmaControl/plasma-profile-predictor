@@ -1,6 +1,5 @@
 import pickle
 import keras
-import tensorflow as tf
 import numpy as np
 
 from helpers.data_generator import process_data, DataGenerator
@@ -14,19 +13,27 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 
 import os
 
-distributed=True
+distributed=False
 
-processed_filename_base='/scratch/gpfs/jabbate/full_data/' #full_data_include_current_ramps' 
+processed_filename_base='/scratch/gpfs/jabbate/data_60_ms/'#data_60_ms/' #full_data_include_current_ramps' 
 
-with tf.device('/cpu:0'):
-    with open(os.path.join(processed_filename_base,'train.pkl'),'rb') as f:
-        traindata=pickle.load(f)
-    with open(os.path.join(processed_filename_base,'val.pkl'),'rb') as f:
-        valdata=pickle.load(f)
+#with tf.device('/cpu:0'):
+with open(os.path.join(processed_filename_base,'train.pkl'),'rb') as f:
+    traindata=pickle.load(f)
+with open(os.path.join(processed_filename_base,'val.pkl'),'rb') as f:
+    valdata=pickle.load(f)
 
 with open(os.path.join(processed_filename_base,'param_dict.pkl'),'rb') as f:
     param_dict=pickle.load(f)
 globals().update(param_dict)
+
+############# CAN REDUCE THE SIGNALS HERE #####################
+
+# actuator_names=['pinj', 'curr', 'tinj', 'gasA']
+# input_profile_names=['temp','dens']
+# target_profile_names=['temp','dens']
+
+###############################################################
 
 profile_downsample = 2
 profile_length = int(np.ceil(65/profile_downsample))
@@ -43,15 +50,14 @@ model_type = 'conv1d'
 predict_deltas = True
 
 std_activation = 'relu'
-checkpt_dir = "/home/jabbate/run_results/" #"/global/homes/a/abbatej/plasma-profile-predictor/"
+checkpt_dir = "/home/jabbate/test_all_gas_vs_gasA_and_zipfit_vs_regular/" #"/global/homes/a/abbatej/plasma-profile-predictor/"
 
 hinge_weight = 50
 batch_size = 512
 epochs = 50
 verbose = 1
 
-runname = 'joe_model_test_distributed'
-
+runname = 'joe_zipfit_gasA'
 
 train_generator = DataGenerator(traindata, batch_size, input_profile_names,
                                 actuator_names, target_profile_names,
@@ -62,10 +68,10 @@ val_generator = DataGenerator(valdata, batch_size, input_profile_names,
                               lookbacks, lookahead,
                               predict_deltas, profile_downsample)
 
-with tf.device('/gpu:0'):
-    model = models[model_type](input_profile_names, target_profile_names,
-                               actuator_names, profile_lookback, actuator_lookback,
-                               lookahead, profile_length, std_activation)
+#with tf.device('/cpu:0'):
+model = models[model_type](input_profile_names, target_profile_names,
+                           actuator_names, profile_lookback, actuator_lookback,
+                           lookahead, profile_length, std_activation)
 
 if distributed:
     parallel_model = keras.utils.multi_gpu_model(model, gpus=2)

@@ -1,11 +1,9 @@
+import keras
 
 from keras import models
 from keras import layers
 
-from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D
 from keras.models import Model
-import numpy as np
-
 
 def build_lstmconv1d_joe(input_profile_names, target_profile_names,
                 actuator_names, profile_lookback, actuator_lookback,
@@ -56,15 +54,14 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
     profile_inputs = []
     profiles = []
     for i in range(num_profiles):
-        profile_inputs.append(
-            Input(profile_inshape, name='input_' + input_profile_names[i]))
-#         profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
-#                         (profile_inputs[i]))
-        profiles.append(Reshape((profile_lookback, profile_length, 1))
-                        (profile_inputs[i]))
-    current_profiles = Concatenate(axis=-1)(profiles)
-    current_profiles = Reshape(
-        (profile_length, num_profiles))(current_profiles)
+        profile_inputs.append(keras.layers.Input(profile_inshape, name='input_' + input_profile_names[i]))
+        # profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
+        #                 (profile_inputs[i]))
+        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
+        profiles.append(keras.layers.Reshape((profile_lookback, profile_length, 1))(profile_inputs[i]))
+    current_profiles = layers.Concatenate(axis=-1)(profiles)
+    current_profiles = layers.Reshape((profile_length, num_profiles))(current_profiles)
 
     # input previous and future actuators and concat each of them
     actuator_past_inputs = []
@@ -75,22 +72,22 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
 
     for i in range(num_actuators):
         actuator_future_inputs.append(
-            Input(future_actuator_inshape,
+            layers.Input(future_actuator_inshape,
                   name="input_future_{}".format(actuator_names[i]))
         )
         actuator_past_inputs.append(
-            Input(past_actuator_inshape,
+            layers.Input(past_actuator_inshape,
                   name="input_past_{}".format(actuator_names[i]))
         )
 
-        future_actuators.append(Reshape((lookahead, 1))
+        future_actuators.append(layers.Reshape((lookahead, 1))
                                 (actuator_future_inputs[i]))
         previous_actuators.append(
             #Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
-            Reshape((actuator_lookback, 1))(actuator_past_inputs[i]))
+            layers.Reshape((actuator_lookback, 1))(actuator_past_inputs[i]))
 
-    future_actuators = Concatenate(axis=-1)(future_actuators)
-    previous_actuators = Concatenate(axis=-1)(previous_actuators)
+    future_actuators = layers.Concatenate(axis=-1)(future_actuators)
+    previous_actuators = layers.Concatenate(axis=-1)(previous_actuators)
     
     
     print(future_actuators.shape)

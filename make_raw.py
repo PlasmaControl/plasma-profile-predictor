@@ -3,7 +3,7 @@ import numpy as np
 import os
 from helpers.data_generator import process_data, DataGenerator
 
-output_filename_base='/scratch/gpfs/jabbate/data_60_ms' #_include_current_ramps/'
+output_filename_base='/scratch/gpfs/jabbate/small_data' #_include_current_ramps/'
 
 efit_type='EFITRT1'
 
@@ -20,7 +20,7 @@ available_sigs = ['which_gas', 'cerauto_rotation_EFITRT1', 'cerauto_rotation_EFI
 
 #avail_profiles + avail_actuators + ['time']
 
-input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type),'temp', 'dens',]
+input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type),'temp', 'dens']
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA','gasB','gasC','gasD','target_density','density_estimate','gas_feedback']
 

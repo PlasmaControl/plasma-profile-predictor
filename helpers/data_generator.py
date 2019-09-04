@@ -7,7 +7,6 @@ from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
 from tqdm import tqdm
 
-
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names, target_profile_names,
                  lookbacks, lookahead, predict_deltas,
@@ -48,7 +47,7 @@ class DataGenerator(Sequence):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
 
     def __getitem__(self, idx):
-        inp = {}
+        inp = {}                
         targ = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
@@ -212,7 +211,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # check if each sig is not completely nan
     def is_valid(shot):
         for sig in sigsplustime:
-            if np.isnan(shot[sig]).all():
+            if np.isnan(shot[sig]).all(): # or np.isinf(shot[sig]).any():
                 return False
         if (flattop_only):
             if (shot['t_ip_flat']==None or shot['ip_flat_duration']==None):
@@ -254,15 +253,19 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose):
         # check to see if each sig in the shot is not completely nan
+
+######################################
         if not is_valid(shot):
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
             continue
 
         first = int(np.ceil(get_first_index(shot)/(window_length-window_overlap)))
-        last = int(np.floor(get_last_index(shot)/(window_length-window_overlap)))
+        last = int(np.floor( ((get_last_index(shot)+1) / (window_length-window_overlap)) - 1))
         for sig in sigsplustime:
             temp = shot[sig]
-            nbins = int(temp.shape[0]/(window_length-window_overlap))
+            if np.any(np.isinf(temp)):
+                temp[np.isinf(temp)]=np.nan
+            nbins = int(np.floor(temp.shape[0]/(window_length-window_overlap)))
             shotdata = []
             for i in range(nbins):
                 # populate array of binned/windowed data for each shot
@@ -275,6 +278,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
                 else:
                     alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
+######################################
+
     print("Shots with Complete NaN: " + ', '.join(str(e)
                                                   for e in shots_with_complete_nan))
     del usabledata
@@ -289,7 +294,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     inds = np.arange(nsamples)
         
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
