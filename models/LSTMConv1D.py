@@ -58,7 +58,6 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
         # profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
         #                 (profile_inputs[i]))
         # import pdb; pdb.set_trace()
-        import pdb; pdb.set_trace()
         profiles.append(keras.layers.Reshape((profile_lookback, profile_length, 1))(profile_inputs[i]))
     current_profiles = layers.Concatenate(axis=-1)(profiles)
     current_profiles = layers.Reshape((profile_length, num_profiles))(current_profiles)

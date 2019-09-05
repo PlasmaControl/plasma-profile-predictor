@@ -29,9 +29,10 @@ globals().update(param_dict)
 
 ############# CAN REDUCE THE SIGNALS HERE #####################
 
-# actuator_names=['pinj', 'curr', 'tinj', 'gasA']
-# input_profile_names=['temp','dens']
-# target_profile_names=['temp','dens']
+actuator_names=['pinj', 'curr', 'tinj', 'gasA']
+#input_profile_names=['temp','dens']
+input_profile_names=['thomson_temp_EFITRT1','thomson_dens_EFITRT1']
+target_profile_names=['temp','dens']
 
 ###############################################################
 
@@ -45,7 +46,8 @@ models = {'simple_lstm': get_model_simple_lstm,
           'linear_systems': get_model_linear_systems,
           'conv1d' : build_lstmconv1d_joe}
 
-model_type = 'conv1d'
+#model_type = 'conv1d'
+model_type = 'conv2d'
 
 predict_deltas = True
 
@@ -57,7 +59,10 @@ batch_size = 512
 epochs = 50
 verbose = 1
 
-runname = 'joe_zipfit_gasA'
+#runname = 'joe_zipfit_gasA'
+#runname = 'joe_thomson_gasA'
+#runname = 'rory_zipfit_gasA'
+runname = 'rory_thomson_gasA'
 
 train_generator = DataGenerator(traindata, batch_size, input_profile_names,
                                 actuator_names, target_profile_names,

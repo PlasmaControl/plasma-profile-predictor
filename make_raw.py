@@ -3,7 +3,7 @@ import numpy as np
 import os
 from helpers.data_generator import process_data, DataGenerator
 
-output_filename_base='/scratch/gpfs/jabbate/small_data' #_include_current_ramps/'
+output_filename_base='/scratch/gpfs/jabbate/data_60_ms_include_rampup' #_include_current_ramps/'
 
 efit_type='EFITRT1'
 
@@ -24,7 +24,7 @@ input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.fo
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA','gasB','gasC','gasD','target_density','density_estimate','gas_feedback']
 
-rawdata_path='/scratch/gpfs/jabbate/small_data/final_data.pkl'
+rawdata_path='/scratch/gpfs/jabbate/full_data/final_data.pkl'
 sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'RobustScaler'
 window_length = 3
@@ -42,7 +42,7 @@ uniform_normalization = True
 train_frac = 0.8
 val_frac = 0.2
 nshots = 12000 #TODO: replace with nbatches
-flattop_only=True
+flattop_only=False
 
 assert(all(elem in available_sigs for elem in sig_names))
 

@@ -278,6 +278,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
                 else:
                     alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
+        if shot['shotnum'][0]==170391:
+            import pdb; pdb.set_trace()
 ######################################
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
@@ -286,6 +288,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
+        import pdb; pdb.set_trace()
         alldata[sig] = np.stack(alldata[sig])
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
