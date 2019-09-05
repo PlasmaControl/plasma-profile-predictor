@@ -1,11 +1,10 @@
-from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D
+from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D, GlobalAveragePooling2D
 from keras.models import Model
 import numpy as np
 
 
-def get_model_conv2d_hyperparam(input_profile_names, target_profile_names,
-                                actuator_names, profile_lookback, actuator_lookback,
-                                lookahead, profile_length, std_activation):
+def get_model_conv2d_hyperparam(input_profile_names, target_profile_names, scalar_input_names,
+                                actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
 
     profile_inshape = (profile_lookback, profile_length)
     past_actuator_inshape = (actuator_lookback,)
@@ -153,39 +152,40 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         num_profiles*max_channels)))(profiles)
     # shape = (length, channels)
 
-    scalar_inputs = []
-    scalars = []
-    for i in range(num_scalars):
-        scalar_inputs.append(
-            Input((lookbacks[scalar_input_names[i]], 1), name='input_' + scalar_input_names[i]))
-        scalars.append(ZeroPadding1D(padding=(
-            max_scalar_lookback - lookbacks[scalar_input_names[i]], 0))(scalar_inputs[i]))
-        scalars[i] = Reshape(
-            (max_scalar_lookback, 1))(scalars[i])
-    scalars = Concatenate(axis=-1)(scalars)
-    # shaoe = (time, num_actuators)
-    scalars = Dense(units=int(num_profiles*max_channels/8),
-                    activation=std_activation)(scalars)
-    # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
-    #                    padding='causal', activation=std_activation)(actuators)
-    scalars = Dense(units=int(num_profiles*max_channels/4),
-                    activation=std_activation)(scalars)
-    # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
-    #                    padding='causal', activation=std_activation)(actuators)
-    scalars = Dense(units=int(num_profiles*max_channels/2),
-                    activation=std_activation)(scalars)
-    scalars = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
-                   recurrent_activation='hard_sigmoid')(scalars)
-    scalars = Reshape((int(num_profiles*max_channels), 1))(scalars)
-    # shape = (channels, 1)
-    scalars = Dense(units=int(profile_length/4),
-                    activation=std_activation)(scalars)
-    scalars = Dense(units=int(profile_length/2),
-                    activation=std_activation)(scalars)
-    scalars = Dense(units=profile_length, activation=None)(scalars)
-    # shape = (channels, profile_length)
-    scalars = Permute(dims=(2, 1))(scalars)
-    # shape = (profile_length, channels)
+    if num_scalars > 0:
+        scalar_inputs = []
+        scalars = []
+        for i in range(num_scalars):
+            scalar_inputs.append(
+                Input((lookbacks[scalar_input_names[i]], 1), name='input_' + scalar_input_names[i]))
+            scalars.append(ZeroPadding1D(padding=(
+                max_scalar_lookback - lookbacks[scalar_input_names[i]], 0))(scalar_inputs[i]))
+            scalars[i] = Reshape(
+                (max_scalar_lookback, 1))(scalars[i])
+        scalars = Concatenate(axis=-1)(scalars)
+        # shaoe = (time, num_actuators)
+        scalars = Dense(units=int(num_profiles*max_channels/8),
+                        activation=std_activation)(scalars)
+        # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
+        #                    padding='causal', activation=std_activation)(actuators)
+        scalars = Dense(units=int(num_profiles*max_channels/4),
+                        activation=std_activation)(scalars)
+        # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
+        #                    padding='causal', activation=std_activation)(actuators)
+        scalars = Dense(units=int(num_profiles*max_channels/2),
+                        activation=std_activation)(scalars)
+        scalars = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
+                       recurrent_activation='hard_sigmoid')(scalars)
+        scalars = Reshape((int(num_profiles*max_channels), 1))(scalars)
+        # shape = (channels, 1)
+        scalars = Dense(units=int(profile_length/4),
+                        activation=std_activation)(scalars)
+        scalars = Dense(units=int(profile_length/2),
+                        activation=std_activation)(scalars)
+        scalars = Dense(units=profile_length, activation=None)(scalars)
+        # shape = (channels, profile_length)
+        scalars = Permute(dims=(2, 1))(scalars)
+        # shape = (profile_length, channels)
 
     actuator_future_inputs = []
     actuator_past_inputs = []
@@ -224,7 +224,10 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     actuators = Permute(dims=(2, 1))(actuators)
     # shape = (profile_length, channels)
 
-    merged = Add()([profiles, actuators, scalars])
+    if num_scalars > 0:
+        merged = Add()([profiles, actuators, scalars])
+    else:
+        merged = Add()([profiles, actuators])
     merged = Reshape((1, profile_length, int(
         num_profiles*max_channels)))(merged)
     # shape = (1, length, channels)
@@ -243,16 +246,22 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
                              padding='same', activation=None)(prof_act[i])
         # shape = (1,length,1)
-        prof_act[i] = Reshape((profile_length,), name='target_' +
-                              target_profile_names[i])(prof_act[i])
-    model = Model(inputs=profile_inputs + actuator_past_inputs +
-                  actuator_future_inputs + scalar_inputs, outputs=prof_act)
+        if kwargs.get('predict_mean'):
+            prof_act[i] = GlobalAveragePooling2D()(prof_act[i])
+        else:
+            prof_act[i] = Reshape((profile_length,), name='target_' +
+                                  target_profile_names[i])(prof_act[i])
+
+    model_inputs = profile_inputs + actuator_past_inputs + actuator_future_inputs
+    if num_scalars > 0:
+        model_inputs += scalar_inputs
+    model_outputs = prof_act
+    model = Model(inputs=model_inputs, outputs=model_outputs)
     return model
 
 
-def get_model_lstm_conv2d(input_profile_names, target_profile_names,
-                          actuator_names, profile_lookback, actuator_lookback,
-                          lookahead, profile_length, std_activation):
+def get_model_lstm_conv2d(input_profile_names, target_profile_names, scalar_input_names,
+                          actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
 
     profile_inshape = (profile_lookback, profile_length)
     actuator_inshape = (actuator_lookback + lookahead,)
@@ -342,9 +351,9 @@ def get_model_lstm_conv2d(input_profile_names, target_profile_names,
     return model
 
 
-def get_model_simple_lstm(input_profile_names, target_profile_names,
-                          actuator_names, profile_lookback, actuator_lookback,
-                          lookahead, profile_length, std_activation):
+def get_model_simple_lstm(input_profile_names, target_profile_names, scalar_input_names,
+                          actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+
     profile_inshape = (profile_lookback, profile_length)
     actuator_inshape = (actuator_lookback + lookahead,)
     num_profiles = len(input_profile_names)
@@ -395,9 +404,8 @@ def get_model_simple_lstm(input_profile_names, target_profile_names,
     return model
 
 
-def get_model_linear_systems(input_profile_names, target_profile_names,
-                             actuator_names, profile_lookback, actuator_lookback,
-                             lookahead, profile_length, std_activation):
+def get_model_linear_systems(input_profile_names, target_profile_names, scalar_input_names,
+                             actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
 
     profile_inshape = (profile_lookback, profile_length)
     actuator_inshape = (actuator_lookback + lookahead,)

@@ -44,6 +44,7 @@ class DataGenerator(Sequence):
             if val > max_lookback:
                 max_lookback = val
         self.max_lookback = max_lookback
+        self.kwargs = kwargs
 
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
@@ -82,6 +83,8 @@ class DataGenerator(Sequence):
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
                                                    -1, ::self.profile_downsample] - baseline
+            if self.kwargs.get('predict_mean'):
+                targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
 
         return inp, targ
 
@@ -141,6 +144,9 @@ class DataGenerator(Sequence):
                 baseline = 0
             targ['target_' + sig] = self.data[sig][inds,
                                                    -1, ::self.profile_downsample] - baseline
+
+            if self.kwargs.get('predict_mean'):
+                targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
         return inp, targ
 
 
@@ -322,7 +328,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     inds = np.arange(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,

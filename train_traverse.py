@@ -8,7 +8,7 @@ from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
 from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
-from models.LSTMConv1D import build_lstmconv1d_joe
+from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 
@@ -18,7 +18,7 @@ import itertools
 
 def main(scenario_index=None):
 
-    scenarios_dict = {'models': [{'model_type': 'conv1d', 'epochs': 50},
+    scenarios_dict = {'models': [{'model_type': 'simple_dense', 'epochs': 50},
                                  {'model_type': 'conv2d', 'epochs': 100}],
                       'actuators_scalars': [{'actuator_names':
                                              ['pinj', 'curr', 'tinj', 'gasA'],
@@ -31,14 +31,26 @@ def main(scenario_index=None):
                                              ['pinj', 'curr', 'tinj',
                                               'target_density', 'gas_feedback'],
                                              'scalar_input_names':['density_estimate']}],
-                      'flattop': [{'flattop_only': True, 'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms/'},
-                                  {'flattop_only': False, 'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_include_rampup/'}],
-                      'inputs':  [{'input_profile_names': ['temp', 'dens']},
-                                  {'input_profile_names': ['thomson_dens_EFITRT1', 'thomson_temp_EFITRT1']}],
-                      'targets': [{'target_profile_names': ['temp', 'dens']}],
+                      'flattop': [{'flattop_only': True,
+                                   'processed_filename_base':
+                                   '/scratch/gpfs/jabbate/data_60_ms/'}, ],
+                      # {'flattop_only': False,
+                      #  'processed_filename_base':
+                      #  '/scratch/gpfs/jabbate/data_60_ms_include_rampup/'}],
+                      'inputs':  [{'input_profile_names': ['temp',
+                                                           'dens']},
+                                  {'input_profile_names': ['thomson_dens_EFITRT1',
+                                                           'thomson_temp_EFITRT1']}],
+                      'targets': [{'target_profile_names': ['temp',
+                                                            'dens']}],
                       'profile_downsample': [{'profile_downsample': 2}],
                       'std_activation': [{'std_activation': 'relu'}],
-                      'hinge_weight': [{'hinge_weight': 50}]}
+                      'hinge_weight': [{'hinge_weight': 50}],
+                      'mse_weight_edge': [{'mse_weight_edge': np.sqrt(10)}],
+                      'mse_weight_power': [{'mse_weight_power': 2}],
+                      'batch_size': [{'batch_size': 128}],
+                      'predict_deltas': [{'predict_deltas': True},
+                                         {'predict_deltas': False}]}
 
     scenarios = []
     for scenario in itertools.product(*list(scenarios_dict.values())):
@@ -73,8 +85,8 @@ def main(scenario_index=None):
     target_profile_names = ['temp', 'dens']
     distributed = False
     profile_downsample = 2
-    profile_length = int(np.ceil(65/profile_downsample))
-    mse_weight_vector = np.linspace(1, np.sqrt(10), profile_length)**2
+    mse_weight_power = 2
+    mse_weight_edge = np.sqrt(10)
     model_type = 'conv1d'
     predict_deltas = True
     std_activation = 'relu'
@@ -83,6 +95,10 @@ def main(scenario_index=None):
     epochs = 50
     verbose = 1
 
+    mse_weight_vector = np.linspace(
+        1, mse_weight_edge, profile_length)**mse_weight_power
+    profile_length = int(np.ceil(65/profile_downsample))
+
     if scenario_index >= 0:
         globals.update(scenarios(scenario_index))
 
@@ -90,7 +106,8 @@ def main(scenario_index=None):
               'lstm_conv2d': get_model_lstm_conv2d,
               'conv2d': get_model_conv2d,
               'linear_systems': get_model_linear_systems,
-              'conv1d': build_lstmconv1d_joe}
+              'conv1d': build_lstmconv1d_joe,
+              'simple_dense': build_dumb_simple_model}
 
     runname = 'model-' + model_type + \
               '_profiles-' + '-'.join(input_profile_names) + \
@@ -103,6 +120,9 @@ def main(scenario_index=None):
               '_nshots-' + str(nshots) + \
               strftime("_%d%b%y-%H-%M", localtime())
 
+    if scenario_index >= 0:
+        runname += 'Scenario-' + str(scenario_index)
+
     train_generator = DataGenerator(traindata, batch_size, input_profile_names,
                                     actuator_names, target_profile_names,
                                     lookbacks, lookahead,
@@ -111,11 +131,12 @@ def main(scenario_index=None):
                                   actuator_names, target_profile_names,
                                   lookbacks, lookahead,
                                   predict_deltas, profile_downsample)
+    model_kwargs = {}
 
     # with tf.device('/cpu:0'):
     model = models[model_type](input_profile_names, target_profile_names,
-                               actuator_names, profile_lookback, actuator_lookback,
-                               lookahead, profile_length, std_activation)
+                               scalar_input_names, actuator_names, lookbacks,
+                               lookahead, profile_length, std_activation, **model_kwargs)
 
     if distributed:
         parallel_model = keras.utils.multi_gpu_model(model, gpus=2)
@@ -186,6 +207,8 @@ def main(scenario_index=None):
                        'val_frac': val_frac,
                        'nshots': nshots,
                        'mse_weight_vector': mse_weight_vector,
+                       'mse_weight_edge': mse_weight_edge,
+                       'mse_weight_power': mse_weight_power,
                        'hinge_weight': hinge_weight,
                        'batch_size': batch_size,
                        'epochs': epochs,

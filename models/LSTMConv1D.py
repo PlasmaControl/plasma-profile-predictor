@@ -2,17 +2,20 @@ import keras
 
 from keras import models
 from keras import layers
+from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D, GlobalAveragePooling1D
 
 from keras.models import Model
 
-def build_lstmconv1d_joe(input_profile_names, target_profile_names,
-                actuator_names, profile_lookback, actuator_lookback,
-                lookahead, profile_length, std_activation):
+
+def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input_names,
+                         actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
 
     rnn_layer = layers.LSTM
 
-    profile_inshape = (profile_lookback, profile_length) #(lookbacks[input_profile_names[0]], profile_length)
-    past_actuator_inshape = (actuator_lookback,) #(lookbacks[actuator_names[0]],)
+    # (lookbacks[input_profile_names[0]], profile_length)
+    profile_inshape = (profile_lookback, profile_length)
+    # (lookbacks[actuator_names[0]],)
+    past_actuator_inshape = (actuator_lookback,)
     future_actuator_inshape = (lookahead,)
     num_profiles = len(input_profile_names)
     num_targets = len(target_profile_names)
@@ -54,14 +57,18 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
     profile_inputs = []
     profiles = []
     for i in range(num_profiles):
-        profile_inputs.append(keras.layers.Input(profile_inshape, name='input_' + input_profile_names[i]))
+        profile_inputs.append(keras.layers.Input(
+            profile_inshape, name='input_' + input_profile_names[i]))
         # profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
         #                 (profile_inputs[i]))
         # import pdb; pdb.set_trace()
-        import pdb; pdb.set_trace()
-        profiles.append(keras.layers.Reshape((profile_lookback, profile_length, 1))(profile_inputs[i]))
+        import pdb
+        pdb.set_trace()
+        profiles.append(keras.layers.Reshape(
+            (profile_lookback, profile_length, 1))(profile_inputs[i]))
     current_profiles = layers.Concatenate(axis=-1)(profiles)
-    current_profiles = layers.Reshape((profile_length, num_profiles))(current_profiles)
+    current_profiles = layers.Reshape(
+        (profile_length, num_profiles))(current_profiles)
 
     # input previous and future actuators and concat each of them
     actuator_past_inputs = []
@@ -73,23 +80,22 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
     for i in range(num_actuators):
         actuator_future_inputs.append(
             layers.Input(future_actuator_inshape,
-                  name="input_future_{}".format(actuator_names[i]))
+                         name="input_future_{}".format(actuator_names[i]))
         )
         actuator_past_inputs.append(
             layers.Input(past_actuator_inshape,
-                  name="input_past_{}".format(actuator_names[i]))
+                         name="input_past_{}".format(actuator_names[i]))
         )
 
         future_actuators.append(layers.Reshape((lookahead, 1))
                                 (actuator_future_inputs[i]))
         previous_actuators.append(
-            #Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
+            # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
             layers.Reshape((actuator_lookback, 1))(actuator_past_inputs[i]))
 
     future_actuators = layers.Concatenate(axis=-1)(future_actuators)
     previous_actuators = layers.Concatenate(axis=-1)(previous_actuators)
-    
-    
+
     print(future_actuators.shape)
     print(previous_actuators.shape)
     print(current_profiles.shape)
@@ -136,8 +142,8 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
                                      padding='same', activation='tanh')(final_output)
         final_output = layers.Conv1D(filters=1, kernel_size=4,
                                      padding='same', activation='linear')(final_output)
-        final_output = layers.Reshape(target_shape = (profile_length,), name="target_"+target_profile_names[i])(final_output)
-        
+        final_output = layers.Reshape(target_shape=(
+            profile_length,), name="target_"+target_profile_names[i])(final_output)
 
         prof_act.append(final_output)
     print(len(prof_act))
@@ -153,7 +159,71 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names,
 #    model=models.Model(inputs=[previous_actuators]+list(current_profiles.values()),
 #                       outputs=list(current_profiles_processed.values()))
 
-
     return model
     #######################
 
+
+def build_dumb_simple_model(input_profile_names, target_profile_names, scalar_input_names,
+                            actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+
+    num_profiles = len(input_profile_names)
+    num_targets = len(target_profile_names)
+    num_actuators = len(actuator_names)
+    num_scalars = len(scalar_input_names)
+
+    profile_inputs = []
+    profiles = []
+    for i in range(num_profiles):
+        profile_inputs.append(
+            Input((profile_length,), name='input_' + input_profile_names[i]))
+        # size 65,
+        profiles.append(Dense(units=profile_length,
+                              activation=std_activation)(profile_inputs[i]))
+        # size 65,
+
+    if num_scalars > 0:
+        scalar_inputs = []
+        scalars = []
+        for i in range(num_scalars):
+            scalar_inputs.append(
+                Input((1,), name='input_' + scalar_input_names[i]))
+            # size 1,
+            scalars.append(Dense(units=profile_length,
+                                 activation=std_activation)(scalar_inputs[i]))
+            # size 65,
+
+    actuator_future_inputs = []
+    actuators = []
+    for i in range(num_actuators):
+        actuator_future_inputs.append(
+            Input((lookahead, 1), name='input_future_' + actuator_names[i]))
+        # size lookahead,1
+        actuators.append(Dense(units=profile_length, activation=std_activation)(
+            actuator_future_inputs[i]))
+        # size lookahead, 65
+        actuators[i] = GlobalAveragePooling1D()(actuators[i])
+        # size 65,
+
+    outputs = []
+    for i in range(num_targets):
+        if num_scalars > 0:
+            outputs.append(profiles+scalars+actuators)
+        else:
+            outputs.append(profiles+actuators)
+        for j in range(len(outputs[i])):
+            outputs[i][j] = Dense(units=profile_length,
+                                  activation=std_activation)(outputs[i][j])
+            # size 65,
+        outputs[i] = Add()(outputs[i])
+        # size 65,
+        outputs[i] = Dense(units=profile_length,
+                           activation=std_activation)(outputs[i])
+        # size 65,
+        if kwargs.get('predict_mean'):
+            outputs[i] = Reshape((1, profile_length))(outputs[i])
+            outputs[i] = GlobalAveragePooling1D()(outputs[i])
+    model_inputs = profile_inputs + actuator_future_inputs
+    if num_scalars > 0:
+        model_inputs += scalar_inputs
+    model = Model(inputs=model_inputs, outputs=outputs)
+    return model
