@@ -11,60 +11,84 @@ from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
 from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-
+from time import strftime, localtime
+import tensorflow as tf
+from keras import backend as K
+from collections import OrderedDict
 import os
+import sys
 import itertools
 
 
-def main(scenario_index=None):
+def main(scenario_index=-2):
 
-    scenarios_dict = {'models': [{'model_type': 'simple_dense', 'epochs': 50},
-                                 {'model_type': 'conv2d', 'epochs': 100}],
-                      'actuators_scalars': [{'actuator_names':
-                                             ['pinj', 'curr', 'tinj', 'gasA'],
-                                             'scalar_input_names':[]},
-                                            {'actuator_names':
-                                             ['pinj', 'curr', 'tinj', 'gasA',
-                                              'gasB', 'gasC', 'gasD'],
-                                             'scalar_input_names':[]},
-                                            {'actuator_names':
-                                             ['pinj', 'curr', 'tinj',
-                                              'target_density', 'gas_feedback'],
-                                             'scalar_input_names':['density_estimate']}],
-                      'flattop': [{'flattop_only': True,
-                                   'processed_filename_base':
-                                   '/scratch/gpfs/jabbate/data_60_ms/'}, ],
-                      # {'flattop_only': False,
-                      #  'processed_filename_base':
-                      #  '/scratch/gpfs/jabbate/data_60_ms_include_rampup/'}],
-                      'inputs':  [{'input_profile_names': ['temp',
-                                                           'dens']},
-                                  {'input_profile_names': ['thomson_dens_EFITRT1',
-                                                           'thomson_temp_EFITRT1']}],
-                      'targets': [{'target_profile_names': ['temp',
-                                                            'dens']}],
-                      'profile_downsample': [{'profile_downsample': 2}],
-                      'std_activation': [{'std_activation': 'relu'}],
-                      'hinge_weight': [{'hinge_weight': 50}],
-                      'mse_weight_edge': [{'mse_weight_edge': np.sqrt(10)}],
-                      'mse_weight_power': [{'mse_weight_power': 2}],
-                      'batch_size': [{'batch_size': 128}],
-                      'predict_deltas': [{'predict_deltas': True},
-                                         {'predict_deltas': False}]}
-
-    scenarios = []
-    for scenario in itertools.product(*list(scenarios_dict.values())):
-        foo = {k: v for d in scenario for k, v in d.items()}
-        scenarios.append(foo)
-    num_scenarios = len(scenarios)
+    num_cores = 16
+    ngpu = 0 
+    config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
+                            inter_op_parallelism_threads=4*num_cores,
+                            allow_soft_placement=True,
+                            device_count={'CPU': 1,
+                                          'GPU': ngpu})
+    session = tf.Session(config=config)
+    K.set_session(session)
+    
+    scenarios_dict = OrderedDict()
+    scenarios_dict['models']= [{'model_type': 'simple_dense', 'epochs': 50},
+                               {'model_type': 'conv2d', 'epochs': 100}]
+    scenarios_dict['actuators_scalars'] = [{'actuator_names':
+                                            ['pinj', 'curr', 'tinj', 'gasA'],
+                                            'scalar_input_names':[]},
+                                           {'actuator_names':
+                                            ['pinj', 'curr', 'tinj', 'gasA',
+                                             'gasB', 'gasC', 'gasD'],
+                                            'scalar_input_names':[]},
+                                           {'actuator_names':
+                                            ['pinj', 'curr', 'tinj',
+                                             'target_density', 'gas_feedback'],
+                                            'scalar_input_names':['density_estimate']}]
+    scenarios_dict['flattop']= [{'flattop_only': True,
+                                 'processed_filename_base':
+                                 '/scratch/gpfs/jabbate/data_60_ms_flattop_randomized/'}, 
+                                {'flattop_only': False,
+                                 'processed_filename_base':
+                                 '/scratch/gpfs/jabbate/data_60_ms_include_rampup_randomized/'}]
+    scenarios_dict['inputs']=  [{'input_profile_names': ['temp','dens']},
+                                {'input_profile_names': ['thomson_dens_EFITRT1',
+                                                         'thomson_temp_EFITRT1']}]
+    scenarios_dict['targets'] = [{'target_profile_names': ['temp','dens']}]
+    scenarios_dict['profile_downsample'] =  [{'profile_downsample': 2}]
+    scenarios_dict['std_activation'] = [{'std_activation': 'relu'}]
+    scenarios_dict['hinge_weight'] = [{'hinge_weight': 50}]
+    scenarios_dict['mse_weight_edge'] = [{'mse_weight_edge': np.sqrt(10)}]
+    scenarios_dict['mse_weight_power'] = [{'mse_weight_power': 2}]
+    scenarios_dict['batch_size'] = [{'batch_size': 128}]
+    scenarios_dict['predict_deltas'] = [{'predict_deltas': True},
+                                        {'predict_deltas': False}]
 
     checkpt_dir = os.path.expanduser("~/run_results/")
 
+    scenarios = []
+    runtimes = []
+    for scenario in itertools.product(*list(scenarios_dict.values())):
+        foo = {k: v for d in scenario for k, v in d.items()}
+        scenarios.append(foo)
+        if foo['model_type'] == 'conv2d':
+            runtimes.append(5*128/foo['batch_size']*foo['epochs'])
+        elif foo['model_type'] == 'simple_dense':
+            runtimes.append(1*128/foo['batch_size']*foo['epochs'])
+        elif foo['model_type'] == 'conv1d':
+            runtimes.append(3.5*128/foo['batch_size']*foo['epochs'])
+        else:
+            runtimes.append(4*60)
+    num_scenarios = len(scenarios)
     if scenario_index == -1:
-        make_bash_scripts(num_scenarios, checkpt_dir)
+
+        make_bash_scripts(num_scenarios, checkpt_dir, num_cores, ngpu, runtimes)
+        print('Created Driver Scripts in ' + checkpt_dir)
         for i in range(num_scenarios):
             os.system('sbatch {}'.format(os.path.join(
                 checkpt_dir, 'driver' + str(i) + '.sh')))
+        print('Jobs submitted, exiting')
         return
 
 # data_60_ms/' #full_data_include_current_ramps'
@@ -79,28 +103,29 @@ def main(scenario_index=None):
     with open(os.path.join(processed_filename_base, 'param_dict.pkl'), 'rb') as f:
         param_dict = pickle.load(f)
     globals().update(param_dict)
-
+    print('Data Loaded \n')
+    
     actuator_names = ['pinj', 'curr', 'tinj', 'gasA']
     input_profile_names = ['temp', 'dens']
     target_profile_names = ['temp', 'dens']
-    distributed = False
+    scalar_input_names = []
     profile_downsample = 2
     mse_weight_power = 2
     mse_weight_edge = np.sqrt(10)
-    model_type = 'conv1d'
+    model_type = 'simple_dense'
     predict_deltas = True
     std_activation = 'relu'
     hinge_weight = 50
-    batch_size = 512
+    batch_size = 128
     epochs = 50
     verbose = 1
 
+    profile_length = int(np.ceil(65/profile_downsample))
     mse_weight_vector = np.linspace(
         1, mse_weight_edge, profile_length)**mse_weight_power
-    profile_length = int(np.ceil(65/profile_downsample))
 
     if scenario_index >= 0:
-        globals.update(scenarios(scenario_index))
+        globals().update(scenarios[scenario_index])
 
     models = {'simple_lstm': get_model_simple_lstm,
               'lstm_conv2d': get_model_lstm_conv2d,
@@ -118,19 +143,23 @@ def main(scenario_index=None):
               '_norm-' + normalization_method + \
               '_activ-' + std_activation + \
               '_nshots-' + str(nshots) + \
+              '_ftop-' + str(flattop_only) + \
               strftime("_%d%b%y-%H-%M", localtime())
 
     if scenario_index >= 0:
-        runname += 'Scenario-' + str(scenario_index)
+        runname += '_Scenario-' + str(scenario_index)
 
+    print(runname)
+        
     train_generator = DataGenerator(traindata, batch_size, input_profile_names,
-                                    actuator_names, target_profile_names,
+                                    actuator_names, target_profile_names, scalar_input_names,
                                     lookbacks, lookahead,
                                     predict_deltas, profile_downsample)
     val_generator = DataGenerator(valdata, batch_size, input_profile_names,
-                                  actuator_names, target_profile_names,
+                                  actuator_names, target_profile_names, scalar_input_names,
                                   lookbacks, lookahead,
                                   predict_deltas, profile_downsample)
+    print('Made Generators \n')
     model_kwargs = {}
 
     # with tf.device('/cpu:0'):
@@ -138,7 +167,7 @@ def main(scenario_index=None):
                                scalar_input_names, actuator_names, lookbacks,
                                lookahead, profile_length, std_activation, **model_kwargs)
 
-    if distributed:
+    if ngpu>1:
         parallel_model = keras.utils.multi_gpu_model(model, gpus=2)
 
     optimizer = keras.optimizers.Adagrad()
@@ -158,7 +187,7 @@ def main(scenario_index=None):
 
     callbacks = []
 
-    if not distributed:
+    if ngpu<=1:
         callbacks.append(ModelCheckpoint(checkpt_dir+runname+'.h5', monitor='val_loss',
                                          verbose=0, save_best_only=True,
                                          save_weights_only=False, mode='auto', period=1))
@@ -170,12 +199,14 @@ def main(scenario_index=None):
     print('Train generator length: {}'.format(len(train_generator)))
     val_steps = len(val_generator)
 
-    if distributed:
+    if ngpu>1:
         parallel_model.compile(optimizer, loss, metrics)
+        print('Model Compiled \n')
         history = parallel_model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,
                                                epochs=epochs, callbacks=callbacks,
                                                validation_data=val_generator, validation_steps=val_steps, verbose=1)  # ,
     else:
+        print('Model Compiled \n')
         model.compile(optimizer, loss, metrics)
         history = model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,
                                       epochs=epochs, callbacks=callbacks,
@@ -219,10 +250,10 @@ def main(scenario_index=None):
 
     with open(checkpt_dir + runname + '_params.pkl', 'wb+') as f:
         pickle.dump(analysis_params, f)
-
+    print('Saved Analysis params')
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        main(sys.argv[1])
+        main(int(sys.argv[1]))
     else:
         main()

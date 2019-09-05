@@ -175,10 +175,11 @@ def build_dumb_simple_model(input_profile_names, target_profile_names, scalar_in
     profiles = []
     for i in range(num_profiles):
         profile_inputs.append(
-            Input((profile_length,), name='input_' + input_profile_names[i]))
+            Input((1,profile_length,), name='input_' + input_profile_names[i]))
         # size 65,
         profiles.append(Dense(units=profile_length,
                               activation=std_activation)(profile_inputs[i]))
+        profiles[i] = Reshape((profile_length,))(profiles[i])
         # size 65,
 
     if num_scalars > 0:
@@ -196,10 +197,11 @@ def build_dumb_simple_model(input_profile_names, target_profile_names, scalar_in
     actuators = []
     for i in range(num_actuators):
         actuator_future_inputs.append(
-            Input((lookahead, 1), name='input_future_' + actuator_names[i]))
-        # size lookahead,1
-        actuators.append(Dense(units=profile_length, activation=std_activation)(
-            actuator_future_inputs[i]))
+            Input((lookahead,), name='input_future_' + actuator_names[i]))
+        # size lookahead,
+        actuators.append(Reshape((lookahead,1))(actuator_future_inputs[i]))
+        # size lookahead, 1
+        actuators[i] = Dense(units=profile_length, activation=std_activation)(actuators[i])
         # size lookahead, 65
         actuators[i] = GlobalAveragePooling1D()(actuators[i])
         # size 65,
@@ -216,12 +218,15 @@ def build_dumb_simple_model(input_profile_names, target_profile_names, scalar_in
             # size 65,
         outputs[i] = Add()(outputs[i])
         # size 65,
-        outputs[i] = Dense(units=profile_length,
-                           activation=std_activation)(outputs[i])
-        # size 65,
+       
         if kwargs.get('predict_mean'):
+            outputs[i] = Dense(units=profile_length,
+                               activation=std_activation)(outputs[i])
             outputs[i] = Reshape((1, profile_length))(outputs[i])
-            outputs[i] = GlobalAveragePooling1D()(outputs[i])
+            outputs[i] = GlobalAveragePooling1D(name="target_"+target_profile_names[i])(outputs[i])
+        else:
+             outputs[i] = Dense(units=profile_length,
+                                activation=std_activation,name="target_"+target_profile_names[i])(outputs[i])
     model_inputs = profile_inputs + actuator_future_inputs
     if num_scalars > 0:
         model_inputs += scalar_inputs

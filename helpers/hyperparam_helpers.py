@@ -1,27 +1,29 @@
 import os
 import yaml
 import re
+import datetime
 
-
-def make_bash_scripts(number, output_dir):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, times):
        # make the directory
     os.makedirs(output_dir, exist_ok=True)
 
     for i in range(number):
         with open(os.path.join(output_dir, 'driver' + str(i) + '.sh'), 'w+') as f:
-            f.write('#!/bin/bash')
-            f.write('#SBATCH -N 1')
-            f.write('#SBATCH -c 16')
-            f.write('#SBATCH -G 1')
+            f.write('#!/bin/bash \n')
+            f.write('#SBATCH -N 1 \n')
+            f.write('#SBATCH -c ' + str(ncpu) + '\n')
+            if ngpu>0:
+                f.write('#SBATCH -G ' + str(ngpu) + '\n')
             f.write('#SBATCH -o ' +
-                    os.path.join(output_dir, 'log' + str(i) + '.out'))
-            f.write('#SBATCH -t 04:00:00')
+                    os.path.join(output_dir, 'log' + str(i) + '.out \n'))
+            f.write('#SBATCH -t ' + str(datetime.timedelta(minutes=times[i])) + '\n')
 
-            f.write('root_dir=$HOME/plasma-profile-predictor')
-            f.write('module load anaconda')
-            f.write('conda activate tfgpu')
+            f.write('root_dir=$HOME/plasma-profile-predictor \n')
+            f.write('module load anaconda \n')
+            f.write('conda activate tfgpu \n')
 
-            f.write('python $root_dir/train_traverse.py ' + str(i))
+            f.write('python $root_dir/train_traverse.py ' + str(i) + '\n')
+            f.write('exit')
 
 
 def make_folder_contents(input_conf, input_script, output_dir, changes_array):
