@@ -51,20 +51,22 @@ def main(scenario_index=-2):
                         'target_profile_names': ['temp', 'dens'],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
-                        'model_type' : 'conv2d',
+                        'model_type' : 'simple_dense',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
                         'hinge_weight' : 50,
                         'mse_weight_power' : 2,
                         'mse_weight_edge' : np.sqrt(10),
-                        'mse_power':2,
+                        'mse_power':2.5,
                         'batch_size' : 128,
                         'epochs' : 50,
                         'verbose' : 1,
                         'flattop_only': True,
                         'predict_deltas' : True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
-                        'optimizer': 'adagrad'}
+                        'optimizer': 'adagrad',
+                        'optimizer_kwargs': {},
+                        'shuffle_generators': True}
    
     scenarios_dict = OrderedDict()
     scenarios_dict['models'] = [{'model_type': 'simple_dense', 'epochs': 50},
@@ -141,26 +143,16 @@ def main(scenario_index=-2):
         traindata = pickle.load(f)
     with open(os.path.join(scenario['processed_filename_base'], 'val.pkl'), 'rb') as f:
         valdata = pickle.load(f)
-    print('Data Loaded \n')
+    print('Data Loaded')
 
+    # update scenario with standard values for things that werent specified
     scenario.update({k:v for k,v in param_dict.items() if k not in scenario.keys()})
     scenario.update({k:v for k,v in default_scenario.items() if k not in scenario.keys()})
 
-    
     scenario['profile_length'] = int(np.ceil(65/scenario['profile_downsample']))
     scenario['mse_weight_vector'] = np.linspace(
         1, scenario['mse_weight_edge'], scenario['profile_length'])**scenario['mse_weight_power']
-    # scenario['max_profile_lookback'] = 0
-    # for sig in scenario['input_profile_names']:
-    #     if scenario['lookbacks'][sig] > scenario['max_profile_lookback']:
-    #         scenario['max_profile_lookback'] = scenario['lookbacks'][sig]
-    # scenario['max_actuator_lookback'] = 0
-    # for sig in scenario['actuator_names']:
-    #     if lookbacks[sig] > max_actuator_lookback:
-    #         max_actuator_lookback = lookbacks[sig] 
-            
-
-
+          
     scenario['runname'] = 'model-' + scenario['model_type'] + \
               '_profiles-' + '-'.join(scenario['input_profile_names']) + \
               '_act-' + '-'.join(scenario['actuator_names']) + \
@@ -177,7 +169,11 @@ def main(scenario_index=-2):
         scenario['runname'] += '_Scenario-' + str(scenario_index)
 
     print(scenario['runname'])
-        
+
+
+    ###############
+    # Make data generators
+    ###############      
     train_generator = DataGenerator(traindata,
                                     scenario['batch_size'],
                                     scenario['input_profile_names'],
@@ -187,7 +183,8 @@ def main(scenario_index=-2):
                                     scenario['lookbacks'],
                                     scenario['lookahead'],
                                     scenario['predict_deltas'],
-                                    scenario['profile_downsample'])
+                                    scenario['profile_downsample'],
+                                    scenario['shuffle_generators'])
     val_generator = DataGenerator(valdata,
                                   scenario['batch_size'],
                                   scenario['input_profile_names'],
@@ -197,15 +194,29 @@ def main(scenario_index=-2):
                                   scenario['lookbacks'],
                                   scenario['lookahead'],
                                   scenario['predict_deltas'],
-                                  scenario['profile_downsample'])
-    print('Made Generators \n')
+                                  scenario['profile_downsample'],
+                                  scenario['shuffle_generators'])
+    print('Made Generators')
 
+
+    ###############
+    # Get model and optimizer
+    ############### 
     models = {'simple_lstm': get_model_simple_lstm,
               'lstm_conv2d': get_model_lstm_conv2d,
               'conv2d': get_model_conv2d,
               'linear_systems': get_model_linear_systems,
               'conv1d': build_lstmconv1d_joe,
               'simple_dense': build_dumb_simple_model}
+
+    optimizers = {'sgd': keras.optimizers.SGD,
+                  'rmsprop': keras.optimizers.RMSprop,
+                  'adagrad': keras.optimizers.Adagrad,
+                  'adadelta': keras.optimizers.Adadelta,
+                  'adam': keras.optimizers.Adam,
+                  'adamax': keras.optimizers.Adamax,
+                  'nadam': keras.optimizers.Nadam}
+    
     # with tf.device('/cpu:0'):
     model = models[scenario['model_type']](scenario['input_profile_names'],
                                            scenario['target_profile_names'],
@@ -220,6 +231,12 @@ def main(scenario_index=-2):
     if ngpu>1:
         parallel_model = keras.utils.multi_gpu_model(model, gpus=ngpu)
 
+    optimizer = optimizers[scenario['optimizer']](**scenario['optimizer_kwargs'])
+
+    ###############
+    # Get losses and metrics
+    ############### 
+    
     loss = {}
     metrics = {}
     for sig in scenario['target_profile_names']:
@@ -256,12 +273,20 @@ def main(scenario_index=-2):
     scenario['val_steps'] = len(val_generator)
     print('Train generator length: {}'.format(len(train_generator)))
 
+
+    ###############
+    # Save scenario
+    ############### 
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print('Saved Analysis params before run')
-    
+
+
+    ###############
+    # Compile and Train
+    ############### 
     if ngpu>1:
-        parallel_model.compile(scenario['optimizer'], loss, metrics)
+        parallel_model.compile(optimizer, loss, metrics)
         print('Parallel model compiled, starting training')
         history = parallel_model.fit_generator(train_generator,
                                                steps_per_epoch=scenario['steps_per_epoch'],
@@ -271,7 +296,7 @@ def main(scenario_index=-2):
                                                validation_steps=scenario['val_steps'],
                                                verbose=scenario['verbose'])
     else:
-        model.compile(scenario['optimizer'], loss, metrics)
+        model.compile(optimizer, loss, metrics)
         print('Model compiled, starting training')
         history = model.fit_generator(train_generator,
                                       steps_per_epoch=scenario['steps_per_epoch'],
@@ -281,13 +306,19 @@ def main(scenario_index=-2):
                                       validation_steps=scenario['val_steps'],
                                       verbose=scenario['verbose'])
 
+
+    ###############
+    # Save Results
+    ############### 
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
     scenario['history'] = history.history
     scenario['history_params'] = history.params
-
+    if not any([isinstance(cb,ModelCheckpoint) for cb in callbacks]):
+        model.save(scenario['model_path'])
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print('Saved Analysis params after completion')
+
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:

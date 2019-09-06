@@ -12,7 +12,7 @@ class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names,
                  target_profile_names, scalar_input_names,
                  lookbacks, lookahead, predict_deltas,
-                 profile_downsample, **kwargs):
+                 profile_downsample, shuffle, **kwargs):
         """Make a data generator for training or validation data
 
         Args:
@@ -26,6 +26,7 @@ class DataGenerator(Sequence):
             lookahead (int): How many steps ahead to predict (prediction window)
             predict_deltas (bool): Whether to predict changes or full profiles.
             profile_downsample (int): How much to downsample the profile data.
+            shuffle (bool): Whether to reorder training samples on epoch end.
         """
         self.data = data
         self.batch_size = batch_size
@@ -44,12 +45,20 @@ class DataGenerator(Sequence):
             if val > max_lookback:
                 max_lookback = val
         self.max_lookback = max_lookback
+        self.shuffle = shuffle
         self.kwargs = kwargs
-
+        self.times_called = 0
+        if self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+        else:
+            self.inds = np.arange(len(self))
+        
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
 
     def __getitem__(self, idx):
+        self.times_called += 1
+        idx = self.inds[idx]
         inp = {}
         targ = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
@@ -86,6 +95,9 @@ class DataGenerator(Sequence):
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
 
+        if self.times_called % len(self) == 0 and self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+        
         return inp, targ
 
     def get_data_by_shot_time(self, shots, times):
