@@ -3,7 +3,7 @@ import numpy as np
 import os
 from helpers.data_generator import process_data, DataGenerator
 
-output_filename_base='/scratch/gpfs/jabbate/data_60_ms_include_rampup' #_include_current_ramps/'
+output_filename_base='/scratch/gpfs/jabbate/data_60_ms_include_rampup_randomized' #_include_current_ramps/'
 
 efit_type='EFITRT1'
 
@@ -54,7 +54,6 @@ traindata, valdata, normalization_dict = process_data(rawdata_path, sig_names,
                                                       val_frac, nshots,
                                                       flattop_only=flattop_only)
 
-    
 with open(os.path.join(output_filename_base,'train.pkl'),'wb') as f:
    pickle.dump(traindata,f)
 with open(os.path.join(output_filename_base,'val.pkl'),'wb') as f:

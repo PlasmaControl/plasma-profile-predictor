@@ -206,7 +206,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
 
     def binavg(array, start):
         """averages over bins"""
-        return np.mean(array[start:start+window_length], axis=0)
+        return np.nanmean(array[start:start+window_length], axis=0)
 
     # check if each sig is not completely nan
     def is_valid(shot):
@@ -255,31 +255,38 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         # check to see if each sig in the shot is not completely nan
 
 ######################################
-        if not is_valid(shot):
-            shots_with_complete_nan.append(np.unique(shot["shotnum"]))
-            continue
+        try:
+            binned_shot={}
+            for sig in sigsplustime:
 
-        first = int(np.ceil(get_first_index(shot)/(window_length-window_overlap)))
-        last = int(np.floor( ((get_last_index(shot)+1) / (window_length-window_overlap)) - 1))
-        for sig in sigsplustime:
-            temp = shot[sig]
-            if np.any(np.isinf(temp)):
-                temp[np.isinf(temp)]=np.nan
-            nbins = int(np.floor(temp.shape[0]/(window_length-window_overlap)))
-            shotdata = []
-            for i in range(nbins):
-                # populate array of binned/windowed data for each shot
-                shotdata.append(binavg(temp, i*(window_length-window_overlap)))
-            shotdata = np.stack(shotdata)
+                if np.any(np.isinf(shot[sig])):
+                    shot[sig][np.isinf(shot[sig])]=np.nan
+                nbins = int(np.floor(shot[sig].shape[0]/(window_length-window_overlap)))
+                binned_shot[sig]=[]
+                for i in range(nbins):
+                    # populate array of binned/windowed data for each shot
+                    binned_shot[sig].append(binavg(shot[sig], i*(window_length-window_overlap)))
 
-            for i in range(first, last, sample_step):
-                # group into arrays of input/output pairs
-                if sig not in ['time', 'shotnum']:
-                    alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
-                else:
-                    alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
-        if shot['shotnum'][0]==170391:
+                binned_shot[sig]=np.stack(np.array(binned_shot[sig]))
+            binned_shot['t_ip_flat']=shot['t_ip_flat']
+            binned_shot['ip_flat_duration']=shot['ip_flat_duration']
+
+            if not is_valid(binned_shot):
+                shots_with_complete_nan.append(np.unique(shot["shotnum"]))
+                continue
+            first = int(np.ceil(get_first_index(binned_shot)))
+            last = int(np.floor(get_last_index(binned_shot)))
+
+            for sig in sigsplustime:
+                for i in range(first, last, sample_step):
+                    # group into arrays of input/output pairs
+                    if sig not in ['time', 'shotnum']:
+                        alldata[sig].append(binned_shot[sig][i-lookbacks[sig]:i+lookahead])
+                    else:
+                        alldata[sig].append(binned_shot[sig][i-max_lookback:i+lookahead])
+        except:
             import pdb; pdb.set_trace()
+
 ######################################
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
@@ -288,13 +295,26 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
-        import pdb; pdb.set_trace()
+
         alldata[sig] = np.stack(alldata[sig])
+
+    nan_indices=set()
+    for sig in sigsplustime:
+        for i,elem in enumerate(alldata[sig]):
+            if np.any(np.isnan(elem)):
+                nan_indices.add(i)
+
+    print("Removing {} samples with partial NaN".format(len(nan_indices)))
+    for sig in sigsplustime:
+        # get all indices that are not nan_indices
+        non_nan_indices=set(range(len(alldata[sig]))).difference(nan_indices)
+        alldata[sig]=alldata[sig][list(non_nan_indices)]
+
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
     
-    inds = np.arange(nsamples)
+    inds = np.random.permutation(nsamples) #np.arange(nsamples)
         
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]

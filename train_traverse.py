@@ -15,7 +15,7 @@ import os
 
 distributed=False
 
-processed_filename_base='/scratch/gpfs/jabbate/data_60_ms/'#data_60_ms/' #full_data_include_current_ramps' 
+processed_filename_base='/scratch/gpfs/jabbate/data_60_ms_include_rampup/'#data_60_ms/' #full_data_include_current_ramps' 
 
 #with tf.device('/cpu:0'):
 with open(os.path.join(processed_filename_base,'train.pkl'),'rb') as f:
@@ -52,11 +52,11 @@ model_type = 'conv2d'
 predict_deltas = True
 
 std_activation = 'relu'
-checkpt_dir = "/home/jabbate/test_all_gas_vs_gasA_and_zipfit_vs_regular/" #"/global/homes/a/abbatej/plasma-profile-predictor/"
+checkpt_dir = "/home/jabbate/plasma-profile-predictor/" #"/global/homes/a/abbatej/plasma-profile-predictor/"
 
 hinge_weight = 50
 batch_size = 512
-epochs = 50
+epochs = 2
 verbose = 1
 
 #runname = 'joe_zipfit_gasA'
