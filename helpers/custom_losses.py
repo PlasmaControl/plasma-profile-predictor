@@ -212,7 +212,7 @@ def denorm_loss(sig, model, param_dict, loss, predict_deltas):
     return denorm_loss
 
 
-def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, predict_deltas):
+def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, mse_power, predict_deltas):
     """Weighted MSE + hinge loss
 
     Weighted MSE takes care of large deviations, while hinge loss tries to make
@@ -223,6 +223,7 @@ def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, predict_deltas):
         model: Model that is being trained
         hinge_weight (float): Relative weight applied to hinge vs weighted MSE.
         mse_weight_vector (float): Array of weights, same length as profile.
+        mse_power (float): Power for mse/mae/mce etc.
         predict_deltas (bool): Whether the model is predicting deltas or full profiles.
 
     Returns:
@@ -244,7 +245,7 @@ def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, predict_deltas):
     def hinge_mse(y_true, y_pred):
         delta_true = y_true-baseline
         delta_pred = y_pred-baseline
-        mse_loss = K.mean(K.square(y_pred-y_true)*mse_weight_vector, axis=-1)
+        mse_loss = K.mean(K.pow(K.abs(y_pred-y_true),mse_power)*mse_weight_vector, axis=-1)
         hinge_loss = K.mean(K.maximum(-(delta_true * delta_pred), 0.), axis=-1)
         return mse_loss + hinge_weight*hinge_loss
     return hinge_mse
