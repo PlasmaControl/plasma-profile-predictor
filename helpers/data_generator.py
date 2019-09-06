@@ -7,8 +7,10 @@ from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
 from tqdm import tqdm
 
+
 class DataGenerator(Sequence):
-    def __init__(self, data, batch_size, input_profile_names, actuator_names, target_profile_names,
+    def __init__(self, data, batch_size, input_profile_names, actuator_names,
+                 target_profile_names, scalar_input_names,
                  lookbacks, lookahead, predict_deltas,
                  profile_downsample, **kwargs):
         """Make a data generator for training or validation data
@@ -16,21 +18,21 @@ class DataGenerator(Sequence):
         Args:
             data: dict of data arrays to draw from.
             batch_size (int): size of each batch.
-            profile_inputs (str): List of names of profile inputs, as strings.
-            actuator_inputs (str): List of names of actuator inputs, as strings.
-            targets (str): List of names of profile targets, as strings.
-            profile_lookback (int): Number of previous steps for profile data.
-            actuator_lookback (int): Number of previous steps for actuator data.
+            input_profile_names (str): List of names of profile inputs, as strings.
+            actuator_names (str): List of names of actuator inputs, as strings.
+            target_profile_names (str): List of names of profile targets, as strings.
+            scalar_input_names (str): List of names of scalar inputs (shape parameters etc).
+            lookbacks (dict): Dictionary of lookback values for each input signal name.
             lookahead (int): How many steps ahead to predict (prediction window)
             predict_deltas (bool): Whether to predict changes or full profiles.
             profile_downsample (int): How much to downsample the profile data.
         """
-
-        self.batch_size = batch_size
         self.data = data
+        self.batch_size = batch_size
         self.profile_inputs = input_profile_names
         self.actuator_inputs = actuator_names
         self.targets = target_profile_names
+        self.scalar_inputs = scalar_input_names
         self.lookbacks = lookbacks
         self.lookahead = lookahead
         self.predict_deltas = predict_deltas
@@ -42,12 +44,13 @@ class DataGenerator(Sequence):
             if val > max_lookback:
                 max_lookback = val
         self.max_lookback = max_lookback
+        self.kwargs = kwargs
 
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
 
     def __getitem__(self, idx):
-        inp = {}                
+        inp = {}
         targ = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
@@ -66,6 +69,11 @@ class DataGenerator(Sequence):
                                                         (idx+1)*self.batch_size,
                                                         self.lookbacks[sig]:
                                                         self.lookbacks[sig]+self.lookahead]
+        for sig in self.scalar_inputs:
+            inp['input_' + sig] = self.data[sig][idx * self.batch_size:
+                                                 (idx+1)*self.batch_size,
+                                                 0:self.lookbacks[sig]]
+
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][idx * self.batch_size:(idx+1)*self.batch_size,
@@ -75,12 +83,27 @@ class DataGenerator(Sequence):
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
                                                    (idx+1)*self.batch_size,
                                                    -1, ::self.profile_downsample] - baseline
+            if self.kwargs.get('predict_mean'):
+                targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
 
         return inp, targ
 
     def get_data_by_shot_time(self, shots, times):
-        # shots: 1d list or array
-        # times: 1d list or array
+        """Gets input/target pairs for specific times within specified shots
+
+        If no data is present for a given shot, that shot will be ignored. 
+        Attempts to find the input data that is closest to the requested time value,
+        but the actual time should be verified manually.
+
+        Args:
+            shots (list or array): Array of shot numbers, as integers.
+            times (list or array): Array of times. Should be the same length as shots array.
+
+        Returns:
+            inputs (dict): Dictionary of input arrays, with all data stored as 1 batch.
+            targets (dict): Dictionary of target values.
+        """
+
         if type(shots) is not np.ndarray:
             shots = np.array(shots)
         if type(times) is not np.ndarray:
@@ -110,6 +133,9 @@ class DataGenerator(Sequence):
             inp['input_future_' + sig] = self.data[sig][inds,
                                                         self.lookbacks[sig]:
                                                         self.lookbacks[sig]+self.lookahead]
+        for sig in self.scalar_inputs:
+            inp['input_' + sig] = self.data[sig][inds,
+                                                 0:self.lookbacks[sig]]
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][inds,
@@ -118,13 +144,16 @@ class DataGenerator(Sequence):
                 baseline = 0
             targ['target_' + sig] = self.data[sig][inds,
                                                    -1, ::self.profile_downsample] - baseline
+
+            if self.kwargs.get('predict_mean'):
+                targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
         return inp, targ
 
 
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
-                 nshots=None, 
+                 nshots=None,
                  verbose=1, flattop_only=True, **kwargs):
     """Organize data into correct format for training
 
@@ -150,7 +179,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
         verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
-            
+        flattop_only (bool): Whether to only include data from flattop.
+
     Returns:
         traindata (dict): Dictionary of numpy arrays, one entry for each signal.
             Each array has shape [nsamples,lookback+lookahead,signal_shape]
@@ -181,9 +211,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for val in lookbacks.values():
         if val > max_lookback:
             max_lookback = val
-    
-    all_shots=sorted(list(rawdata.keys()))
-    
+
+    all_shots = sorted(list(rawdata.keys()))
+
     for shot in all_shots:
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
@@ -196,7 +226,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
-        
+
     usabledata = usabledata[:nshots]
     if verbose:
         t = 0
@@ -211,10 +241,10 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # check if each sig is not completely nan
     def is_valid(shot):
         for sig in sigsplustime:
-            if np.isnan(shot[sig]).all(): # or np.isinf(shot[sig]).any():
+            if np.isnan(shot[sig]).all():  # or np.isinf(shot[sig]).any():
                 return False
         if (flattop_only):
-            if (shot['t_ip_flat']==None or shot['ip_flat_duration']==None):
+            if (shot['t_ip_flat'] == None or shot['ip_flat_duration'] == None):
                 return False
         return True
 
@@ -229,8 +259,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                          lookbacks[sig] for sig in sig_names])
         output_max = max([get_non_nan_inds(shot[sig])[0] -
                           lookahead for sig in sig_names])
-        if (flattop_only) and (shot['t_ip_flat']!=None):
-            current_max = np.searchsorted(shot['time'],shot['t_ip_flat'],side='left')
+        if (flattop_only) and (shot['t_ip_flat'] != None):
+            current_max = np.searchsorted(
+                shot['time'], shot['t_ip_flat'], side='left')
             return max(input_max, output_max, current_max)
         else:
             return max(input_max, output_max)
@@ -240,8 +271,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                            for sig in sig_names])
         full_min = min([get_non_nan_inds(shot[sig])[-1] -
                         lookahead for sig in sig_names])
-        if (flattop_only) and (shot['t_ip_flat']!=None) and (shot['ip_flat_duration']!= None):
-            current_min = np.searchsorted(shot['time'],shot['t_ip_flat']+shot['ip_flat_duration'],side='right')
+        if (flattop_only) and (shot['t_ip_flat'] != None) and (shot['ip_flat_duration'] != None):
+            current_min = np.searchsorted(
+                shot['time'], shot['t_ip_flat']+shot['ip_flat_duration'], side='right')
             return min(full_min, partial_min, current_min)
         else:
             return min(full_min, partial_min)
@@ -254,40 +286,34 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                      disable=not verbose):
         # check to see if each sig in the shot is not completely nan
 
-######################################
-        try:
-            binned_shot={}
-            for sig in sigsplustime:
+        binned_shot={}
+        for sig in sigsplustime:
 
-                if np.any(np.isinf(shot[sig])):
-                    shot[sig][np.isinf(shot[sig])]=np.nan
-                nbins = int(np.floor(shot[sig].shape[0]/(window_length-window_overlap)))
-                binned_shot[sig]=[]
-                for i in range(nbins):
-                    # populate array of binned/windowed data for each shot
-                    binned_shot[sig].append(binavg(shot[sig], i*(window_length-window_overlap)))
+            if np.any(np.isinf(shot[sig])):
+                shot[sig][np.isinf(shot[sig])]=np.nan
+            nbins = int(np.floor(shot[sig].shape[0]/(window_length-window_overlap)))
+            binned_shot[sig]=[]
+            for i in range(nbins):
+                # populate array of binned/windowed data for each shot
+                binned_shot[sig].append(binavg(shot[sig], i*(window_length-window_overlap)))
 
-                binned_shot[sig]=np.stack(np.array(binned_shot[sig]))
-            binned_shot['t_ip_flat']=shot['t_ip_flat']
-            binned_shot['ip_flat_duration']=shot['ip_flat_duration']
+            binned_shot[sig]=np.stack(np.array(binned_shot[sig]))
+        binned_shot['t_ip_flat']=shot['t_ip_flat']
+        binned_shot['ip_flat_duration']=shot['ip_flat_duration']
 
-            if not is_valid(binned_shot):
-                shots_with_complete_nan.append(np.unique(shot["shotnum"]))
-                continue
-            first = int(np.ceil(get_first_index(binned_shot)))
-            last = int(np.floor(get_last_index(binned_shot)))
+        if not is_valid(binned_shot):
+            shots_with_complete_nan.append(np.unique(shot["shotnum"]))
+            continue
+        first = int(np.ceil(get_first_index(binned_shot)))
+        last = int(np.floor(get_last_index(binned_shot)))
 
-            for sig in sigsplustime:
-                for i in range(first, last, sample_step):
-                    # group into arrays of input/output pairs
-                    if sig not in ['time', 'shotnum']:
-                        alldata[sig].append(binned_shot[sig][i-lookbacks[sig]:i+lookahead])
-                    else:
-                        alldata[sig].append(binned_shot[sig][i-max_lookback:i+lookahead])
-        except:
-            import pdb; pdb.set_trace()
-
-######################################
+        for sig in sigsplustime:
+            for i in range(first, last, sample_step):
+                # group into arrays of input/output pairs
+                if sig not in ['time', 'shotnum']:
+                    alldata[sig].append(binned_shot[sig][i-lookbacks[sig]:i+lookahead])
+                else:
+                    alldata[sig].append(binned_shot[sig][i-max_lookback:i+lookahead])
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
                                                   for e in shots_with_complete_nan))
@@ -314,8 +340,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
     
-    inds = np.random.permutation(nsamples) #np.arange(nsamples)
-        
+    inds = np.random.permutation(nsamples) #np.arange(nsamples) to keep everything in order
+
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
