@@ -6,159 +6,183 @@ from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Ad
 
 from keras.models import Model
 
-
 def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input_names,
                          actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+   
+   rnn_layer = layers.LSTM
+   
+   # (lookbacks[input_profile_names[0]], profile_length)
+   profile_inshape = (1, profile_length)
+   # (lookbacks[actuator_names[0]],)
+   
+   # find the biggest lookback we;ll need for each signal 
+   max_profile_lookback = 0
+   for sig in input_profile_names:
+      if lookbacks[sig] > max_profile_lookback:
+         max_profile_lookback = lookbacks[sig]
+   max_actuator_lookback = 0
+   for sig in actuator_names:
+      if lookbacks[sig] > max_actuator_lookback:
+         max_actuator_lookback = lookbacks[sig]
+   max_scalar_lookback = 0
+   for sig in scalar_input_names:
+      if lookbacks[sig] > max_scalar_lookback:
+         max_scalar_lookback = lookbacks[sig]
 
-    rnn_layer = layers.LSTM
+   past_scalar_inshape = (max(max_scalar_lookback,max_actuator_lookback),)
+   future_actuator_inshape = (lookahead,)
+   num_profiles = len(input_profile_names)
+   num_targets = len(target_profile_names)
+   num_actuators = len(actuator_names)
+   num_scalars = len(scalar_input_names)
+   #max_channels = 32
+   
+   # num_actuators = len(sigs_0d)
+   # num_sigs_1d = len(sigs_1d)
+   # num_sigs_predict = len(sigs_predict)
+   
+   ########################################################################
+   ########################
+   ###Inputs###############
+   ####Profiles############
+   ######Past/Future Actu##
+   '''
+   Deliverables from inputs section:
+   1. variable name: 'current_profiles'
+   Tensor that concat all profiles in shape
+   (profile lookback, profile len. num profiles). 
+   Note: Don't think different lookback lengths are fully
+   supported yet, even though we take in a lookback dict
+   with lookbacks for each sig
+   2. variable name: 'previous_actuators'
+   Tensor for all past actuators in shape
+   (lookback, num actu)
+   3. variable name: 'future_actuators'
+   Tensor for all past actuators in shape
+   (lookahead, num actu)
+   
+   Notes:
+   a) Lookback is defined to include *current* timestep 
+   b) lookahead is all timesteps *after* current timestep
+   c) multiple prediction sigs not working yet, need to 
+   for loop probabaly to get multiple output layers?
+   '''
+   
+   # input each profile sig one by one and then concat them together
+   profile_inputs = []
+   profiles = []
+   for i in range(num_profiles):
+      profile_inputs.append(keras.layers.Input(
+         profile_inshape, name='input_' + input_profile_names[i]))
+      # profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
+      #                 (profile_inputs[i]))
+      # import pdb; pdb.set_trace()
+      profiles.append(keras.layers.Reshape((1, profile_length, 1))(profile_inputs[i]))
+      
+   current_profiles = layers.Concatenate(axis=-1)(profiles)
+   current_profiles = layers.Reshape(
+      (profile_length, num_profiles))(current_profiles)
 
-    # (lookbacks[input_profile_names[0]], profile_length)
-    profile_inshape = (profile_lookback, profile_length)
-    # (lookbacks[actuator_names[0]],)
-    past_actuator_inshape = (actuator_lookback,)
-    future_actuator_inshape = (lookahead,)
-    num_profiles = len(input_profile_names)
-    num_targets = len(target_profile_names)
-    num_actuators = len(actuator_names)
-    #max_channels = 32
+   # input previous and future actuators and concat each of them
+   past_scalar_inputs = []
+   actuator_future_inputs = []
 
-    # num_actuators = len(sigs_0d)
-    # num_sigs_1d = len(sigs_1d)
-    # num_sigs_predict = len(sigs_predict)
+   previous_scalars = []
+   future_actuators = []
 
-    ########################################################################
-    ########################
-    ###Inputs###############
-    ####Profiles############
-    ######Past/Future Actu##
-    '''
-    Deliverables from inputs section:
-    1. variable name: 'current_profiles'
-        Tensor that concat all profiles in shape
-        (profile lookback, profile len. num profiles). 
-        Note: Don't think different lookback lengths are fully
-        supported yet, even though we take in a lookback dict
-        with lookbacks for each sig
-    2. variable name: 'previous_actuators'
-        Tensor for all past actuators in shape
-        (lookback, num actu)
-    3. variable name: 'future_actuators'
-        Tensor for all past actuators in shape
-        (lookahead, num actu)
+   for i in range(num_actuators):
+      # import pdb; pdb.set_trace() 
+      actuator_future_inputs.append(
+         layers.Input(future_actuator_inshape,
+                      name="input_future_{}".format(actuator_names[i])))
+      future_actuators.append(layers.Reshape((lookahead, 1))
+                        (actuator_future_inputs[i]))
 
-    Notes:
-        a) Lookback is defined to include *current* timestep 
-        b) lookahead is all timesteps *after* current timestep
-        c) multiple prediction sigs not working yet, need to 
-            for loop probabaly to get multiple output layers?
-    '''
+      past_scalar_inputs.append(
+         layers.Input(past_scalar_inshape,
+                      name="input_past_{}".format(actuator_names[i]))
+      )
+      previous_scalars.append(
+         # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
+         layers.Reshape((max(max_scalar_lookback,max_actuator_lookback), 1))(past_scalar_inputs[i]))
 
-    # input each profile sig one by one and then concat them together
-    profile_inputs = []
-    profiles = []
-    for i in range(num_profiles):
-        profile_inputs.append(keras.layers.Input(
-            profile_inshape, name='input_' + input_profile_names[i]))
-        # profiles.append(Reshape((lookbacks[input_profile_names[i]], profile_length, 1))
-        #                 (profile_inputs[i]))
-        # import pdb; pdb.set_trace()
-        profiles.append(keras.layers.Reshape((profile_lookback, profile_length, 1))(profile_inputs[i]))
+   for i in range(num_scalars):
+      past_scalar_inputs.append(
+         layers.Input(past_scalar_inshape,
+                      name="input_past_{}".format(scalar_input_names[i]))
+      )
+      previous_scalars.append(
+         # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
+         layers.Reshape((max(max_scalar_lookback,max_actuator_lookback), 1))(past_scalar_inputs[i]))
 
-    current_profiles = layers.Concatenate(axis=-1)(profiles)
-    current_profiles = layers.Reshape(
-        (profile_length, num_profiles))(current_profiles)
+   future_actuators = layers.Concatenate(axis=-1)(future_actuators)
+   previous_scalars = layers.Concatenate(axis=-1)(previous_scalars)
 
-    # input previous and future actuators and concat each of them
-    actuator_past_inputs = []
-    actuator_future_inputs = []
+   print(future_actuators.shape)
+   print(previous_scalars.shape)
+   print(current_profiles.shape)
 
-    previous_actuators = []
-    future_actuators = []
+   #######################################################################
+   
+   # previous_scalars = layers.Input(
+   #     shape=(lookbacks[sigs_0d[0]]+1, num_actuators), name="previous_scalars")
+   # future_actuators = layers.Input(
+   #     shape=(delay, num_actuators), name="future_actuators")
 
-    for i in range(num_actuators):
-        actuator_future_inputs.append(
-            layers.Input(future_actuator_inshape,
-                         name="input_future_{}".format(actuator_names[i]))
-        )
-        actuator_past_inputs.append(
-            layers.Input(past_actuator_inshape,
-                         name="input_past_{}".format(actuator_names[i]))
-        )
+   actuator_effect = rnn_layer(
+      profile_length, activation=std_activation)(previous_scalars)
+   actuator_effect = layers.Reshape(
+      target_shape=(profile_length, 1))(actuator_effect)
+   
+   future_actuator_effect = rnn_layer(
+      profile_length, activation=std_activation)(future_actuators)
+   future_actuator_effect = layers.Reshape(
+      target_shape=(profile_length, 1))(future_actuator_effect)
 
-        future_actuators.append(layers.Reshape((lookahead, 1))
-                                (actuator_future_inputs[i]))
-        previous_actuators.append(
-            # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
-            layers.Reshape((actuator_lookback, 1))(actuator_past_inputs[i]))
+   # current_profiles = layers.Input(
+   #     shape=(profile_length, num_sigs_1d), name="previous_profiles")
+   # take out for the other version
 
-    future_actuators = layers.Concatenate(axis=-1)(future_actuators)
-    previous_actuators = layers.Concatenate(axis=-1)(previous_actuators)
+   current_profiles_processed_0 = layers.Concatenate()(
+      [current_profiles, actuator_effect, future_actuator_effect])
 
-    print(future_actuators.shape)
-    print(previous_actuators.shape)
-    print(current_profiles.shape)
+   prof_act = []
+   for i in range(num_targets):
 
-    #######################################################################
-
-    # previous_actuators = layers.Input(
-    #     shape=(lookbacks[sigs_0d[0]]+1, num_actuators), name="previous_actuators")
-    # future_actuators = layers.Input(
-    #     shape=(delay, num_actuators), name="future_actuators")
-
-    actuator_effect = rnn_layer(
-        profile_length, activation=std_activation)(previous_actuators)
-    actuator_effect = layers.Reshape(
-        target_shape=(profile_length, 1))(actuator_effect)
-
-    future_actuator_effect = rnn_layer(
-        profile_length, activation=std_activation)(future_actuators)
-    future_actuator_effect = layers.Reshape(
-        target_shape=(profile_length, 1))(future_actuator_effect)
-
-    # current_profiles = layers.Input(
-    #     shape=(profile_length, num_sigs_1d), name="previous_profiles")
-    # take out for the other version
-
-    current_profiles_processed_0 = layers.Concatenate()(
-        [current_profiles, actuator_effect, future_actuator_effect])
-
-    prof_act = []
-    for i in range(num_targets):
-
-        current_profiles_processed_1 = layers.Conv1D(filters=8, kernel_size=2,
-                                                     padding='same', activation='relu')(current_profiles_processed_0)
-        current_profiles_processed_2 = layers.Conv1D(filters=16, kernel_size=4,
-                                                     padding='same', activation='relu')(current_profiles_processed_1)
-        current_profiles_processed_3 = layers.Conv1D(filters=16, kernel_size=8,
-                                                     padding='same', activation='relu')(current_profiles_processed_2)
-
-        final_output = layers.Concatenate()(
-            [current_profiles_processed_1, current_profiles_processed_2, current_profiles_processed_3])
-        final_output = layers.Conv1D(filters=16, kernel_size=4,
-                                     padding='same', activation='tanh')(final_output)
-        final_output = layers.Conv1D(filters=8, kernel_size=4,
-                                     padding='same', activation='tanh')(final_output)
-        final_output = layers.Conv1D(filters=1, kernel_size=4,
-                                     padding='same', activation='linear')(final_output)
-        final_output = layers.Reshape(target_shape=(
-            profile_length,), name="target_"+target_profile_names[i])(final_output)
-
-        prof_act.append(final_output)
-    print(len(prof_act))
+      current_profiles_processed_1 = layers.Conv1D(filters=8, kernel_size=2,
+                                                   padding='same', activation='relu')(current_profiles_processed_0)
+      current_profiles_processed_2 = layers.Conv1D(filters=16, kernel_size=4,
+                                                   padding='same', activation='relu')(current_profiles_processed_1)
+      current_profiles_processed_3 = layers.Conv1D(filters=16, kernel_size=8,
+                                                   padding='same', activation='relu')(current_profiles_processed_2)
+      
+      final_output = layers.Concatenate()(
+         [current_profiles_processed_1, current_profiles_processed_2, current_profiles_processed_3])
+      final_output = layers.Conv1D(filters=16, kernel_size=4,
+                                   padding='same', activation='tanh')(final_output)
+      final_output = layers.Conv1D(filters=8, kernel_size=4,
+                                   padding='same', activation='tanh')(final_output)
+      final_output = layers.Conv1D(filters=1, kernel_size=4,
+                                   padding='same', activation='linear')(final_output)
+      final_output = layers.Reshape(target_shape=(
+         profile_length,), name="target_"+target_profile_names[i])(final_output)
+      
+      prof_act.append(final_output)
+   print(len(prof_act))
 
 
-#     current_profiles,current_profiles_processed={},{}
-#     for sig in sigs_1d:
-#         current_profiles[sig]=layers.Input(shape=(rho_length_in,1),"current_profile_{}".format(sig))
-#         current_profiles_processed[sig]=layers.Conv1D(filters=3,kernel_size=4)(current_profiles[sig])
-    model = Model(inputs=profile_inputs + actuator_past_inputs +
+   #     current_profiles,current_profiles_processed={},{}
+   #     for sig in sigs_1d:
+   #         current_profiles[sig]=layers.Input(shape=(rho_length_in,1),"current_profile_{}".format(sig))
+   #         current_profiles_processed[sig]=layers.Conv1D(filters=3,kernel_size=4)(current_profiles[sig])
+   model = Model(inputs=profile_inputs + past_scalar_inputs +
                   actuator_future_inputs, outputs=prof_act)
 
-#    model=models.Model(inputs=[previous_actuators]+list(current_profiles.values()),
-#                       outputs=list(current_profiles_processed.values()))
-
-    return model
-    #######################
+   #    model=models.Model(inputs=[previous_scalars]+list(current_profiles.values()),
+   #                       outputs=list(current_profiles_processed.values()))
+   
+   return model
+   #######################
 
 
 def build_dumb_simple_model(input_profile_names, target_profile_names, scalar_input_names,
