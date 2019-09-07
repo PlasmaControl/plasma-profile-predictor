@@ -26,7 +26,7 @@ def main(scenario_index=-2):
     # set session
     ###################
     num_cores = 16
-    ngpu = 0
+    ngpu = 1
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
                             allow_soft_placement=True,
@@ -51,7 +51,7 @@ def main(scenario_index=-2):
                         'target_profile_names': ['temp', 'dens'],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
-                        'model_type' : 'simple_dense',
+                        'model_type' : 'conv1d',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
                         'hinge_weight' : 50,
@@ -70,7 +70,11 @@ def main(scenario_index=-2):
    
     scenarios_dict = OrderedDict()
     scenarios_dict['models'] = [{'model_type': 'simple_dense', 'epochs': 50},
-                                {'model_type': 'conv2d', 'epochs': 100}]
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':64}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':8}},
+                                {'model_type': 'conv1d', 'epochs': 50}]
     scenarios_dict['actuators_scalars'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA'],
                                             'scalar_input_names':[]},
                                            {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA',

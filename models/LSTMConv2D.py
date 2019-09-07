@@ -62,8 +62,11 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
                 Input((lookbacks[scalar_input_names[i]],), name='input_' + scalar_input_names[i]))
             scalars.append(Reshape((lookbacks[scalar_input_names[i]],1))(scalar_inputs[i]))
             scalars[i] = ZeroPadding1D(padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], 0))(scalars[i])
-        scalars = Concatenate(axis=-1)(scalars)
-        # shaoe = (time, num_actuators)
+        if num_scalars>1:
+            scalars = Concatenate(axis=-1)(scalars)
+        else:
+            scalars = scalars[0]
+            # shaoe = (time, num_actuators)
         scalars = Dense(units=int(num_profiles*max_channels/8),
                         activation=std_activation)(scalars)
         # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
