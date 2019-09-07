@@ -22,10 +22,11 @@ available_sigs = ['which_gas', 'cerauto_rotation_EFITRT1', 'cerauto_rotation_EFI
 
 input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.format(efit_type),'temp', 'dens']
 target_profile_names = ['temp', 'dens']
-actuator_names = ['pinj', 'curr', 'tinj', 'gasA','gasB','gasC','gasD','target_density','density_estimate','gas_feedback']
+actuator_names = ['pinj', 'curr', 'tinj', 'gasA','gasB','gasC','gasD','target_density','gas_feedback']
+scalar_names = ['density_estimate']
+rawdata_path='/scratch/gpfs/jabbate/small_data/final_data.pkl'
+sig_names = input_profile_names + target_profile_names + actuator_names + scalar_names
 
-rawdata_path='/scratch/gpfs/jabbate/full_data/final_data.pkl'
-sig_names = input_profile_names + target_profile_names + actuator_names
 normalization_method = 'RobustScaler'
 window_length = 3
 window_overlap = 0
@@ -34,7 +35,7 @@ actuator_lookback = 6
 lookbacks = {}
 for sig in input_profile_names + target_profile_names:
    lookbacks[sig] = profile_lookback
-for sig in actuator_names:
+for sig in actuator_names + scalar_names:
    lookbacks[sig] = actuator_lookback
 lookahead = 3
 sample_step = 1
@@ -92,6 +93,7 @@ param_dict={'normalization_dict': normalization_dict,
             'input_profile_names': input_profile_names,
             'target_profile_names': target_profile_names,
             'actuator_names': actuator_names,
+            'scalar_names': scalar_names,
             'efit_type': efit_type,
             'profile_lookback': profile_lookback,
             'actuator_lookback': actuator_lookback,
