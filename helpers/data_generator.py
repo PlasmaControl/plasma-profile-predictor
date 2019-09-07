@@ -12,7 +12,7 @@ class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names,
                  target_profile_names, scalar_input_names,
                  lookbacks, lookahead, predict_deltas,
-                 profile_downsample, **kwargs):
+                 profile_downsample, shuffle, **kwargs):
         """Make a data generator for training or validation data
 
         Args:
@@ -26,6 +26,7 @@ class DataGenerator(Sequence):
             lookahead (int): How many steps ahead to predict (prediction window)
             predict_deltas (bool): Whether to predict changes or full profiles.
             profile_downsample (int): How much to downsample the profile data.
+            shuffle (bool): Whether to reorder training samples on epoch end.
         """
         self.data = data
         self.batch_size = batch_size
@@ -44,12 +45,20 @@ class DataGenerator(Sequence):
             if val > max_lookback:
                 max_lookback = val
         self.max_lookback = max_lookback
+        self.shuffle = shuffle
         self.kwargs = kwargs
-
+        self.times_called = 0
+        if self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+        else:
+            self.inds = np.arange(len(self))
+        
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
 
     def __getitem__(self, idx):
+        self.times_called += 1
+        idx = self.inds[idx]
         inp = {}
         targ = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
@@ -86,6 +95,9 @@ class DataGenerator(Sequence):
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
 
+        if self.times_called % len(self) == 0 and self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+        
         return inp, targ
 
     def get_data_by_shot_time(self, shots, times):
@@ -236,7 +248,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
 
     def binavg(array, start):
         """averages over bins"""
-        return np.mean(array[start:start+window_length], axis=0)
+        return np.nanmean(array[start:start+window_length], axis=0)
 
     # check if each sig is not completely nan
     def is_valid(shot):
@@ -286,33 +298,34 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                      disable=not verbose):
         # check to see if each sig in the shot is not completely nan
 
-        ######################################
-        if not is_valid(shot):
-            shots_with_complete_nan.append(np.unique(shot["shotnum"]))
-            continue
-
-        first = int(np.ceil(get_first_index(shot) /
-                            (window_length-window_overlap)))
-        last = int(np.floor(((get_last_index(shot)+1) /
-                             (window_length-window_overlap)) - 1))
+        binned_shot={}
         for sig in sigsplustime:
-            temp = shot[sig]
-            if np.any(np.isinf(temp)):
-                temp[np.isinf(temp)] = np.nan
-            nbins = int(np.floor(temp.shape[0]/(window_length-window_overlap)))
-            shotdata = []
+
+            if np.any(np.isinf(shot[sig])):
+                shot[sig][np.isinf(shot[sig])]=np.nan
+            nbins = int(np.floor(shot[sig].shape[0]/(window_length-window_overlap)))
+            binned_shot[sig]=[]
             for i in range(nbins):
                 # populate array of binned/windowed data for each shot
-                shotdata.append(binavg(temp, i*(window_length-window_overlap)))
-            shotdata = np.stack(shotdata)
+                binned_shot[sig].append(binavg(shot[sig], i*(window_length-window_overlap)))
 
+            binned_shot[sig]=np.stack(np.array(binned_shot[sig]))
+        binned_shot['t_ip_flat']=shot['t_ip_flat']
+        binned_shot['ip_flat_duration']=shot['ip_flat_duration']
+
+        if not is_valid(binned_shot):
+            shots_with_complete_nan.append(np.unique(shot["shotnum"]))
+            continue
+        first = int(np.ceil(get_first_index(binned_shot)))
+        last = int(np.floor(get_last_index(binned_shot)))
+
+        for sig in sigsplustime:
             for i in range(first, last, sample_step):
                 # group into arrays of input/output pairs
                 if sig not in ['time', 'shotnum']:
-                    alldata[sig].append(shotdata[i-lookbacks[sig]:i+lookahead])
+                    alldata[sig].append(binned_shot[sig][i-lookbacks[sig]:i+lookahead])
                 else:
-                    alldata[sig].append(shotdata[i-max_lookback:i+lookahead])
-######################################
+                    alldata[sig].append(binned_shot[sig][i-max_lookback:i+lookahead])
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
                                                   for e in shots_with_complete_nan))
@@ -320,12 +333,26 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
+
         alldata[sig] = np.stack(alldata[sig])
+
+    nan_indices=set()
+    for sig in sigsplustime:
+        for i,elem in enumerate(alldata[sig]):
+            if np.any(np.isnan(elem)):
+                nan_indices.add(i)
+
+    print("Removing {} samples with partial NaN".format(len(nan_indices)))
+    for sig in sigsplustime:
+        # get all indices that are not nan_indices
+        non_nan_indices=set(range(len(alldata[sig]))).difference(nan_indices)
+        alldata[sig]=alldata[sig][list(non_nan_indices)]
+
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
-
-    inds = np.arange(nsamples)
+    
+    inds = np.random.permutation(nsamples) #np.arange(nsamples) to keep everything in order
 
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
