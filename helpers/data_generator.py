@@ -352,7 +352,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
     
-    inds = np.random.permutation(nsamples) #np.arange(nsamples) to keep everything in order
+    inds = np.arange(nsamples) #to keep everything in order
 
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
