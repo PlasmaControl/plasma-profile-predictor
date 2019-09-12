@@ -3,7 +3,7 @@ import numpy as np
 import os
 from helpers.data_generator import process_data, DataGenerator
 
-output_filename_base='/scratch/gpfs/jabbate/data_60_ms_ordered_flattop' #_include_current_ramps/'
+output_filename_base='/scratch/gpfs/jabbate/data_20_ms_ordered_all' #_include_current_ramps/'
 
 efit_type='EFITRT1'
 
@@ -28,7 +28,7 @@ rawdata_path='/scratch/gpfs/jabbate/full_data/final_data.pkl'
 sig_names = input_profile_names + target_profile_names + actuator_names + scalar_names
 
 normalization_method = 'RobustScaler'
-window_length = 3
+window_length = 1
 window_overlap = 0
 profile_lookback = 1
 actuator_lookback = 6
@@ -43,7 +43,7 @@ uniform_normalization = True
 train_frac = 0.8
 val_frac = 0.2
 nshots = 12000 #TODO: replace with nbatches
-flattop_only=True
+flattop_only=False
 
 assert(all(elem in available_sigs for elem in sig_names))
 

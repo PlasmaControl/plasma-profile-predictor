@@ -26,9 +26,9 @@ def main(scenario_index=-2):
     # set session
     ###################
     num_cores = 16
-    ngpu = 0
-    config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
-                            inter_op_parallelism_threads=4*num_cores,
+    ngpu = 4
+    config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
+                            inter_op_parallelism_threads=num_cores,
                             allow_soft_placement=True,
                             device_count={'CPU': 1,
                                           'GPU': ngpu})
@@ -51,16 +51,16 @@ def main(scenario_index=-2):
                         'target_profile_names': ['temp', 'dens'],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
-                        'model_type' : 'simple_dense',
+                        'model_type' : 'conv2d',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
-                        'hinge_weight' : 50,
-                        'mse_weight_power' : 2,
+                        'hinge_weight' : 0,
+                        'mse_weight_power' : 0,
                         'mse_weight_edge' : np.sqrt(10),
-                        'mse_power':2.5,
+                        'mse_power':2,
                         'batch_size' : 128,
                         'epochs' : 50,
-                        'verbose' : 1,
+                        'verbose' : 2,
                         'flattop_only': True,
                         'predict_deltas' : True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
@@ -70,24 +70,25 @@ def main(scenario_index=-2):
    
     scenarios_dict = OrderedDict()
     scenarios_dict['models'] = [{'model_type': 'simple_dense', 'epochs': 50},
+                                {'model_type': 'conv1d', 'epochs': 50},
                                 {'model_type': 'conv2d', 'epochs': 100}]
     scenarios_dict['actuators_scalars'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA'],
-                                            'scalar_input_names':[]},
-                                           {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA',
-                                             'gasB', 'gasC', 'gasD'],
-                                            'scalar_input_names':[]},
-                                           {'actuator_names': ['pinj', 'curr', 'tinj',
-                                             'target_density', 'gas_feedback'],
-                                            'scalar_input_names':['density_estimate']}]
-    scenarios_dict['flattop'] = [{'flattop_only': True},
-                                {'flattop_only': False}]
-    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens']},
-                                {'input_profile_names': ['thomson_dens_EFITRT1',
-                                                         'thomson_temp_EFITRT1']}]
+                                            'scalar_input_names':[]}]
+                                           # {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA',
+                                           #   'gasB', 'gasC', 'gasD'],
+                                           #  'scalar_input_names':[]},
+                                           # {'actuator_names': ['pinj', 'curr', 'tinj',
+                                           #   'target_density', 'gas_feedback'],
+                                           #  'scalar_input_names':['density_estimate']}]
+    scenarios_dict['flattop'] = [{'flattop_only': True}]
+                                #{'flattop_only': False}]
+    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens']}]
+                                #{'input_profile_names': ['thomson_dens_EFITRT1',
+                                #                         'thomson_temp_EFITRT1']}]
     scenarios_dict['targets'] = [{'target_profile_names': ['temp','dens']}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
-    scenarios_dict['predict_deltas'] = [{'predict_deltas': True},
-                                        {'predict_deltas': False}]
+    scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
+#                                        {'predict_deltas': False}]
 
 
 
@@ -97,11 +98,11 @@ def main(scenario_index=-2):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
         if foo['model_type'] == 'conv2d':
-            runtimes.append(5*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(8*128/foo['batch_size']*foo['epochs'])
         elif foo['model_type'] == 'simple_dense':
-            runtimes.append(1*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(3*128/foo['batch_size']*foo['epochs'])
         elif foo['model_type'] == 'conv1d':
-            runtimes.append(3.5*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(6*128/foo['batch_size']*foo['epochs'])
         else:
             runtimes.append(4*60)
     num_scenarios = len(scenarios)

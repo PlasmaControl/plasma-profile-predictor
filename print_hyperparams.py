@@ -6,7 +6,7 @@ import pickle
 import sys
 import time
 
-base_dir='/home/wconlin/run_results/'
+base_dir='/home/jabbate/run_results/'
 
 regular_params=['model_path','model_type', 'epochs', 'actuator_names', 'scalar_input_names', 'flattop_only', 'input_profile_names', 'target_profile_names', 'batch_size', 'predict_deltas', 'processed_filename_base', 'rawdata_path', 'sig_names', 'normalization_method', 'window_length', 'window_overlap', 'lookbacks', 'lookahead', 'sample_step', 'uniform_normalization', 'train_frac', 'val_frac', 'nshots', 'efit_type', 'profile_lookback', 'actuator_lookback', 'basefilename', 'profile_downsample', 'model_kwargs', 'std_activation', 'hinge_weight', 'mse_weight_power', 'mse_weight_edge', 'mse_power', 'verbose', 'optimizer', 'profile_length', 'runname', 'steps_per_epoch', 'val_steps']
 
