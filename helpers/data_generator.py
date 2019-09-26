@@ -5,6 +5,7 @@ from pathlib import Path
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
+from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan
 from tqdm import tqdm
 
 
@@ -52,7 +53,7 @@ class DataGenerator(Sequence):
             self.inds = np.random.permutation(range(len(self)))
         else:
             self.inds = np.arange(len(self))
-        
+
     def __len__(self):
         return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
 
@@ -97,7 +98,7 @@ class DataGenerator(Sequence):
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
-        
+
         return inp, targ
 
     def get_data_by_shot_time(self, shots, times):
@@ -201,9 +202,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
-
     verbose = bool(verbose)
-    sig_names = list(np.unique(sig_names))
+    # Load data
     if type(rawdata) is not dict:
         if verbose:
             print('Loading')
@@ -214,18 +214,40 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         else:
             print(abs_path)
             raise IOError("No such path to data file")
-    sigsplustime = sig_names + ['time', 'shotnum']
+
+    # get pruning functions
+    pruning_functions = kwargs.get('pruning_functions', [])
+    prun_dict = {'remove_nan': remove_nan,
+                 'remove_ECH': remove_ECH,
+                 'remove_I_coil': remove_I_coil,
+                 'remove_gas': remove_gas,
+                 'remove_dudtrip': remove_dudtrip}
+    for elem in pruning_functions:
+        if isinstance(elem, str):
+            elem = prun_dict[elem]
+
+    # get sig names
+    extra_sigs = ['time', 'shotnum']
+    if remove_dudtrip in pruning_functions:
+        extra_sigs += ['dud_trip']
+    if remove_I_coil in pruning_functions:
+        extra_sigs += ['bt', 'curr', 'C_coil_method', 'I_coil_method']
+    if remove_gas in pruning_functions:
+        extra_sigs += ['gasB', 'gasC', 'gasD', 'gasE', 'pfx1', 'pfx2']
+    if remove_ECH in pruning_functions:
+        extra_sigs += ['ech']
+    sig_names = list(np.unique(sig_names))
+    sigsplustime = list(np.unique(sig_names + extra_sigs))
     if verbose:
         print('Signals: ' + ', '.join(sig_names))
-    usabledata = []
+
     # find which shots have all the signals needed
+    usabledata = []
     max_lookback = 0
     for val in lookbacks.values():
         if val > max_lookback:
             max_lookback = val
-
     all_shots = sorted(list(rawdata.keys()))
-
     for shot in all_shots:
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
@@ -298,20 +320,22 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                      disable=not verbose):
         # check to see if each sig in the shot is not completely nan
 
-        binned_shot={}
+        binned_shot = {}
         for sig in sigsplustime:
 
             if np.any(np.isinf(shot[sig])):
-                shot[sig][np.isinf(shot[sig])]=np.nan
-            nbins = int(np.floor(shot[sig].shape[0]/(window_length-window_overlap)))
-            binned_shot[sig]=[]
+                shot[sig][np.isinf(shot[sig])] = np.nan
+            nbins = int(np.floor(shot[sig].shape[0] /
+                                 (window_length-window_overlap)))
+            binned_shot[sig] = []
             for i in range(nbins):
                 # populate array of binned/windowed data for each shot
-                binned_shot[sig].append(binavg(shot[sig], i*(window_length-window_overlap)))
+                binned_shot[sig].append(
+                    binavg(shot[sig], i*(window_length-window_overlap)))
 
-            binned_shot[sig]=np.stack(np.array(binned_shot[sig]))
-        binned_shot['t_ip_flat']=shot['t_ip_flat']
-        binned_shot['ip_flat_duration']=shot['ip_flat_duration']
+            binned_shot[sig] = np.stack(np.array(binned_shot[sig]))
+        binned_shot['t_ip_flat'] = shot['t_ip_flat']
+        binned_shot['ip_flat_duration'] = shot['ip_flat_duration']
 
         if not is_valid(binned_shot):
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
@@ -323,9 +347,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             for i in range(first, last, sample_step):
                 # group into arrays of input/output pairs
                 if sig not in ['time', 'shotnum']:
-                    alldata[sig].append(binned_shot[sig][i-lookbacks[sig]:i+lookahead])
+                    alldata[sig].append(
+                        binned_shot[sig][i-lookbacks[sig]:i+lookahead])
                 else:
-                    alldata[sig].append(binned_shot[sig][i-max_lookback:i+lookahead])
+                    alldata[sig].append(
+                        binned_shot[sig][i-max_lookback:i+lookahead])
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
                                                   for e in shots_with_complete_nan))
@@ -333,29 +359,24 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose):
-
         alldata[sig] = np.stack(alldata[sig])
 
-    nan_indices=set()
-    for sig in sigsplustime:
-        for i,elem in enumerate(alldata[sig]):
-            if np.any(np.isnan(elem)):
-                nan_indices.add(i)
+    print("{} samples total".format(len(alldata['time'])))
 
-    print("Removing {} samples with partial NaN".format(len(nan_indices)))
-    for sig in sigsplustime:
-        # get all indices that are not nan_indices
-        non_nan_indices=set(range(len(alldata[sig]))).difference(nan_indices)
-        alldata[sig]=alldata[sig][list(non_nan_indices)]
+    for fun in pruning_functions:
+        alldata = fun(alldata)
+
+    print("{} samples remaining after pruning".format(len(alldata['time'])))
 
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
-    
-    inds = np.random.permutation(nsamples) #np.arange(nsamples) to keep everything in order
+
+    # np.arange(nsamples) to keep everything in order
+    inds = np.random.permutation(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
