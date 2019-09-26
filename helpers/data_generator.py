@@ -7,7 +7,7 @@ from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
 from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan
 from tqdm import tqdm
-
+from helpers import exclude_shots
 
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names,
@@ -191,7 +191,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             point separately.
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
-        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress, 2 is abbreviated.
         flattop_only (bool): Whether to only include data from flattop.
 
     Returns:
@@ -202,7 +202,6 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
-    verbose = bool(verbose)
     # Load data
     if type(rawdata) is not dict:
         if verbose:
@@ -217,15 +216,36 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
 
     # get pruning functions
     pruning_functions = kwargs.get('pruning_functions', [])
+    if 'ech' not in sig_names:
+        pruning_functions.append('remove_ECH')
+    if not {'gasB','gasC','gasD','gasE'}.issubset(set(sig_names)):
+        pruning_functions.append('remove_gas')
     prun_dict = {'remove_nan': remove_nan,
                  'remove_ECH': remove_ECH,
                  'remove_I_coil': remove_I_coil,
                  'remove_gas': remove_gas,
                  'remove_dudtrip': remove_dudtrip}
-    for elem in pruning_functions:
+    for i, elem in enumerate(pruning_functions):
         if isinstance(elem, str):
-            elem = prun_dict[elem]
+            pruning_functions[i] = prun_dict[elem]
 
+    # get excluded shots
+    excluded_shots = kwargs.get('excluded_shots',[])
+    exclude_dict = {'topology_TOP': exclude_shots.topology_TOP, 
+                    'topology_SNT': exclude_shots.topology_SNT, 
+                    'topology_SNB': exclude_shots.topology_SNB, 
+                    'topology_OUT': exclude_shots.topology_OUT, 
+                    'topology_MAR': exclude_shots.topology_MAR, 
+                    'topology_IN': exclude_shots.topology_IN, 
+                    'topology_DN': exclude_shots.topology_DN, 
+                    'topology_BOT': exclude_shots.topology_BOT}
+    for i, elem in enumerate(excluded_shots):
+        if isinstance(elem, str):
+            excluded_shots[i] = exclude_dict[elem]
+        if not isinstance(elem, list):
+            excluded_shots[i] = [elem]
+    excluded_shots = [item for sublist in excluded_shots for item in sublist]
+    
     # get sig names
     extra_sigs = ['time', 'shotnum']
     if remove_dudtrip in pruning_functions:
@@ -247,16 +267,23 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for val in lookbacks.values():
         if val > max_lookback:
             max_lookback = val
+    for sig in sigsplustime:
+        if sig not in lookbacks.keys():
+            lookbacks[sig] = max_lookback
     all_shots = sorted(list(rawdata.keys()))
     for shot in all_shots:
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
-           and rawdata[shot]['time'].size > (max_lookback+lookahead):
+           and rawdata[shot]['time'].size > (max_lookback+lookahead) \
+           and shot not in excluded_shots:
             usabledata.append(rawdata[shot])
     usabledata = np.array(usabledata)
     del rawdata
     gc.collect()
-    nshots = np.minimum(nshots, len(usabledata))
+    if nshots is not None:
+        nshots = np.minimum(nshots, len(usabledata))
+    else:
+        nshots = len(usabledata)
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
@@ -317,7 +344,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for sig in sigsplustime:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
-                     disable=not verbose):
+                     disable=not verbose==1):
         # check to see if each sig in the shot is not completely nan
 
         binned_shot = {}
@@ -346,7 +373,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         for sig in sigsplustime:
             for i in range(first, last, sample_step):
                 # group into arrays of input/output pairs
-                if sig not in ['time', 'shotnum']:
+                if sig in sig_names:
                     alldata[sig].append(
                         binned_shot[sig][i-lookbacks[sig]:i+lookahead])
                 else:
@@ -358,13 +385,13 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     del usabledata
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
-                    disable=not verbose):
+                    disable=not verbose==1):
         alldata[sig] = np.stack(alldata[sig])
 
     print("{} samples total".format(len(alldata['time'])))
 
     for fun in pruning_functions:
-        alldata = fun(alldata)
+        alldata = fun(alldata, verbose)
 
     print("{} samples remaining after pruning".format(len(alldata['time'])))
 
@@ -380,7 +407,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
-                    disable=not verbose):
+                    disable=not verbose==1):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]
     if verbose:

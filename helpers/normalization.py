@@ -150,18 +150,17 @@ def normalize(data, method, uniform_over_profile=True, verbose=1):
         uniform_over_profile (bool): 'True' uses the same normalization
             parameters over a whole profile, 'False' normalizes each spatial
             point separately.
-        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress, 2 abbreviates.
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Normalized data.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
-    verbose = bool(verbose)
     if type(data) is dict:
         param_dict = {}
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
-                        disable=not verbose):
+                        disable=not verbose==1):
             if key not in ['time', 'shotnum']:
                 data[key], p = normalize_arr(
                     data[key], method, uniform_over_profile)
@@ -236,15 +235,14 @@ def denormalize(data, param_dict, verbose=1):
         data: Numpy array or dictionary of numpy arrays.
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing. Eg, mean, stddev, method, etc.
-        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress, 2 abbreviates.
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Denormalized data.
     """
-    verbose = bool(verbose)
     if type(data) is dict:
         for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True,
-                        disable=not verbose):
+                        disable=not verbose==1):
             if key not in ['time', 'shotnum']:
                 data[key] = denormalize_arr(data[key], param_dict[key])
         return data
@@ -259,15 +257,14 @@ def renormalize(data, param_dict, verbose=1):
         data: Numpy array or dictionary of numpy arrays of raw data.
         param_dict (dict): Dictionary of parameters used during normalization,
             Eg, mean, stddev, method, etc.
-        verbose (int): verbosity level. 0 is no CL output, 1 shows progress.
+        verbose (int): verbosity level. 0 is no CL output, 1 shows progress, 2 abbreviates
 
     Returns:
         data: Numpy array or dictionary of numpy arrays. Normalized data.
     """
-    verbose = bool(verbose)
     if type(data) is dict:
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
-                        disable=not verbose):
+                        disable=not verbose==1):
             if key not in ['time', 'shotnum']:
                 data[key] = renormalize(data[key], param_dict[key])
         return data
