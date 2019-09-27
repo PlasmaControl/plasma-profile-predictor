@@ -25,10 +25,10 @@ def main(scenario_index=-2):
     ###################
     # set session
     ###################
-    num_cores = 16
-    ngpu = 4
-    config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
-                            inter_op_parallelism_threads=num_cores,
+    num_cores = 32
+    ngpu = 1
+    config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
+                            inter_op_parallelism_threads=4*num_cores,
                             allow_soft_placement=True,
                             device_count={'CPU': 1,
                                           'GPU': ngpu})
@@ -51,44 +51,64 @@ def main(scenario_index=-2):
                         'target_profile_names': ['temp', 'dens'],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
-                        'model_type' : 'conv2d',
+                        'model_type' : 'conv1d',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
                         'hinge_weight' : 0,
-                        'mse_weight_power' : 0,
-                        'mse_weight_edge' : np.sqrt(10),
+                        'mse_weight_power' : 2,
+                        'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
                         'epochs' : 50,
-                        'verbose' : 2,
                         'flattop_only': True,
                         'predict_deltas' : True,
+                        'raw_data_path':'/scratch/gpfs/jabbate/full_data/final_data.pkl',   # _batch_211.pkl',
+                        'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
                         'optimizer_kwargs': {},
-                        'shuffle_generators': True}
-   
+                        'shuffle_generators': True,
+                        'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil'],
+                        'normalization_method': 'RobustScaler',
+                        'window_length': 3,
+                        'window_overlap': 0,
+                        'profile_lookback': 1,
+                        'actuator_lookback': 6,
+                        'lookahead': 3,
+                        'sample_step': 1,
+                        'uniform_normalization': True,
+                        'train_frac': 0.8,
+                        'val_frac': 0.2,
+                        'nshots':12000,
+                        'excluded_shots': ['topology_TOP', 'topology_OUT','topology_MAR','topology_IN','topology_DN','topology_BOT']} 
+
+
+
+    
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'simple_dense', 'epochs': 50},
-                                {'model_type': 'conv1d', 'epochs': 50},
-                                {'model_type': 'conv2d', 'epochs': 100}]
-    scenarios_dict['actuators_scalars'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA'],
-                                            'scalar_input_names':[]}]
-                                           # {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA',
-                                           #   'gasB', 'gasC', 'gasD'],
-                                           #  'scalar_input_names':[]},
-                                           # {'actuator_names': ['pinj', 'curr', 'tinj',
-                                           #   'target_density', 'gas_feedback'],
-                                           #  'scalar_input_names':['density_estimate']}]
-    scenarios_dict['flattop'] = [{'flattop_only': True}]
-                                #{'flattop_only': False}]
-    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens']}]
-                                #{'input_profile_names': ['thomson_dens_EFITRT1',
-                                #                         'thomson_temp_EFITRT1']}]
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':64}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
+                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':8}},
+                                {'model_type': 'conv1d', 'epochs': 50}]
+    scenarios_dict['actuators'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA', 'gasB', 'gasC', 'gasD', 'gasE']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'target_density', 'gas_feedback']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA','ech']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA', 'gasB', 'gasC', 'gasD', 'gasE','ech']}]
+    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate']},
+                                 {'scalar_input_names': []},
+                                 {'scalar_input_names': ['density_estimate', 'a_EFIT01', 'drsep_EFIT01', 'kappa_EFIT01', 'rmagx_EFIT01', 'triangularity_bot_EFIT01',
+                                                         'triangularity_top_EFIT01','volume_EFIT01', 'zmagX_EFIT01']}]
+    scenarios_dict['flattop'] = [{'flattop_only': True},
+                                {'flattop_only': False}]
+    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens']},
+                                {'input_profile_names': ['temp','dens','press_EFIT01','ffprime_EFIT01','q_EFIT01','itemp','rotation']}]
     scenarios_dict['targets'] = [{'target_profile_names': ['temp','dens']}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
-    scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
-#                                        {'predict_deltas': False}]
+    scenarios_dict['process_data'] = [{'process_data':True}]
+    scenarios_dict['predict_deltas'] = [{'predict_deltas': True},
+                                        {'predict_deltas': False}]
 
 
 
@@ -98,11 +118,11 @@ def main(scenario_index=-2):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
         if foo['model_type'] == 'conv2d':
-            runtimes.append(8*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(7*128/foo['batch_size']*foo['epochs']+30)
         elif foo['model_type'] == 'simple_dense':
-            runtimes.append(3*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(2*128/foo['batch_size']*foo['epochs']+30)
         elif foo['model_type'] == 'conv1d':
-            runtimes.append(6*128/foo['batch_size']*foo['epochs'])
+            runtimes.append(5*128/foo['batch_size']*foo['epochs']+30)
         else:
             runtimes.append(4*60)
     num_scenarios = len(scenarios)
@@ -114,7 +134,7 @@ def main(scenario_index=-2):
     if scenario_index == -1:
         make_bash_scripts(num_scenarios, checkpt_dir, num_cores, ngpu, runtimes)
         print('Created Driver Scripts in ' + checkpt_dir)
-        for i in range(4):
+        for i in range(num_scenarios):
             os.system('sbatch {}'.format(os.path.join(
                 checkpt_dir, 'driver' + str(i) + '.sh')))
         print('Jobs submitted, exiting')
@@ -124,35 +144,69 @@ def main(scenario_index=-2):
     # Load Scenario and Data
     ###############    
     if scenario_index >= 0:
+        verbose=2
         print('Loading Scenario ' + str(scenario_index) + ':')
         scenario = scenarios[scenario_index]
     else:
+        verbose=1
         print('Loading Default Scenario:')
         scenario = default_scenario
     print(scenario)
-    if 'processed_filename_base' not in scenario.keys():
-        scenario['processed_filename_base'] = default_scenario['processed_filename_base']
+
+    if scenario['process_data']:
+        scenario.update({k:v for k,v in default_scenario.items() if k not in scenario.keys()})
+        scenario['lookbacks'] = {}
+        for sig in scenario['input_profile_names'] + scenario['target_profile_names']:
+            scenario['lookbacks'][sig] = scenario['profile_lookback']
+        for sig in scenario['actuator_names'] + scenario['scalar_input_names']:
+            scenario['lookbacks'][sig] = scenario['actuator_lookback']
+        scenario['sig_names'] = scenario['input_profile_names'] + scenario['target_profile_names'] + scenario['actuator_names'] + scenario['scalar_input_names']
+
+        if 'raw_data_path' not in scenario.keys():
+            scenario['raw_data_path'] = default_scenario['raw_data_path']
+        traindata, valdata, normalization_dict = process_data(scenario['raw_data_path'],
+                                                              scenario['sig_names'],
+                                                              scenario['normalization_method'],
+                                                              scenario['window_length'],
+                                                              scenario['window_overlap'],
+                                                              scenario['lookbacks'],
+                                                              scenario['lookahead'],
+                                                              scenario['sample_step'],
+                                                              scenario['uniform_normalization'],
+                                                              scenario['train_frac'],
+                                                              scenario['val_frac'],
+                                                              scenario['nshots'],
+                                                              verbose,
+                                                              scenario['flattop_only'],
+                                                              pruning_functions=scenario['pruning_functions'],
+                                                              excluded_shots = scenario['excluded_shots'])
+
+        scenario['normalization_dict'] = normalization_dict
+
+    else:        
+        if 'processed_filename_base' not in scenario.keys():
+            scenario['processed_filename_base'] = default_scenario['processed_filename_base']
         
-    if scenario['flattop_only']:
-        scenario['processed_filename_base'] += 'flattop/'
-    else:
-        scenario['processed_filename_base'] += 'all/'
+        if scenario['flattop_only']:
+            scenario['processed_filename_base'] += 'flattop/'
+        else:
+            scenario['processed_filename_base'] += 'all/'
          
-    with open(os.path.join(scenario['processed_filename_base'], 'param_dict.pkl'), 'rb') as f:
-        param_dict = pickle.load(f)
-    with open(os.path.join(scenario['processed_filename_base'], 'train.pkl'), 'rb') as f:
-        traindata = pickle.load(f)
-    with open(os.path.join(scenario['processed_filename_base'], 'val.pkl'), 'rb') as f:
-        valdata = pickle.load(f)
-    print('Data Loaded')
+        with open(os.path.join(scenario['processed_filename_base'], 'param_dict.pkl'), 'rb') as f:
+            param_dict = pickle.load(f)
+        with open(os.path.join(scenario['processed_filename_base'], 'train.pkl'), 'rb') as f:
+            traindata = pickle.load(f)
+        with open(os.path.join(scenario['processed_filename_base'], 'val.pkl'), 'rb') as f:
+            valdata = pickle.load(f)
+        print('Data Loaded')
+        scenario.update({k:v for k,v in param_dict.items() if k not in scenario.keys()})
+        scenario.update({k:v for k,v in default_scenario.items() if k not in scenario.keys()})
 
-    # update scenario with standard values for things that werent specified
-    scenario.update({k:v for k,v in param_dict.items() if k not in scenario.keys()})
-    scenario.update({k:v for k,v in default_scenario.items() if k not in scenario.keys()})
 
+  
     scenario['profile_length'] = int(np.ceil(65/scenario['profile_downsample']))
     scenario['mse_weight_vector'] = np.linspace(
-        1, scenario['mse_weight_edge'], scenario['profile_length'])**scenario['mse_weight_power']
+        1, scenario['mse_weight_edge']**(1/scenario['mse_weight_power']), scenario['profile_length'])**scenario['mse_weight_power']
           
     scenario['runname'] = 'model-' + scenario['model_type'] + \
               '_profiles-' + '-'.join(scenario['input_profile_names']) + \
@@ -170,7 +224,6 @@ def main(scenario_index=-2):
         scenario['runname'] += '_Scenario-' + str(scenario_index)
 
     print(scenario['runname'])
-
 
     ###############
     # Make data generators
@@ -228,7 +281,7 @@ def main(scenario_index=-2):
                                            scenario['profile_length'],
                                            scenario['std_activation'],
                                            **scenario['model_kwargs'])
-
+    model.summary()
     if ngpu>1:
         parallel_model = keras.utils.multi_gpu_model(model, gpus=ngpu)
 
@@ -285,7 +338,7 @@ def main(scenario_index=-2):
 
     ###############
     # Compile and Train
-    ############### 
+    ###############
     if ngpu>1:
         parallel_model.compile(optimizer, loss, metrics)
         print('Parallel model compiled, starting training')
@@ -295,7 +348,7 @@ def main(scenario_index=-2):
                                                callbacks=callbacks,
                                                validation_data=val_generator,
                                                validation_steps=scenario['val_steps'],
-                                               verbose=scenario['verbose'])
+                                               verbose=verbose)
     else:
         model.compile(optimizer, loss, metrics)
         print('Model compiled, starting training')
@@ -305,7 +358,7 @@ def main(scenario_index=-2):
                                       callbacks=callbacks,
                                       validation_data=val_generator,
                                       validation_steps=scenario['val_steps'],
-                                      verbose=scenario['verbose'])
+                                      verbose=verbose)
 
 
     ###############
