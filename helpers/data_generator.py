@@ -167,7 +167,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
                  nshots=None,
-                 verbose=1, flattop_only=True, **kwargs):
+                 verbose=1, flattop_only=True, randomize= True, **kwargs):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -399,8 +399,12 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
 
-    # np.arange(nsamples) to keep everything in order
-    inds = np.random.permutation(nsamples)
+    #  to keep everything in order
+    if randomize: 
+        inds = np.random.permutation(nsamples)
+    else:
+        print('nonrandomized')
+        inds=np.arange(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
