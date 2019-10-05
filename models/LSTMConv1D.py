@@ -10,6 +10,8 @@ from keras.models import Model
 def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input_names,
                          actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
 
+
+    max_channels = kwargs.get('max_channels',16)
     rnn_layer = layers.LSTM
 
     # (lookbacks[input_profile_names[0]], profile_length)
@@ -151,19 +153,19 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
     prof_act = []
     for i in range(num_targets):
 
-        current_profiles_processed_1 = layers.Conv1D(filters=8, kernel_size=2,
+        current_profiles_processed_1 = layers.Conv1D(filters=max_channels, kernel_size=2,
                                                      padding='same', activation='relu')(current_profiles_processed_0)
-        current_profiles_processed_2 = layers.Conv1D(filters=16, kernel_size=4,
+        current_profiles_processed_2 = layers.Conv1D(filters=max_channels, kernel_size=4,
                                                      padding='same', activation='relu')(current_profiles_processed_1)
-        current_profiles_processed_3 = layers.Conv1D(filters=16, kernel_size=8,
+        current_profiles_processed_3 = layers.Conv1D(filters=max_channels, kernel_size=8,
                                                      padding='same', activation='relu')(current_profiles_processed_2)
 
         final_output = layers.Concatenate()(
             [current_profiles_processed_1, current_profiles_processed_2, current_profiles_processed_3])
-        final_output = layers.Conv1D(filters=16, kernel_size=4,
-                                     padding='same', activation='tanh')(final_output)
-        final_output = layers.Conv1D(filters=8, kernel_size=4,
-                                     padding='same', activation='tanh')(final_output)
+        final_output = layers.Conv1D(filters=max_channels, kernel_size=4,
+                                     padding='same', activation='relu')(final_output)
+        final_output = layers.Conv1D(filters=int(max_channels/2), kernel_size=4,
+                                     padding='same', activation='relu')(final_output)
         final_output = layers.Conv1D(filters=1, kernel_size=4,
                                      padding='same', activation='linear')(final_output)
         final_output = layers.Reshape(target_shape=(

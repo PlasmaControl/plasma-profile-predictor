@@ -39,7 +39,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results/")
+    checkpt_dir = os.path.expanduser("~/run_results_10_4/")
 
     ###############
     # scenarios
@@ -86,29 +86,31 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':64}},
-                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
                                 {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
-                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':8}},
-                                {'model_type': 'conv1d', 'epochs': 50}]
-    scenarios_dict['actuators'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA', 'gasB', 'gasC', 'gasD', 'gasE']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'target_density', 'gas_feedback']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA','ech']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA', 'gasB', 'gasC', 'gasD', 'gasE','ech']}]
-    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate']},
-                                 {'scalar_input_names': []},
-                                 {'scalar_input_names': ['density_estimate', 'a_EFIT01', 'drsep_EFIT01', 'kappa_EFIT01', 'rmagx_EFIT01', 'triangularity_bot_EFIT01',
+                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
+                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
+    scenarios_dict['actuators'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']}]
+                                
+    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate', 'a_EFIT01', 'drsep_EFIT01', 'kappa_EFIT01', 'rmagx_EFIT01', 'triangularity_bot_EFIT01',
                                                          'triangularity_top_EFIT01','volume_EFIT01', 'zmagX_EFIT01']}]
     scenarios_dict['flattop'] = [{'flattop_only': True},
                                 {'flattop_only': False}]
-    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens']},
-                                {'input_profile_names': ['temp','dens','press_EFIT01','ffprime_EFIT01','q_EFIT01','itemp','rotation']}]
-    scenarios_dict['targets'] = [{'target_profile_names': ['temp','dens']}]
+    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens','q_EFIT01']},
+                                {'input_profile_names': ['temp','dens','press_EFIT01','ffprime_EFIT01','q_EFIT01']}]
+    scenarios_dict['targets'] = [{'target_profile_names': ['temp']},
+                                 {'target_profile_names': ['dens']},
+                                 {'target_profile_names': ['q_EFIT01']},
+                                 {'target_profile_names': ['temp','press_EFIT01','q_EFIT01']},
+                                 {'target_profile_names': ['temp','dens','q_EFIT01']}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
-    scenarios_dict['predict_deltas'] = [{'predict_deltas': True},
-                                        {'predict_deltas': False}]
+    scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
+    scenarios_dict['lookahead'] = [{'lookahead':1},
+                                   {'lookahead':2},
+                                   {'lookahead':3},
+                                   {'lookahead':4}]
+                                       
 
 
 
