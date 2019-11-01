@@ -40,7 +40,9 @@ def main(scenario_index=-2):
     ###############
     
     checkpt_dir = os.path.expanduser("~/run_results_10_4/")
-
+    if not os.path.exists(checkpt_dir):
+        os.makedirs(checkpt_dir)
+        
     ###############
     # scenarios
     ###############
