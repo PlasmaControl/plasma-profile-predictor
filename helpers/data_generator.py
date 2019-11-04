@@ -76,6 +76,7 @@ class DataGenerator(Sequence):
                                                  0:self.lookbacks[sig],
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
+            
             inp['input_past_' + sig] = self.data[sig][idx * self.batch_size:
                                                       (idx+1)*self.batch_size,
                                                       0:self.lookbacks[sig]]
@@ -176,7 +177,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
                  nshots=None,
-                 verbose=1, flattop_only=True, **kwargs):
+                 verbose=1, flattop_only=True, randomize= True, **kwargs):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -324,9 +325,12 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         else:
             return np.where(np.any(~np.isnan(arr), axis=1))[0]
 
+    delta_sigs = kwargs.get('delta_sigs',[])
+
     def get_first_index(shot):
         input_max = max([get_non_nan_inds(shot[sig])[0] +
-                         lookbacks[sig] for sig in sig_names])
+                         lookbacks[sig] +
+                         int(sig in delta_sigs) for sig in sig_names])
         output_max = max([get_non_nan_inds(shot[sig])[0] -
                           lookahead for sig in sig_names])
         if (flattop_only) and (shot['t_ip_flat'] != None):
@@ -383,8 +387,13 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             for i in range(first, last, sample_step):
                 # group into arrays of input/output pairs
                 if sig in sig_names:
-                    alldata[sig].append(
-                        binned_shot[sig][i-lookbacks[sig]:i+lookahead])
+                    if sig in delta_sigs:
+                        alldata[sig].append(
+                            np.diff(binned_shot[sig][i-lookbacks[sig]-1:i+lookahead]))
+                    else:
+                        alldata[sig].append(
+                            binned_shot[sig][i-lookbacks[sig]:i+lookahead])
+
                 else:
                     alldata[sig].append(
                         binned_shot[sig][i-max_lookback:i+lookahead])
@@ -408,11 +417,15 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata, normalization_method, uniform_normalization, verbose)
     nsamples = alldata['time'].shape[0]
 
-    # np.arange(nsamples) to keep everything in order
-    inds = np.random.permutation(nsamples)
+    #  to keep everything in order
+    if randomize: 
+        inds = np.random.permutation(nsamples)
+    else:
+        print('nonrandomized')
+        inds=np.arange(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)                   :int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,

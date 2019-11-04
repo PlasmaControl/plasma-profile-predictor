@@ -3,7 +3,7 @@ import numpy as np
 import os
 from helpers.data_generator import process_data, DataGenerator
 
-output_filename_base='/scratch/gpfs/jabbate/data_60_ms_include_rampup_randomized' #_include_current_ramps/'
+output_filename_base='/scratch/gpfs/jabbate/data_20_ms_ordered_all' #_include_current_ramps/'
 
 efit_type='EFITRT1'
 
@@ -24,11 +24,11 @@ input_profile_names = ['thomson_dens_{}'.format(efit_type), 'thomson_temp_{}'.fo
 target_profile_names = ['temp', 'dens']
 actuator_names = ['pinj', 'curr', 'tinj', 'gasA','gasB','gasC','gasD','target_density','gas_feedback']
 scalar_names = ['density_estimate']
-rawdata_path='/scratch/gpfs/jabbate/small_data/final_data.pkl'
+rawdata_path='/scratch/gpfs/jabbate/full_data/final_data.pkl'
 sig_names = input_profile_names + target_profile_names + actuator_names + scalar_names
 
 normalization_method = 'RobustScaler'
-window_length = 3
+window_length = 1
 window_overlap = 0
 profile_lookback = 1
 actuator_lookback = 6
@@ -54,6 +54,8 @@ traindata, valdata, normalization_dict = process_data(rawdata_path, sig_names,
                                                       uniform_normalization, train_frac,
                                                       val_frac, nshots,
                                                       flattop_only=flattop_only)
+
+os.makedirs(output_filename_base,exist_ok=True)
 
 with open(os.path.join(output_filename_base,'train.pkl'),'wb') as f:
    pickle.dump(traindata,f)

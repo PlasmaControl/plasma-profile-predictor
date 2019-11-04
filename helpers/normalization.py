@@ -182,9 +182,9 @@ def denormalize_arr(data, param_dict):
         data: Numpy array of denormalized data.
     """
     eps = np.finfo('float32').eps
-    for key, val in param_dict.items():
-        if K.is_tensor(val):
-            val = np.array(K.eval(val))
+    #for key, val in param_dict.items():
+    #    if K.is_tensor(val):
+    #        val = np.array(K.eval(val))
     if param_dict['method'] == 'StandardScaler':
         return data*np.maximum(param_dict['std'], eps) + param_dict['mean']
     elif param_dict['method'] == 'MinMax':
@@ -241,6 +241,7 @@ def denormalize(data, param_dict, verbose=1):
         data: Numpy array or dictionary of numpy arrays. Denormalized data.
     """
     if type(data) is dict:
+        data=data.copy() # don't make changes in place
         for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose==1):
             if key not in ['time', 'shotnum']:
