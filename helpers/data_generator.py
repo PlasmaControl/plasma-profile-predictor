@@ -1,3 +1,4 @@
+
 import pickle
 import numpy as np
 import gc
@@ -28,6 +29,7 @@ class DataGenerator(Sequence):
             predict_deltas (bool): Whether to predict changes or full profiles.
             profile_downsample (int): How much to downsample the profile data.
             shuffle (bool): Whether to reorder training samples on epoch end.
+            sample_weight (str): how to weight training samples. One of either None or 'std' to weight by standard deviation
         """
         self.data = data
         self.batch_size = batch_size
@@ -62,6 +64,8 @@ class DataGenerator(Sequence):
         idx = self.inds[idx]
         inp = {}
         targ = {}
+        sample_weights = np.ones(self.batch_size)
+        
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
         self.cur_times = self.data['time'][idx * self.batch_size:
@@ -80,6 +84,10 @@ class DataGenerator(Sequence):
                                                         (idx+1)*self.batch_size,
                                                         self.lookbacks[sig]:
                                                         self.lookbacks[sig]+self.lookahead]
+            if self.kwargs.get('sample_weights') == 'std':
+                sample_weights += np.std(self.data[sig][idx * self.batch_size:
+                                                      (idx+1)*self.batch_size,
+                                                      0:self.lookbacks[sig]])
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -100,7 +108,7 @@ class DataGenerator(Sequence):
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
-        return inp, targ
+        return inp, targ, sample_weights
 
     def get_data_by_shot_time(self, shots, times):
         """Gets input/target pairs for specific times within specified shots
