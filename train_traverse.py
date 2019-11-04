@@ -39,7 +39,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_10_4/")
+    checkpt_dir = os.path.expanduser("~/run_results_11_2/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -48,9 +48,9 @@ def main(scenario_index=-2):
     ###############
 
 
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA'],
-                        'input_profile_names': ['temp', 'dens'],
-                        'target_profile_names': ['temp', 'dens'],
+    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
+                        'input_profile_names': ['thomson_temp_EFITRT1', 'thomson_dens_EFITRT1','press_EFITRT1','ffprime_EFITRT1','q_EFIT01'],
+                        'target_profile_names': ['thomson_temp_EFITRT1', 'thomson_dens_EFITRT1'],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
                         'model_type' : 'conv1d',
@@ -61,10 +61,10 @@ def main(scenario_index=-2):
                         'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
-                        'epochs' : 50,
+                        'epochs' : 100,
                         'flattop_only': True,
-                        'predict_deltas' : True,
-                        'raw_data_path':'/scratch/gpfs/jabbate/full_data/final_data.pkl',   # _batch_211.pkl',
+                        'predict_deltas' : False,
+                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -218,9 +218,6 @@ def main(scenario_index=-2):
               '_targ-' + '-'.join(scenario['target_profile_names']) + \
               '_profLB-' + str(scenario['profile_lookback']) + \
               '_actLB-' + str(scenario['actuator_lookback']) +\
-              '_norm-' + scenario['normalization_method'] + \
-              '_activ-' + scenario['std_activation'] + \
-              '_nshots-' + str(scenario['nshots']) + \
               '_ftop-' + str(scenario['flattop_only']) + \
               strftime("_%d%b%y-%H-%M", localtime())
 

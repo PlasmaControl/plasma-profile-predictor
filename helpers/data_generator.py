@@ -65,7 +65,7 @@ class DataGenerator(Sequence):
         inp = {}
         targ = {}
         sample_weights = np.ones(self.batch_size)
-        
+        weights_dict = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
         self.cur_times = self.data['time'][idx * self.batch_size:
@@ -103,11 +103,12 @@ class DataGenerator(Sequence):
                                                    -1, ::self.profile_downsample] - baseline
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
+            weights_dict['target_' + sig] = sample_weights
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
-        return inp, targ, sample_weights
+        return inp, targ
 
     def get_data_by_shot_time(self, shots, times):
         """Gets input/target pairs for specific times within specified shots
