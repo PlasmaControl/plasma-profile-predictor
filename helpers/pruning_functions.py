@@ -82,12 +82,13 @@ def remove_gas(data, verbose):
     if verbose==2:
         print('Removing weird gas')
     from functools import reduce
-    gasB_inds = np.nonzero(np.any(data['gasB'] > .1, axis=1))[0]
-    gasC_inds = np.nonzero(np.any(data['gasC'] > .1, axis=1))[0]
-    gasD_inds = np.nonzero(np.any(data['gasD'] > .1, axis=1))[0]
-    gasE_inds = np.nonzero(np.any(data['gasE'] > .1, axis=1))[0]
-    pfx1_inds = np.nonzero(np.any(data['pfx1'] > .1, axis=1))[0]
-    pfx2_inds = np.nonzero(np.any(data['pfx2'] > .1, axis=1))[0]
+    threshold=2
+    gasB_inds = np.nonzero(np.any(data['gasB'] > threshold, axis=1))[0]
+    gasC_inds = np.nonzero(np.any(data['gasC'] > threshold, axis=1))[0]
+    gasD_inds = np.nonzero(np.any(data['gasD'] > threshold, axis=1))[0]
+    gasE_inds = np.nonzero(np.any(data['gasE'] > threshold, axis=1))[0]
+    pfx1_inds = np.nonzero(np.any(data['pfx1'] > threshold, axis=1))[0]
+    pfx2_inds = np.nonzero(np.any(data['pfx2'] > threshold, axis=1))[0]
     gas_inds = reduce(np.union1d, (gasB_inds, gasC_inds,
                                    gasD_inds, gasE_inds, pfx1_inds, pfx2_inds))
     remove_inds = set()

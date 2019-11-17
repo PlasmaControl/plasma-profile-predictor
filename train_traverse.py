@@ -39,16 +39,22 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_10_4/")
-
+    checkpt_dir = os.path.expanduser("~/run_results_11_2/")
+    if not os.path.exists(checkpt_dir):
+        os.makedirs(checkpt_dir)
+        
     ###############
     # scenarios
     ###############
 
+    efit_type='EFITRT1'
 
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA'],
-                        'input_profile_names': ['temp', 'dens'],
-                        'target_profile_names': ['temp', 'dens'],
+    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
+                        'input_profile_names': ['thomson_temp_{}'.format(efit_type), 
+                                                'thomson_dens_{}'.format(efit_type), 
+                                                'press_{}'.format(efit_type),
+                                                'q_EFIT01'],
+                        'target_profile_names': ['thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type)],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
                         'model_type' : 'conv1d',
@@ -59,10 +65,10 @@ def main(scenario_index=-2):
                         'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
-                        'epochs' : 50,
+                        'epochs' : 100,
                         'flattop_only': True,
-                        'predict_deltas' : True,
-                        'raw_data_path':'/scratch/gpfs/jabbate/full_data/final_data.pkl',   # _batch_211.pkl',
+                        'predict_deltas' : False,
+                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -70,7 +76,7 @@ def main(scenario_index=-2):
                         'shuffle_generators': True,
                         'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil'],
                         'normalization_method': 'RobustScaler',
-                        'window_length': 3,
+                        'window_length': 1,
                         'window_overlap': 0,
                         'profile_lookback': 1,
                         'actuator_lookback': 6,
@@ -79,7 +85,7 @@ def main(scenario_index=-2):
                         'uniform_normalization': True,
                         'train_frac': 0.8,
                         'val_frac': 0.2,
-                        'nshots':12000,
+                        'nshots': 12000,
                         'excluded_shots': ['topology_TOP', 'topology_OUT','topology_MAR','topology_IN','topology_DN','topology_BOT']} 
 
 
@@ -87,29 +93,41 @@ def main(scenario_index=-2):
     
     scenarios_dict = OrderedDict()
     scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
-                                {'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
-                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':16}},
-                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
-    scenarios_dict['actuators'] = [{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']}]
+                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':16}}]
+    scenarios_dict['actuators'] = [{'actuator_names': ['pinj']},
+                                   {'actuator_names': ['pinj', 'curr']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
+                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
                                 
-    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate', 'a_EFIT01', 'drsep_EFIT01', 'kappa_EFIT01', 'rmagx_EFIT01', 'triangularity_bot_EFIT01',
-                                                         'triangularity_top_EFIT01','volume_EFIT01', 'zmagX_EFIT01']}]
-    scenarios_dict['flattop'] = [{'flattop_only': True},
-                                {'flattop_only': False}]
-    scenarios_dict['inputs'] =  [{'input_profile_names': ['temp','dens','q_EFIT01']},
-                                {'input_profile_names': ['temp','dens','press_EFIT01','ffprime_EFIT01','q_EFIT01']}]
+    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate']}]
+
+# [{'scalar_input_names': ['density_estimate', 'a_{}'.format(efit_type), 'drsep_{}'.format(efit_type), 'kappa_{}'.format(efit_type), 'rmagx_{}'.format(efit_type), 'triangularity_bot_{}'.format(efit_type),
+                                                         #'triangularity_top_{}'.format(efit_type), 'zmagX_{}'.format(efit_type)]}]
+    scenarios_dict['flattop'] = [{'flattop_only': True}]
+    scenarios_dict['inputs'] = {'input_profile_names': ['temp','dens','ffprime_{}'.format(efit_type),'press_{}'.format(efit_type)]}, #'q_{}'.format(efit_type)]},
+        #                                {'input_profile_names': ['thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type),'press_{}'.format(efit_type),'ffprime_{}'.format(efit_type)]}] #,'q_{}'.format(efit_type)]}]
     scenarios_dict['targets'] = [{'target_profile_names': ['temp']},
                                  {'target_profile_names': ['dens']},
-                                 {'target_profile_names': ['q_EFIT01']},
-                                 {'target_profile_names': ['temp','press_EFIT01','q_EFIT01']},
-                                 {'target_profile_names': ['temp','dens','q_EFIT01']}]
+                                 {'target_profile_names': ['idens']},
+                                 {'target_profile_names': ['itemp']},
+                                 {'target_profile_names': ['rotation']},
+                                 {'target_profile_names': ['q_{}'.format(efit_type)]},
+                                 {'target_profile_names': ['press_{}'.format(efit_type)]},
+                                 {'target_profile_names': ['ffprime_{}'.format(efit_type)]}]
+    scenarios_dict['inputs'] = [{'target_profile_names': ['temp']},
+                                 {'target_profile_names': ['dens']},
+                                 {'target_profile_names': ['idens']},
+                                 {'target_profile_names': ['itemp']},
+                                 {'target_profile_names': ['rotation']},
+                                 {'target_profile_names': ['q_{}'.format(efit_type)]},
+                                 {'target_profile_names': ['press_{}'.format(efit_type)]},
+                                 {'target_profile_names': ['ffprime_{}'.format(efit_type)]}] 
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
-    scenarios_dict['lookahead'] = [{'lookahead':1},
-                                   {'lookahead':2},
-                                   {'lookahead':3},
-                                   {'lookahead':4}]
+    scenarios_dict['window_length']=[{'window_length':3}]
+    scenarios_dict['lookahead'] = [{'lookahead':3},
+                                   {'lookahead':8}]
                                        
 
 
@@ -216,9 +234,6 @@ def main(scenario_index=-2):
               '_targ-' + '-'.join(scenario['target_profile_names']) + \
               '_profLB-' + str(scenario['profile_lookback']) + \
               '_actLB-' + str(scenario['actuator_lookback']) +\
-              '_norm-' + scenario['normalization_method'] + \
-              '_activ-' + scenario['std_activation'] + \
-              '_nshots-' + str(scenario['nshots']) + \
               '_ftop-' + str(scenario['flattop_only']) + \
               strftime("_%d%b%y-%H-%M", localtime())
 
