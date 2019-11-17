@@ -17,3 +17,5 @@ ktf2cpp/predictor
 log*
 *.pkl
 willdelete
+*.png
+*.jpg
