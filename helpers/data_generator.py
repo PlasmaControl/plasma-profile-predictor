@@ -10,6 +10,7 @@ from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH,
 from tqdm import tqdm
 from helpers import exclude_shots
 
+
 class DataGenerator(Sequence):
     def __init__(self, data, batch_size, input_profile_names, actuator_names,
                  target_profile_names, scalar_input_names,
@@ -76,7 +77,7 @@ class DataGenerator(Sequence):
                                                  0:self.lookbacks[sig],
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
-            
+
             inp['input_past_' + sig] = self.data[sig][idx * self.batch_size:
                                                       (idx+1)*self.batch_size,
                                                       0:self.lookbacks[sig]]
@@ -86,8 +87,8 @@ class DataGenerator(Sequence):
                                                         self.lookbacks[sig]+self.lookahead]
             if self.kwargs.get('sample_weights') == 'std':
                 sample_weights += np.std(self.data[sig][idx * self.batch_size:
-                                                      (idx+1)*self.batch_size,
-                                                      0:self.lookbacks[sig]])
+                                                        (idx+1)*self.batch_size,
+                                                        0:self.lookbacks[sig]])
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -173,11 +174,145 @@ class DataGenerator(Sequence):
         return inp, targ
 
 
+class AutoEncoderDataGenerator(Sequence):
+    def __init__(self, data, batch_size, profile_names, actuator_names,
+                 scalar_names, lookback, lookahead, profile_downsample, state_latent_dim,
+                 shuffle, **kwargs):
+        """Make a data generator for training or validation data for autoencoder model
+
+        Args:
+            data: dict of data arrays to draw from.
+            batch_size (int): size of each batch.
+            profile_names (str): List of names of profile inputs, as strings.
+            actuator_names (str): List of names of actuator inputs, as strings.
+            scalar_names (str): List of names of scalar inputs (shape parameters etc).
+            lookbacks (dict): Dictionary of lookback values for each input signal name.
+            lookahead (int): How many steps ahead to predict (prediction window)
+            profile_downsample (int): How much to downsample the profile data.
+            shuffle (bool): Whether to reorder training samples on epoch end.
+            sample_weight (str): how to weight training samples. One of either None or 'std' to weight by standard deviation
+        """
+        self.data = data
+        self.batch_size = batch_size
+        self.profile_inputs = profile_names
+        self.actuator_inputs = actuator_names
+        self.scalar_inputs = scalar_names
+        self.lookback = lookback
+        self.lookahead = lookahead
+        self.profile_downsample = profile_downsample
+        self.profile_length = int(np.ceil(65/profile_downsample))
+        self.num_actuators = len(actuator_names)
+        self.num_profiles = len(profiles_names)
+        self.num_scalars = len(scalars_names)
+        self.state_dim = self.num_profiles*self.profile_length + self.num_scalars
+        self.state_latent_dim = state_latent_dim
+        self.cur_shotnum = np.zeros(self.batch_size)
+        self.cur_times = np.zeros(self.batch_size)
+        self.shuffle = shuffle
+        self.kwargs = kwargs
+        self.times_called = 0
+        if self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+        else:
+            self.inds = np.arange(len(self))
+
+    def __len__(self):
+        return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+
+        # NEED TO FIGURE OUT INDEXING WRT TO DATA PROCESSING AND TIMESTEPS
+        # SAMPLE WEIGHTS
+        # DECAY ON FUTURE PREDICTIONS
+        self.times_called += 1
+        idx = self.inds[idx]
+        inp = {}
+        sample_weights = np.ones(self.batch_size)
+        weights_dict = {}
+        self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
+                                                (idx+1)*self.batch_size]
+        self.cur_times = self.data['time'][idx * self.batch_size:
+                                           (idx+1)*self.batch_size]
+        for sig in self.profile_inputs:
+            inp['input_' + sig] = self.data[sig][idx * self.batch_size:
+                                                 (idx+1)*self.batch_size,
+                                                 0:self.lookbacks[sig],
+                                                 ::self.profile_downsample]
+        for sig in self.actuator_inputs:
+
+            inp['input_' + sig] = self.data[sig][idx * self.batch_size:
+                                                 (idx+1)*self.batch_size,
+                                                 0:self.lookbacks[sig]]
+            if self.kwargs.get('sample_weights') == 'std':
+                sample_weights += np.std(self.data[sig][idx * self.batch_size:
+                                                        (idx+1)*self.batch_size,
+                                                        0:self.lookbacks[sig]])
+        for sig in self.scalar_inputs:
+            inp['input_' + sig] = self.data[sig][idx * self.batch_size:
+                                                 (idx+1)*self.batch_size,
+                                                 0:self.lookbacks[sig]]
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
+                'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
+                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+
+        if self.times_called % len(self) == 0 and self.shuffle:
+            self.inds = np.random.permutation(range(len(self)))
+
+        return inp, targ
+
+    def get_data_by_shot_time(self, shots, times):
+        """Gets inputs for specific times within specified shots
+
+        If no data is present for a given shot, that shot will be ignored. 
+        Attempts to find the input data that is closest to the requested time value,
+        but the actual time should be verified manually.
+
+        Args:
+            shots (list or array): Array of shot numbers, as integers.
+            times (list or array): Array of times. Should be the same length as shots array.
+
+        Returns:
+            inputs (dict): Dictionary of input arrays, with all data stored as 1 batch.
+        """
+
+        if type(shots) is not np.ndarray:
+            shots = np.array(shots)
+        if type(times) is not np.ndarray:
+            times = np.array(times)
+        inds = np.array([])
+        for shot, time in zip(shots, times):
+            shot_inds = np.nonzero(self.data['shotnum'][:, 0] == shot)[0]
+            if len(shot_inds) < 1:
+                continue
+            ind = shot_inds[np.argmin(
+                np.abs(time-self.data['time'][shot_inds, self.max_lookback-1]))]
+            inds = np.append(inds, ind)
+        inds = inds.astype(int)
+
+        inp = {}
+        targ = {}
+        self.cur_shotnum = self.data['shotnum'][inds]
+        self.cur_times = self.data['time'][inds]
+
+        for sig in self.profile_inputs:
+            inp['input_' + sig] = self.data[sig][inds,
+                                                 0:self.lookbacks[sig],
+                                                 ::self.profile_downsample]
+        for sig in self.actuator_inputs:
+            inp['input_' + sig] = self.data[sig][inds,
+                                                 self.lookbacks[sig]:
+                                                 self.lookbacks[sig]+self.lookahead]
+        for sig in self.scalar_inputs:
+            inp['input_' + sig] = self.data[sig][inds,
+                                                 0:self.lookbacks[sig]]
+        return inp
+
+
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
                  nshots=None,
-                 verbose=1, flattop_only=True, randomize= True, **kwargs):
+                 verbose=1, flattop_only=True, randomize=True, **kwargs):
     """Organize data into correct format for training
 
     Gathers raw data into bins, group into training sequences, normalize, 
@@ -228,7 +363,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     pruning_functions = kwargs.get('pruning_functions', [])
     if 'ech' not in sig_names:
         pruning_functions.append('remove_ECH')
-    if not {'gasB','gasC','gasD','gasE'}.issubset(set(sig_names)):
+    if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
         pruning_functions.append('remove_gas')
     prun_dict = {'remove_nan': remove_nan,
                  'remove_ECH': remove_ECH,
@@ -240,14 +375,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             pruning_functions[i] = prun_dict[elem]
 
     # get excluded shots
-    excluded_shots = kwargs.get('excluded_shots',[])
-    exclude_dict = {'topology_TOP': exclude_shots.topology_TOP, 
-                    'topology_SNT': exclude_shots.topology_SNT, 
-                    'topology_SNB': exclude_shots.topology_SNB, 
-                    'topology_OUT': exclude_shots.topology_OUT, 
-                    'topology_MAR': exclude_shots.topology_MAR, 
-                    'topology_IN': exclude_shots.topology_IN, 
-                    'topology_DN': exclude_shots.topology_DN, 
+    excluded_shots = kwargs.get('excluded_shots', [])
+    exclude_dict = {'topology_TOP': exclude_shots.topology_TOP,
+                    'topology_SNT': exclude_shots.topology_SNT,
+                    'topology_SNB': exclude_shots.topology_SNB,
+                    'topology_OUT': exclude_shots.topology_OUT,
+                    'topology_MAR': exclude_shots.topology_MAR,
+                    'topology_IN': exclude_shots.topology_IN,
+                    'topology_DN': exclude_shots.topology_DN,
                     'topology_BOT': exclude_shots.topology_BOT}
     for i, elem in enumerate(excluded_shots):
         if isinstance(elem, str):
@@ -255,7 +390,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         if not isinstance(elem, list):
             excluded_shots[i] = [elem]
     excluded_shots = [item for sublist in excluded_shots for item in sublist]
-    
+
     # get sig names
     extra_sigs = ['time', 'shotnum']
     if remove_dudtrip in pruning_functions:
@@ -273,10 +408,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
 
     # find which shots have all the signals needed
     usabledata = []
-    max_lookback = 0
-    for val in lookbacks.values():
-        if val > max_lookback:
-            max_lookback = val
+    if isinstance(lookbacks, int):
+        max_lookback = lookbacks
+        lookbacks = {sig: max_lookback for sig in sig_names}
+    else:
+        max_lookback = 0
+        for val in lookbacks.values():
+            if val > max_lookback:
+                max_lookback = val
     for sig in sigsplustime:
         if sig not in lookbacks.keys():
             lookbacks[sig] = max_lookback
@@ -325,7 +464,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         else:
             return np.where(np.any(~np.isnan(arr), axis=1))[0]
 
-    delta_sigs = kwargs.get('delta_sigs',[])
+    delta_sigs = kwargs.get('delta_sigs', [])
 
     def get_first_index(shot):
         input_max = max([get_non_nan_inds(shot[sig])[0] +
@@ -357,7 +496,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for sig in sigsplustime:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
-                     disable=not verbose==1):
+                     disable=not verbose == 1):
         # check to see if each sig in the shot is not completely nan
 
         binned_shot = {}
@@ -403,7 +542,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     del usabledata
     gc.collect()
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
-                    disable=not verbose==1):
+                    disable=not verbose == 1):
         alldata[sig] = np.stack(alldata[sig])
 
     print("{} samples total".format(len(alldata['time'])))
@@ -418,18 +557,18 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     nsamples = alldata['time'].shape[0]
 
     #  to keep everything in order
-    if randomize: 
+    if randomize:
         inds = np.random.permutation(nsamples)
     else:
         print('nonrandomized')
-        inds=np.arange(nsamples)
+        inds = np.arange(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
-                    disable=not verbose==1):
+                    disable=not verbose == 1):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]
     if verbose:
