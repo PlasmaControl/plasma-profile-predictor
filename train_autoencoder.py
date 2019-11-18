@@ -307,7 +307,8 @@ def main(scenario_index=-2):
     # Compile and Train
     ###############
     if ngpu > 1:
-        parallel_model.compile(optimizer, loss, metrics)
+        parallel_model.compile(optimizer, loss, metrics,
+                               sample_weight_mode="temporal")
         print('Parallel model compiled, starting training')
         history = parallel_model.fit_generator(train_generator,
                                                steps_per_epoch=scenario['steps_per_epoch'],
@@ -317,7 +318,7 @@ def main(scenario_index=-2):
                                                validation_steps=scenario['val_steps'],
                                                verbose=verbose)
     else:
-        model.compile(optimizer, loss, metrics)
+        model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
         print('Model compiled, starting training')
         history = model.fit_generator(train_generator,
                                       steps_per_epoch=scenario['steps_per_epoch'],

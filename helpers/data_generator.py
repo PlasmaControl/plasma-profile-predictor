@@ -110,12 +110,12 @@ class DataGenerator(Sequence):
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
-        return inp, targ
+        return inp, targ, weights_dict
 
     def get_data_by_shot_time(self, shots, times):
         """Gets input/target pairs for specific times within specified shots
 
-        If no data is present for a given shot, that shot will be ignored. 
+        If no data is present for a given shot, that shot will be ignored.
         Attempts to find the input data that is closest to the requested time value,
         but the actual time should be verified manually.
 
@@ -176,8 +176,8 @@ class DataGenerator(Sequence):
 
 class AutoEncoderDataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_names, actuator_names,
-                 scalar_names, lookback, lookahead, profile_downsample, state_latent_dim,
-                 shuffle, **kwargs):
+                 scalar_names, lookback, lookahead, profile_downsample,
+                 state_latent_dim, decay_rate, x_weight, u_weight, shuffle, **kwargs):
         """Make a data generator for training or validation data for autoencoder model
 
         Args:
@@ -186,11 +186,15 @@ class AutoEncoderDataGenerator(Sequence):
             profile_names (str): List of names of profile inputs, as strings.
             actuator_names (str): List of names of actuator inputs, as strings.
             scalar_names (str): List of names of scalar inputs (shape parameters etc).
-            lookbacks (dict): Dictionary of lookback values for each input signal name.
+            lookback (int): How many timesteps of previous actuators
             lookahead (int): How many steps ahead to predict (prediction window)
             profile_downsample (int): How much to downsample the profile data.
+            state_latent_dim (int): dimension of the state latent space.
+            decay_rate (0< float <=1): Geometric decay rate for importance of future predictions
+            x_weight (float): weight to apply to x residual during training
+            u_weight (float): weight to apply to u residual during training          
             shuffle (bool): Whether to reorder training samples on epoch end.
-            sample_weight (str): how to weight training samples. One of either None or 'std' to weight by standard deviation
+
         """
         self.data = data
         self.batch_size = batch_size
@@ -208,6 +212,9 @@ class AutoEncoderDataGenerator(Sequence):
         self.state_latent_dim = state_latent_dim
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
+        self.decay_rate = decay_rate
+        self.x_weights = x_weight
+        self.u_weight = u_weight
         self.shuffle = shuffle
         self.kwargs = kwargs
         self.times_called = 0
@@ -222,8 +229,7 @@ class AutoEncoderDataGenerator(Sequence):
     def __getitem__(self, idx):
 
         # NEED TO FIGURE OUT INDEXING WRT TO DATA PROCESSING AND TIMESTEPS
-        # SAMPLE WEIGHTS
-        # DECAY ON FUTURE PREDICTIONS
+
         self.times_called += 1
         idx = self.inds[idx]
         inp = {}
@@ -243,10 +249,7 @@ class AutoEncoderDataGenerator(Sequence):
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
                                                  0:self.lookbacks[sig]]
-            if self.kwargs.get('sample_weights') == 'std':
-                sample_weights += np.std(self.data[sig][idx * self.batch_size:
-                                                        (idx+1)*self.batch_size,
-                                                        0:self.lookbacks[sig]])
+
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -254,16 +257,21 @@ class AutoEncoderDataGenerator(Sequence):
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+        weights_dict = {'x_residual': self.x_weight*np.ones((self.batch_size, self.lookahead)),
+                        'u_residual': self.u_weight*np.ones((self.batch_size, self.lookback+self.lookahead)),
+                        'linear_system_residual': np.repeat(np.array(
+                            [.5**i for i in range(self.lookahead-1)]).reshape(
+                                (1, self.lookahead-1)), self.batch_size, axis=0)}
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
-        return inp, targ
+        return inp, targ, weights_dict
 
     def get_data_by_shot_time(self, shots, times):
         """Gets inputs for specific times within specified shots
 
-        If no data is present for a given shot, that shot will be ignored. 
+        If no data is present for a given shot, that shot will be ignored.
         Attempts to find the input data that is closest to the requested time value,
         but the actual time should be verified manually.
 
@@ -315,24 +323,24 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  verbose=1, flattop_only=True, randomize=True, **kwargs):
     """Organize data into correct format for training
 
-    Gathers raw data into bins, group into training sequences, normalize, 
+    Gathers raw data into bins, group into training sequences, normalize,
     and split into training and validation sets.
 
     Args:
-        rawdata (dict): Nested dictionary of raw signal data, or path to pickle. 
+        rawdata (dict): Nested dictionary of raw signal data, or path to pickle.
             Should be of the form rawdata[shot][signal_name] = signal_data.
         sig_names (list): List of signal names as strings.
         normalization_method (str): One of `StandardScaler`, `MinMax`, `MaxAbs`,
             `RobustScaler`, `PowerTransform`.
         window_length (int): Number of samples to average over in each bin/window.
-        window_overlap (int): How many timesteps to overlap windows.  
+        window_overlap (int): How many timesteps to overlap windows.
         lookbacks (dict of int): How many window lengths for lookback for each sig.
         lookahead (int): How many window lengths to predict into the future.
-        sample_step (int): How much to offset sequential training sequences. 
-            Step of 1 means sample[i] and sample[i+1] will be offset by 1, with 
+        sample_step (int): How much to offset sequential training sequences.
+            Step of 1 means sample[i] and sample[i+1] will be offset by 1, with
             the rest overlapping.
-        uniform_normalization (bool): 'True' uses the same normalization 
-            parameters over a whole profile, 'False' normalizes each spatial 
+        uniform_normalization (bool): 'True' uses the same normalization
+            parameters over a whole profile, 'False' normalizes each spatial
             point separately.
         val_frac (float): Fraction of samples to use for validation.
         nshots (int): How many shots to use. If None, all available will be used.
@@ -564,7 +572,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         inds = np.arange(nsamples)
 
     traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac):int(nsamples*(val_frac+train_frac))]
+    valinds = inds[int(nsamples*train_frac)
+                       :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
