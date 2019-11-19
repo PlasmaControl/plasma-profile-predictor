@@ -6,6 +6,19 @@ from keras.models import Model
 
 
 def get_state_splitter_joiner(profile_names, scalar_names, lookahead, profile_length):
+    """Create models to split and join inputs/outputs for state variables
+
+    Args:
+        profile_names (str): List of names of profiles
+        scalar_names (str): list of names of scalars 
+        lookahead (int): how many timesteps in the future to predict
+        profile_length (int): number of psi pts in discretized profiles
+
+    Returns:
+        joiner (model): model that takes individual inputs and returns a combined tensor
+        splitter (model): model that takes combined tensor and returns individual tensors for each signal
+    """
+
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
     state_dim = num_profiles*profile_length + num_scalars
@@ -34,6 +47,16 @@ def get_state_splitter_joiner(profile_names, scalar_names, lookahead, profile_le
 
 
 def get_control_splitter_joiner(actuator_names, timesteps):
+    """Create models to split and join inputs/outputs for control variables
+
+    Args:
+        actuator_names (str): List of names of actuators
+        timesteps (int): how many timesteps in the future to predict + how many timesteps of previous actuators
+
+    Returns:
+        joiner (model): model that takes individual inputs and returns a combined tensor
+        splitter (model): model that takes combined tensor and returns individual tensors for each signal
+    """
     num_actuators = len(actuator_names)
     actuator_inputs = [Input((timesteps, 1), name='input_' + nm)
                        for nm in actuator_names]
@@ -53,6 +76,20 @@ def get_control_splitter_joiner(actuator_names, timesteps):
 
 def get_control_encoder_dense(actuator_names, control_latent_dim,
                               std_activation, **kwargs):
+    """Control encoder using dense network.
+
+    Args:
+        actuator_names (str): List of names of actuators
+        control_latent_dim (int): dimensionality of the encoded variables
+        std_activation (str or fn): activation function to apply to hidden layers
+        num_layers (int): number of hidden layers
+        layer_scale (float): power law scaling for size of hidden layers
+            size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
+
+    Returns:
+        control_encoder (model): Keras model that takes each actuator as individual inputs
+            and returns a single tensor of the encoded values.
+    """
     layer_scale = kwargs.get('layer_scale', 1)
     num_layers = kwargs.get('num_layers', 6)
     num_actuators = len(actuator_names)
@@ -70,6 +107,20 @@ def get_control_encoder_dense(actuator_names, control_latent_dim,
 
 def get_control_decoder_dense(actuator_names, control_latent_dim,
                               std_activation, **kwargs):
+    """Control decoder using dense network.
+
+    Args:
+        actuator_names (str): List of names of actuators
+        control_latent_dim (int): dimensionality of the encoded variables
+        std_activation (str or fn): activation function to apply to hidden layers
+        num_layers (int): number of hidden layers
+        layer_scale (float): power law scaling for size of hidden layers
+            size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
+
+    Returns:
+        control_encoder (model): Keras model that takes a single tensor of the 
+            encoded values and returns each actuator as individual outputs.
+    """
     layer_scale = kwargs.get('layer_scale', 1)
     num_layers = kwargs.get('num_layers', 6)
     num_actuators = len(actuator_names)
@@ -89,6 +140,22 @@ def get_control_decoder_dense(actuator_names, control_latent_dim,
 
 def get_state_encoder_dense(profile_names, scalar_names, profile_length,
                             state_latent_dim, std_activation, **kwargs):
+    """State encoder using dense network.
+
+    Args:
+        profile_names (str): List of names of profiles
+        scalar_names (str): List of names of scalars
+        profile_length (int): number of psi pts in discretized profiles
+        state_latent_dim (int): dimensionality of the encoded variables
+        std_activation (str or fn): activation function to apply to hidden layers
+        num_layers (int): number of hidden layers
+        layer_scale (float): power law scaling for size of hidden layers
+            size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
+
+    Returns:
+        state_encoder (model): Keras model that takes each profile and scalar as individual inputs
+            and returns a single tensor of the encoded values.
+    """
     layer_scale = kwargs.get('layer_scale', 1)
     num_layers = kwargs.get('num_layers', 6)
     num_profiles = len(profile_names)
@@ -110,6 +177,22 @@ def get_state_encoder_dense(profile_names, scalar_names, profile_length,
 
 def get_state_decoder_dense(profile_names, scalar_names, profile_length,
                             state_latent_dim, std_activation, **kwargs):
+    """State decoder using dense network.
+
+    Args:
+        profile_names (str): List of names of profiles
+        scalar_names (str): List of names of scalars
+        profile_length (int): number of psi pts in discretized profiles
+        state_latent_dim (int): dimensionality of the encoded variables
+        std_activation (str or fn): activation function to apply to hidden layers
+        num_layers (int): number of hidden layers
+        layer_scale (float): power law scaling for size of hidden layers
+            size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
+
+    Returns:
+        state_decoder (model): Keras model that takes a single tensor of the 
+            encoded values and returns each profile/scalar as individual outputs.
+    """
     layer_scale = kwargs.get('layer_scale', 1)
     num_layers = kwargs.get('num_layers', 6)
     num_profiles = len(profile_names)
@@ -132,6 +215,21 @@ def get_state_decoder_dense(profile_names, scalar_names, profile_length,
 
 
 def get_latent_linear_model(state_latent_dim, control_latent_dim, lookback, lookahead, regularization=None):
+    """Linear model for encoded variables
+
+    Args:
+        state_latent_dim (int): dimensionality of the encoded state variables
+        control_latent_dim (int): dimensionality of the encoded control variables
+        lookback (int): how many timesteps of past actuators to use
+        lookahead (int): how many timesteps in the future to predict
+        regularization (dict): Dictionary of L1 and L2 regularization parameters 
+            for A and B matrices. keys 'l1A', l2A', 'l1B', 'l2B'
+
+    Returns:
+        latent_linear_system (model): Keras model that takes state and control 
+            tensors as input and returns a tensor of residual values in the 
+            linear dynamic approximation
+    """
     if regularization is None:
         regularization = {'l1A': 0,
                           'l2A': 0,
@@ -165,7 +263,34 @@ def get_latent_linear_model(state_latent_dim, control_latent_dim, lookback, look
 def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_type, control_decoder_type,
                      state_encoder_kwargs, state_decoder_kwargs, control_encoder_kwargs, control_decoder_kwargs,
                      profile_names, scalar_names, actuator_names,
-                     state_latent_dim, control_latent_dim, lookback, lookahead, **kwargs):
+                     state_latent_dim, control_latent_dim, profile_length, lookback, lookahead, **kwargs):
+    """Linear Recurrent autoencoder
+
+    Args:
+        state_encoder_type (str): Type of netork to use for state encoding
+        state_decoder_type (str): Type of netork to use for state decoding
+        control_encoder_type (str): Type of netork to use for control encoding
+        control_decoder_type (str): Type of netork to use for control decoding
+        state_encoder_kwargs (dict): Dictionary of keyword arguments for state encoder model
+        state_decoder_kwargs (dict): Dictionary of keyword arguments for state decoder model
+        control_encoder_kwargs (dict): Dictionary of keyword arguments for control encoder model
+        control_decoder_kwargs (dict): Dictionary of keyword arguments for control decoder model
+        profile_names (str): List of names of profiles
+        scalar_names (str): list of names of scalars 
+        actuator_names (str): list of names of actuators
+        state_latent_dim (int): dimensionality of the encoded state variables
+        control_latent_dim (int): dimensionality of the encoded control variables
+        profile_length (int): number of psi pts in discretized profiles
+        lookback (int): how many timesteps of past actuators to use
+        lookahead (int): how many timesteps in the future to predict
+
+
+
+    Returns:
+        autoencoder (model): Keras model that takes profile, scalar, and actuator 
+            tensors as input and returns a tensor of residual values in the 
+            state reconstruction, control reconstruction, and linear dynamic approximation
+    """
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
