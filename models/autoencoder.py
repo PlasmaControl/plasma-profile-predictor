@@ -25,12 +25,12 @@ def get_state_splitter_joiner(profile_names, scalar_names, lookahead, profile_le
 
     profile_inputs = [Input((lookahead, profile_length),
                             name='input_' + nm) for nm in profile_names]
-    profiles = Concatenate(axis=-1)(profile_inputs)
+    profiles = Concatenate(axis=-1,name='profile_joiner')(profile_inputs) if num_profiles>1 else profile_inputs[0]
     scalar_inputs = [Input((lookahead, 1), name='input_' + nm)
                      for nm in scalar_names]
     scalars = Concatenate(
         axis=-1)(scalar_inputs) if num_scalars > 1 else scalar_inputs[0] if num_scalars > 0 else []
-    x = Concatenate(axis=-1)([profiles, scalars]
+    x = Concatenate(axis=-1,name='state_joiner')([profiles, scalars]
                              ) if num_scalars > 0 else profiles
     joiner_model = Model(inputs=profile_inputs +
                          scalar_inputs, outputs=x, name='state_joiner')
@@ -61,7 +61,7 @@ def get_control_splitter_joiner(actuator_names, timesteps):
     actuator_inputs = [Input((timesteps, 1), name='input_' + nm)
                        for nm in actuator_names]
     actuators = Concatenate(
-        axis=-1)(actuator_inputs) if num_actuators > 1 else actuator_inputs[0]
+        axis=-1,name='control_joiner')(actuator_inputs) if num_actuators > 1 else actuator_inputs[0]
     joiner = Model(inputs=actuator_inputs,
                    outputs=actuators, name='control_joiner')
 
@@ -166,7 +166,7 @@ def get_state_encoder_dense(profile_names, scalar_names, profile_length,
         profile_names, scalar_names, 1, profile_length)
     x = joiner(joiner.inputs)
     for i in range(num_layers):
-        units = int(state_latent_dim + (state_dim-latent_dim)
+        units = int(state_latent_dim + (state_dim-state_latent_dim)
                     * ((num_layers-i-1)/(num_layers-1))**layer_scale)
         x = Dense(units=units, activation=std_activation, use_bias=True)(x)
     x = Reshape((state_latent_dim,))(x)
@@ -202,7 +202,7 @@ def get_state_decoder_dense(profile_names, scalar_names, profile_length,
     xi = Input((state_latent_dim,))
     x = xi
     for i in range(num_layers-1, 0, -1):
-        units = int(state_latent_dim + (state_dim-latent_dim)
+        units = int(state_latent_dim + (state_dim-state_latent_dim)
                     * ((num_layers-i-1)/(num_layers-1))**layer_scale)
         x = Dense(units=units, activation=std_activation, use_bias=True)(x)
     y = Dense(units=state_dim, activation='linear')(x)
@@ -242,7 +242,7 @@ def get_latent_linear_model(state_latent_dim, control_latent_dim, lookback, look
     x1 = Cropping1D((1, 0), name='x1')(xi)
     u = Cropping1D((lookback, 0), name='u')(ui)
 
-    AB = SimpleRNN(units=latent_dim,
+    AB = SimpleRNN(units=state_latent_dim,
                    activation='linear',
                    use_bias=False,
                    name='AB_matrices',
@@ -305,21 +305,17 @@ def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_typ
                                                        scalar_names,
                                                        profile_length,
                                                        state_latent_dim,
-                                                       std_activation,
                                                        **state_encoder_kwargs)
     state_decoder = state_decoders[state_decoder_type](profile_names,
                                                        scalar_names,
                                                        profile_length,
                                                        state_latent_dim,
-                                                       std_activation,
                                                        **state_decoder_kwargs)
     control_encoder = control_encoders[control_encoder_type](actuator_names,
                                                              control_latent_dim,
-                                                             std_activation,
                                                              **control_encoder_kwargs)
     control_decoder = control_decoders[control_decoder_type](actuator_names,
                                                              control_latent_dim,
-                                                             std_activation,
                                                              **control_decoder_kwargs)
     state_joiner, state_splitter = get_state_splitter_joiner(profile_names,
                                                              scalar_names,
@@ -334,15 +330,17 @@ def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_typ
                                            lookahead,
                                            regularization=kwargs.get('regularization', None))
 
-    xi = state_joiner(state_joiner.inputs)
-    ui = control_joiner(control_joiner.inputs)
+    xi = state_joiner.outputs[0]
+    ui = control_joiner.outputs[0]
     st_enc = Model(state_splitter.inputs,
                    state_encoder(state_splitter.outputs))
     x = TimeDistributed(st_enc)(xi)
+    x = Reshape((lookahead+1,state_latent_dim))(x)
     ctrl_enc = Model(control_splitter.inputs,
                      control_encoder(control_splitter.outputs))
     u = TimeDistributed(ctrl_enc)(ui)
-
+    u = Reshape((lookback+lookahead,control_latent_dim))(u)
+    
     x1res = linear_model([x, u])
 
     st_dec = Model(state_decoder.inputs, state_joiner(state_decoder.outputs))

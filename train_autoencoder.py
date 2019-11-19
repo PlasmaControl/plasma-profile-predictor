@@ -2,13 +2,10 @@ import pickle
 import keras
 import numpy as np
 
-from helpers.data_generator import process_data, DataGenerator
+from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
-from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
-from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
-from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
 import models.autoencoder
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -41,7 +38,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = os.path.expanduser("~/run_results_11_2/")
+    checkpt_dir = os.path.expanduser("~/run_results_11_19")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -63,18 +60,26 @@ def main(scenario_index=-2):
                         'control_encoder_type': 'dense',
                         'control_decoder_type': 'dense',
                         'state_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2},
+                                                 'layer_scale': 2,
+                                                 'std_activation':'relu'},
                         'state_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2},
+                                                 'layer_scale': 2,
+                                                 'std_activation':'relu'},
                         'control_encoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2},
+                                                   'layer_scale': 2,
+                                                   'std_activation':'relu'},
                         'control_decoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2},
-                        'std_activation': 'relu',
+                                                   'layer_scale': 2,
+                                                   'std_activation':'relu'},
+                        'state_latent_dim':50,
+                        'control_latent_dim':5,
+                        'x_weight':1,
+                        'u_weight':1,
+                        'decay_rate':1,
                         'batch_size': 128,
                         'epochs': 100,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data_batch_150.pkl',
                         'process_data': True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -113,14 +118,7 @@ def main(scenario_index=-2):
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        if foo['model_type'] == 'conv2d':
-            runtimes.append(7*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'simple_dense':
-            runtimes.append(2*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'conv1d':
-            runtimes.append(5*128/foo['batch_size']*foo['epochs']+30)
-        else:
-            runtimes.append(4*60)
+        runtimes.append(4*60)
     num_scenarios = len(scenarios)
 
     ###############
@@ -220,6 +218,10 @@ def main(scenario_index=-2):
     ###############
     # Make data generators
     ###############
+    for sig in traindata.keys():
+        print(sig)
+        print(traindata[sig].shape)
+        
     train_generator = AutoEncoderDataGenerator(traindata,
                                                scenario['batch_size'],
                                                scenario['profile_names'],
@@ -229,6 +231,9 @@ def main(scenario_index=-2):
                                                scenario['lookahead'],
                                                scenario['profile_downsample'],
                                                scenario['state_latent_dim'],
+                                               scenario['decay_rate'],
+                                               scenario['x_weight'],
+                                               scenario['u_weight'],                                            
                                                scenario['shuffle_generators'])
     val_generator = AutoEncoderDataGenerator(valdata,
                                              scenario['batch_size'],
@@ -239,7 +244,14 @@ def main(scenario_index=-2):
                                              scenario['lookahead'],
                                              scenario['profile_downsample'],
                                              scenario['state_latent_dim'],
+                                             scenario['decay_rate'],
+                                             scenario['x_weight'],
+                                             scenario['u_weight'],
                                              scenario['shuffle_generators'])
+    for sig in train_generator[0][0].keys():
+        print(sig)
+        print(train_generator[0][0][sig].shape)
+
     print('Made Generators')
 
     ###############
@@ -253,22 +265,47 @@ def main(scenario_index=-2):
                   'adamax': keras.optimizers.Adamax,
                   'nadam': keras.optimizers.Nadam}
 
-    model = make_autoencoder(scenario['state_encoder_type'],
-                             scenario['state_decoder_type'],
-                             scenario['control_encoder_type'],
-                             scenario['control_decoder_type'],
-                             scenario['state_encoder_kwargs'],
-                             scenario['state_decoder_kwargs'],
-                             scenario['control_encoder_kwargs'],
-                             scenario['control_decoder_kwargs'],
-                             scenario['profile_names'],
-                             scenario['scalar_names'],
-                             scenario['actuator_names'],
-                             scenario['state_latent_dim'],
-                             scenario['control_latent_dim'],
-                             scenario['profile_length'],
-                             scenario['lookback'],
-                             scenario['lookahead'])
+    model = models.autoencoder.make_autoencoder(scenario['state_encoder_type'],
+                                                scenario['state_decoder_type'],
+                                                scenario['control_encoder_type'],
+                                                scenario['control_decoder_type'],
+                                                scenario['state_encoder_kwargs'],
+                                                scenario['state_decoder_kwargs'],
+                                                scenario['control_encoder_kwargs'],
+                                                scenario['control_decoder_kwargs'],
+                                                scenario['profile_names'],
+                                                scenario['scalar_names'],
+                                                scenario['actuator_names'],
+                                                scenario['state_latent_dim'],
+                                                scenario['control_latent_dim'],
+                                                scenario['profile_length'],
+                                                scenario['lookback'],
+                                                scenario['lookahead'])
+
+    for layer in model.layers:
+        try:
+            print(layer.input_shape)
+        except:
+            error=False
+            i=0
+            while not error:
+                try:
+                    print(layer.get_input_at(i))
+                    i += 1
+                except ValueError:
+                    error = True
+        try:
+            print(layer.output_shape)
+        except:
+            error=False
+            i=0
+            while not error:
+                try:
+                    print(layer.get_output_at(i))
+                    i += 1
+                except ValueError:
+                    error = True
+
 
     model.summary()
     if ngpu > 1:
@@ -348,20 +385,3 @@ if __name__ == '__main__':
         main()
 
 
-state_latent_dim = 25
-control_latent_dim = 10
-std_activation = 'relu'
-state_num_layers = 6
-control_num_layers = 10
-num_profiles = len(profile_names)
-num_scalars = len(scalar_names)
-num_actuators = len(actuator_names)
-lookback = 0
-lookahead = 1
-profile_length = 33
-layer_scale = 2
-
-num_profiles = len(profile_names)
-num_scalars = len(scalar_names)
-num_actuators = len(actuator_names)
-state_dim = num_profiles*profile_length + num_scalars*lookback

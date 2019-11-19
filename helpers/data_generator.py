@@ -74,30 +74,29 @@ class DataGenerator(Sequence):
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 0:self.lookbacks[sig],
+                                                 0:self.lookbacks[sig]+1,
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
 
             inp['input_past_' + sig] = self.data[sig][idx * self.batch_size:
                                                       (idx+1)*self.batch_size,
-                                                      0:self.lookbacks[sig]]
+                                                      0:self.lookbacks[sig]+1]
             inp['input_future_' + sig] = self.data[sig][idx * self.batch_size:
                                                         (idx+1)*self.batch_size,
-                                                        self.lookbacks[sig]:
-                                                        self.lookbacks[sig]+self.lookahead]
+                                                        self.lookbacks[sig]+1:
+                                                        self.lookbacks[sig]+1+self.lookahead]
             if self.kwargs.get('sample_weights') == 'std':
                 sample_weights += np.std(self.data[sig][idx * self.batch_size:
-                                                        (idx+1)*self.batch_size,
-                                                        0:self.lookbacks[sig]])
+                                                        (idx+1)*self.batch_size,:])
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
-                                                 0:self.lookbacks[sig]]
+                                                 0:self.lookbacks[sig]+1]
 
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][idx * self.batch_size:(idx+1)*self.batch_size,
-                                          self.lookbacks[sig]-1, ::self.profile_downsample]
+                                          self.lookbacks[sig], ::self.profile_downsample]
             else:
                 baseline = 0
             targ['target_' + sig] = self.data[sig][idx * self.batch_size:
@@ -149,21 +148,21 @@ class DataGenerator(Sequence):
 
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][inds,
-                                                 0:self.lookbacks[sig],
+                                                 0:self.lookbacks[sig]+1,
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
             inp['input_past_' + sig] = self.data[sig][inds,
-                                                      0:self.lookbacks[sig]]
+                                                      0:self.lookbacks[sig]+1]
             inp['input_future_' + sig] = self.data[sig][inds,
                                                         self.lookbacks[sig]:
-                                                        self.lookbacks[sig]+self.lookahead]
+                                                        self.lookbacks[sig]+1+self.lookahead]
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][inds,
-                                                 0:self.lookbacks[sig]]
+                                                 0:self.lookbacks[sig]+1]
         for sig in self.targets:
             if self.predict_deltas:
                 baseline = self.data[sig][inds,
-                                          self.lookbacks[sig]-1, ::self.profile_downsample]
+                                          self.lookbacks[sig], ::self.profile_downsample]
             else:
                 baseline = 0
             targ['target_' + sig] = self.data[sig][inds,
@@ -206,14 +205,14 @@ class AutoEncoderDataGenerator(Sequence):
         self.profile_downsample = profile_downsample
         self.profile_length = int(np.ceil(65/profile_downsample))
         self.num_actuators = len(actuator_names)
-        self.num_profiles = len(profiles_names)
-        self.num_scalars = len(scalars_names)
+        self.num_profiles = len(profile_names)
+        self.num_scalars = len(scalar_names)
         self.state_dim = self.num_profiles*self.profile_length + self.num_scalars
         self.state_latent_dim = state_latent_dim
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
         self.decay_rate = decay_rate
-        self.x_weights = x_weight
+        self.x_weight = x_weight
         self.u_weight = u_weight
         self.shuffle = shuffle
         self.kwargs = kwargs
@@ -224,12 +223,9 @@ class AutoEncoderDataGenerator(Sequence):
             self.inds = np.arange(len(self))
 
     def __len__(self):
-        return int(np.ceil(len(self.data['time']) / float(self.batch_size)))
+        return int(np.floor(len(self.data['time']) / float(self.batch_size)))
 
     def __getitem__(self, idx):
-
-        # NEED TO FIGURE OUT INDEXING WRT TO DATA PROCESSING AND TIMESTEPS
-
         self.times_called += 1
         idx = self.inds[idx]
         inp = {}
@@ -241,27 +237,22 @@ class AutoEncoderDataGenerator(Sequence):
                                            (idx+1)*self.batch_size]
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
-                                                 (idx+1)*self.batch_size,
-                                                 0:self.lookbacks[sig],
+                                                 (idx+1)*self.batch_size,:,
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
-
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
-                                                 (idx+1)*self.batch_size,
-                                                 0:self.lookbacks[sig]]
-
+                                                 (idx+1)*self.batch_size,:-1,np.newaxis]
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
-                                                 (idx+1)*self.batch_size,
-                                                 0:self.lookbacks[sig]]
+                                                 (idx+1)*self.batch_size,:,np.newaxis]
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
-                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
-        weights_dict = {'x_residual': self.x_weight*np.ones((self.batch_size, self.lookahead)),
+                'latent_linear_system': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+        weights_dict = {'x_residual': self.x_weight*np.ones((self.batch_size, self.lookahead+1)),
                         'u_residual': self.u_weight*np.ones((self.batch_size, self.lookback+self.lookahead)),
-                        'linear_system_residual': np.repeat(np.array(
-                            [.5**i for i in range(self.lookahead-1)]).reshape(
-                                (1, self.lookahead-1)), self.batch_size, axis=0)}
+                        'latent_linear_system': np.repeat(np.array(
+                            [self.decay_rate**i for i in range(self.lookahead)]).reshape(
+                                (1, self.lookahead)), self.batch_size, axis=0)}
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
@@ -303,16 +294,12 @@ class AutoEncoderDataGenerator(Sequence):
         self.cur_times = self.data['time'][inds]
 
         for sig in self.profile_inputs:
-            inp['input_' + sig] = self.data[sig][inds,
-                                                 0:self.lookbacks[sig],
+            inp['input_' + sig] = self.data[sig][inds,:,
                                                  ::self.profile_downsample]
         for sig in self.actuator_inputs:
-            inp['input_' + sig] = self.data[sig][inds,
-                                                 self.lookbacks[sig]:
-                                                 self.lookbacks[sig]+self.lookahead]
+            inp['input_' + sig] = self.data[sig][inds,:]
         for sig in self.scalar_inputs:
-            inp['input_' + sig] = self.data[sig][inds,
-                                                 0:self.lookbacks[sig]]
+            inp['input_' + sig] = self.data[sig][inds,:]
         return inp
 
 
@@ -536,14 +523,13 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                 if sig in sig_names:
                     if sig in delta_sigs:
                         alldata[sig].append(
-                            np.diff(binned_shot[sig][i-lookbacks[sig]-1:i+lookahead]))
+                            np.diff(binned_shot[sig][i-lookbacks[sig]-1:i+lookahead+1]))
                     else:
                         alldata[sig].append(
-                            binned_shot[sig][i-lookbacks[sig]:i+lookahead])
-
+                            binned_shot[sig][i-lookbacks[sig]:i+lookahead+1])
                 else:
                     alldata[sig].append(
-                        binned_shot[sig][i-max_lookback:i+lookahead])
+                        binned_shot[sig][i-max_lookback:i+lookahead+1])
 
     print("Shots with Complete NaN: " + ', '.join(str(e)
                                                   for e in shots_with_complete_nan))
