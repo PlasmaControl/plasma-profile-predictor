@@ -38,7 +38,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = os.path.expanduser("~/run_results_11_19")
+    checkpt_dir = os.path.expanduser("~/run_results_11_19/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -46,13 +46,14 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type = 'EFITRT1'
+    efit_type = 'EFIT02'
 
     default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
                         'profile_names': ['thomson_temp_{}'.format(efit_type),
                                           'thomson_dens_{}'.format(efit_type),
+                                          'ffprime_{}'.format(efit_type),
                                           'press_{}'.format(efit_type),
-                                          'q_EFIT01'],
+                                          'q_{}'.format(efit_type)],
                         'scalar_names': [],
                         'profile_downsample': 2,
                         'state_encoder_type': 'dense',
@@ -75,11 +76,11 @@ def main(scenario_index=-2):
                         'control_latent_dim':5,
                         'x_weight':1,
                         'u_weight':1,
-                        'decay_rate':1,
+                        'discount_factor':1,
                         'batch_size': 128,
                         'epochs': 100,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data_batch_150.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data': True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -99,19 +100,20 @@ def main(scenario_index=-2):
                         'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
 
     scenarios_dict = OrderedDict()
-    scenarios_dict['actuators'] = [{'actuator_names': ['pinj']},
-                                   {'actuator_names': ['pinj', 'curr']},
-                                   {'actuator_names': [
-                                       'pinj', 'curr', 'tinj', 'gasA']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
-    scenarios_dict['scalars'] = [{'scalar_names': ['density_estimate']}]
-    scenarios_dict['inputs'] = {'profile_names': ['temp', 'dens', 'ffprime_{}'.format(
-        efit_type), 'press_{}'.format(efit_type)]},  # 'q_{}'.format(efit_type)]},
-    scenarios_dict['batch_size'] = [{'batch_size': 128}]
-    scenarios_dict['process_data'] = [{'process_data': True}]
+    scenarios_dict['x_weight'] = [{'x_weight':0.5},
+                                 {'x_weight':1},
+                                 {'x_weight':2},
+                                 {'x_weight':5}]
+    scenarios_dict['u_weight'] = [{'u_weight':0.5},
+                                 {'u_weight':1},
+                                 {'u_weight':2},
+                                 {'u_weight':5}]
+    scenarios_dict['discount_factor'] = [{'discount_factor':0.5},
+                                 {'discount_factor':0.9},
+                                 {'discount_factor':0.8},
+                                 {'discount_factor':0.7}]
     scenarios_dict['window_length'] = [{'window_length': 3}]
-    scenarios_dict['lookahead'] = [{'lookahead': 3},
-                                   {'lookahead': 8}]
+
 
     scenarios = []
     runtimes = []
@@ -218,9 +220,6 @@ def main(scenario_index=-2):
     ###############
     # Make data generators
     ###############
-    for sig in traindata.keys():
-        print(sig)
-        print(traindata[sig].shape)
         
     train_generator = AutoEncoderDataGenerator(traindata,
                                                scenario['batch_size'],
@@ -231,7 +230,7 @@ def main(scenario_index=-2):
                                                scenario['lookahead'],
                                                scenario['profile_downsample'],
                                                scenario['state_latent_dim'],
-                                               scenario['decay_rate'],
+                                               scenario['discount_factor'],
                                                scenario['x_weight'],
                                                scenario['u_weight'],                                            
                                                scenario['shuffle_generators'])
@@ -244,13 +243,10 @@ def main(scenario_index=-2):
                                              scenario['lookahead'],
                                              scenario['profile_downsample'],
                                              scenario['state_latent_dim'],
-                                             scenario['decay_rate'],
+                                             scenario['discount_factor'],
                                              scenario['x_weight'],
                                              scenario['u_weight'],
                                              scenario['shuffle_generators'])
-    for sig in train_generator[0][0].keys():
-        print(sig)
-        print(train_generator[0][0][sig].shape)
 
     print('Made Generators')
 
@@ -282,29 +278,6 @@ def main(scenario_index=-2):
                                                 scenario['lookback'],
                                                 scenario['lookahead'])
 
-    for layer in model.layers:
-        try:
-            print(layer.input_shape)
-        except:
-            error=False
-            i=0
-            while not error:
-                try:
-                    print(layer.get_input_at(i))
-                    i += 1
-                except ValueError:
-                    error = True
-        try:
-            print(layer.output_shape)
-        except:
-            error=False
-            i=0
-            while not error:
-                try:
-                    print(layer.get_output_at(i))
-                    i += 1
-                except ValueError:
-                    error = True
 
 
     model.summary()

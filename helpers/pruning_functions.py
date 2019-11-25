@@ -1,20 +1,29 @@
 import numpy as np
-from tqdm import tqdm
+import numba
+
+
+@numba.njit
+def prune_loop(inds,shotnumarr,timearr):
+    remove_inds = set()
+    for ind in inds:
+        shot = shotnumarr[ind]
+        time = timearr[ind]
+        i = ind
+        while np.any(shotnumarr[i] == shot) and np.any(timearr[i] >= time):
+            remove_inds.add(i)
+            i += 1
+            if i>=len(timearr):
+                break
+    return remove_inds
+
 
 def remove_dudtrip(data, verbose):
-    if verbose==2:
+    if verbose:
         print('Removing dudtrip')
     dud_trip_inds = np.nonzero(data['dud_trip'])[0]
-    remove_inds = set()
-    for ind in tqdm(dud_trip_inds, desc='Removing dudtrip', ascii=True, dynamic_ncols=True, disable=not verbose==1):
-        shot = data['shotnum'][ind]
-        time = data['time'][ind]
-        i = ind
-        while any(data['shotnum'][i] == shot) and any(data['time'][i] >= time):
-                remove_inds.add(i)
-                i += 1
-                if i>=len(data['time']):
-                    break
+    if len(dud_trip_inds)==0:
+        return data
+    remove_inds = prune_loop(dud_trip_inds,data['shotnum'],data['time'])
     if verbose:
         print("Removed {} samples".format(len(remove_inds)))
     keep_inds = set(range(len(data['time']))).difference(remove_inds)
@@ -26,48 +35,46 @@ def remove_dudtrip(data, verbose):
 
 
 def remove_I_coil(data, verbose):
-    if verbose==2:
+    if verbose:
         print('Removing weird I-coils')
-    c_coil = []
-    i_coil = []
-    EFC = []
-    left = []
-    non_standard = []
-    non_exist = []
+    
+    @numba.njit
+    def find_Icoil_inds(n,bt,curr,C_coil_method,I_coil_method):
+        c_coil = list()
+        i_coil = list()
+        EFC = list()
+        for i in range(n):
+            if np.mean(bt[i]*curr[i]) < 0:
+                # left-handed
+                if not set(np.unique(C_coil_method[i])).issubset({5, 0, -1}):
+                    c_coil.append(i)
+                if not set(np.unique(I_coil_method[i])).issubset({5, 0, -1}):
+                    i_coil.append(i)
+                if not np.all(np.logical_xor(C_coil_method[i] == 5, I_coil_method[i] == 5)):
+                    EFC.append(i)
+            else:
+                # right-handed
+                if not set(np.unique(C_coil_method[i])).issubset({6, 0, -1}):
+                    c_coil.append(i)
+                if not set(np.unique(I_coil_method[i])).issubset({7, 0, -1}):
+                    i_coil.append(i)
+                if not np.any(np.logical_or(np.logical_and(C_coil_method[i] == 6, 
+                                                           I_coil_method[i] != 7), 
+                                            np.logical_and(C_coil_method[i] != 6, 
+                                                           I_coil_method[i] == 7))):
+                    EFC.append(i)
+                    
+        coil_inds = c_coil + i_coil + EFC
+        return coil_inds
 
-
-    for i in tqdm(range(len(data['time'])),desc='Finding weird I-coils', ascii=True, dynamic_ncols=True, leave=False, disable=not verbose==1):
-        if np.mean(data['bt'][i]*data['curr'][i]) < 0:
-            # left-handed
-            if not set(np.unique(data['C_coil_method'][i])).issubset({5, 0, -1}):
-                c_coil.append(i)
-            if not set(np.unique(data['I_coil_method'][i])).issubset({5, 0, -1}):
-                i_coil.append(i)
-            if not all(np.logical_xor(data['C_coil_method'][i] == 5, data['I_coil_method'][i] == 5)):
-                EFC.append(i)
-        else:
-            left.append(i)
-            # right-handed
-            if not set(np.unique(data['C_coil_method'][i])).issubset({6, 0, -1}):
-                c_coil.append(i)
-            if not set(np.unique(data['I_coil_method'][i])).issubset({7, 0, -1}):
-                i_coil.append(i)
-            if not any(np.logical_or(np.logical_and(data['C_coil_method'][i] == 6, data['I_coil_method'][i] != 7), np.logical_and(data['C_coil_method'][i] != 6, data['I_coil_method'][i] == 7))):
-                EFC.append(i)
-
-    coil_inds = [c_coil, i_coil, EFC, non_standard, non_exist]
-    coil_inds = list(set().union(*coil_inds))
-
-    remove_inds = set()
-    for ind in tqdm(coil_inds, desc='Removing weird I-coils', ascii=True, dynamic_ncols=True, disable=not verbose==1):
-        shot = data['shotnum'][ind]
-        time = data['time'][ind]
-        i = ind
-        while any(data['shotnum'][i] == shot) and any(data['time'][i] >= time):
-            remove_inds.add(i)
-            i += 1
-            if i>=len(data['time']):
-                break
+    coil_inds = np.unique(find_Icoil_inds(len(data['time']),
+                                          data['bt'],
+                                          data['curr'],
+                                          data['C_coil_method'].astype(int),
+                                          data['I_coil_method'].astype(int)))
+    if len(coil_inds)==0:
+        return data
+    remove_inds = prune_loop(coil_inds,data['shotnum'],data['time'])
     if verbose:
         print("Removed {} samples".format(len(remove_inds)))
     keep_inds = set(range(len(data['time']))).difference(remove_inds)
@@ -79,7 +86,7 @@ def remove_I_coil(data, verbose):
 
 
 def remove_gas(data, verbose):
-    if verbose==2:
+    if verbose:
         print('Removing weird gas')
     from functools import reduce
     threshold=2
@@ -91,16 +98,9 @@ def remove_gas(data, verbose):
     pfx2_inds = np.nonzero(np.any(data['pfx2'] > threshold, axis=1))[0]
     gas_inds = reduce(np.union1d, (gasB_inds, gasC_inds,
                                    gasD_inds, gasE_inds, pfx1_inds, pfx2_inds))
-    remove_inds = set()
-    for ind in tqdm(gas_inds, desc='Removing weird gas', ascii=True, dynamic_ncols=True, disable=not verbose==1):
-        shot = data['shotnum'][ind]
-        time = data['time'][ind]
-        i = ind
-        while any(data['shotnum'][i] == shot) and any(data['time'][i] >= time):
-            remove_inds.add(i)
-            i += 1
-            if i>=len(data['time']):
-                break
+    if len(gas_inds)==0:
+        return data
+    remove_inds = prune_loop(gas_inds,data['shotnum'],data['time'])
     if verbose:
         print("Removed {} samples".format(len(remove_inds)))
     keep_inds = set(range(len(data['time']))).difference(remove_inds)
@@ -112,19 +112,12 @@ def remove_gas(data, verbose):
 
 
 def remove_ECH(data, verbose):
-    if verbose==2:
+    if verbose:
         print('Removing ECH')
     ech_inds = np.nonzero(np.any(data['ech'] > .5, axis=1))[0]
-    remove_inds = set()
-    for ind in tqdm(ech_inds, desc='Removing ECH', ascii=True, dynamic_ncols=True, disable=not verbose==1):
-        shot = data['shotnum'][ind]
-        time = data['time'][ind]
-        i = ind
-        while any(data['shotnum'][i] == shot) and any(data['time'][i] >= time):
-            remove_inds.add(i)
-            i += 1
-            if i>=len(data['time']):
-                break
+    if len(ech_inds)==0:
+        return data
+    remove_inds = prune_loop(ech_inds,data['shotnum'],data['time'])
     if verbose:
         print("Removed {} samples".format(len(remove_inds)))
     keep_inds = set(range(len(data['time']))).difference(remove_inds)
@@ -134,14 +127,18 @@ def remove_ECH(data, verbose):
         data[sig] = data[sig][list(keep_inds)]
     return data
 
+
 def remove_nan(data, verbose):
-    if verbose==2:
+    if verbose:
         print('Removing NaN')
-    remove_inds = set()
-    for sig in tqdm(data.keys(), desc='Removing NaN', ascii=True, dynamic_ncols=True, disable=not verbose==1):
-        for i, elem in enumerate(data[sig]):
-            if np.any(np.isnan(elem)):
-                remove_inds.add(i)
+    remove_inds = []
+    for sig in data.keys():
+        if data[sig].ndim==1:
+            remove_inds += np.where(np.isnan(data[sig]))[0].tolist()
+        else:
+            ax = tuple(np.arange(1,data[sig].ndim).astype(int))
+            remove_inds += np.where(np.any(np.isnan(data[sig]),axis=ax))[0].tolist()
+    remove_inds = np.unique(remove_inds)
     if verbose:
         print("Removed {} samples".format(len(remove_inds)))
     keep_inds = set(range(len(data['time']))).difference(remove_inds)

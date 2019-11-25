@@ -1,13 +1,15 @@
-
 import pickle
-import numpy as np
 import gc
+import sys
+import time
+import numba
 from pathlib import Path
+from tqdm import tqdm
+import numpy as np
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
 from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan
-from tqdm import tqdm
 from helpers import exclude_shots
 
 
@@ -176,7 +178,7 @@ class DataGenerator(Sequence):
 class AutoEncoderDataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_names, actuator_names,
                  scalar_names, lookback, lookahead, profile_downsample,
-                 state_latent_dim, decay_rate, x_weight, u_weight, shuffle, **kwargs):
+                 state_latent_dim, discount_factor, x_weight, u_weight, shuffle, **kwargs):
         """Make a data generator for training or validation data for autoencoder model
 
         Args:
@@ -189,7 +191,7 @@ class AutoEncoderDataGenerator(Sequence):
             lookahead (int): How many steps ahead to predict (prediction window)
             profile_downsample (int): How much to downsample the profile data.
             state_latent_dim (int): dimension of the state latent space.
-            decay_rate (0< float <=1): Geometric decay rate for importance of future predictions
+            discount_factor (0< float <=1): Geometric decay rate for importance of future predictions
             x_weight (float): weight to apply to x residual during training
             u_weight (float): weight to apply to u residual during training          
             shuffle (bool): Whether to reorder training samples on epoch end.
@@ -211,7 +213,7 @@ class AutoEncoderDataGenerator(Sequence):
         self.state_latent_dim = state_latent_dim
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
-        self.decay_rate = decay_rate
+        self.discount_factor = discount_factor
         self.x_weight = x_weight
         self.u_weight = u_weight
         self.shuffle = shuffle
@@ -247,11 +249,11 @@ class AutoEncoderDataGenerator(Sequence):
                                                  (idx+1)*self.batch_size,:,np.newaxis]
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
-                'latent_linear_system': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
         weights_dict = {'x_residual': self.x_weight*np.ones((self.batch_size, self.lookahead+1)),
                         'u_residual': self.u_weight*np.ones((self.batch_size, self.lookback+self.lookahead)),
-                        'latent_linear_system': np.repeat(np.array(
-                            [self.decay_rate**i for i in range(self.lookahead)]).reshape(
+                        'linear_system_residual': np.repeat(np.array(
+                            [self.discount_factor**i for i in range(self.lookahead)]).reshape(
                                 (1, self.lookahead)), self.batch_size, axis=0)}
 
         if self.times_called % len(self) == 0 and self.shuffle:
@@ -303,6 +305,8 @@ class AutoEncoderDataGenerator(Sequence):
         return inp
 
 
+
+
 def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  window_overlap=0, lookbacks={}, lookahead=3, sample_step=5,
                  uniform_normalization=True, train_frac=0.7, val_frac=0.2,
@@ -342,7 +346,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         param_dict (dict): Dictionary of parameters used during normalization,
             to be used for denormalizing later. Eg, mean, stddev, method, etc.
     """
+    ##############################
     # Load data
+    ##############################
     if type(rawdata) is not dict:
         if verbose:
             print('Loading')
@@ -353,8 +359,10 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         else:
             print(abs_path)
             raise IOError("No such path to data file")
-
+            
+    ##############################
     # get pruning functions
+    ##############################
     pruning_functions = kwargs.get('pruning_functions', [])
     if 'ech' not in sig_names:
         pruning_functions.append('remove_ECH')
@@ -369,7 +377,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         if isinstance(elem, str):
             pruning_functions[i] = prun_dict[elem]
 
+    ##############################
     # get excluded shots
+    ##############################
     excluded_shots = kwargs.get('excluded_shots', [])
     exclude_dict = {'topology_TOP': exclude_shots.topology_TOP,
                     'topology_SNT': exclude_shots.topology_SNT,
@@ -386,7 +396,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             excluded_shots[i] = [elem]
     excluded_shots = [item for sublist in excluded_shots for item in sublist]
 
+    ##############################
     # get sig names
+    ##############################
     extra_sigs = ['time', 'shotnum']
     if remove_dudtrip in pruning_functions:
         extra_sigs += ['dud_trip']
@@ -401,19 +413,25 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print('Signals: ' + ', '.join(sig_names))
 
-    # find which shots have all the signals needed
-    usabledata = []
+    ##############################
+    # figure out lookbacks
+    ##############################
     if isinstance(lookbacks, int):
         max_lookback = lookbacks
-        lookbacks = {sig: max_lookback for sig in sig_names}
+        lookbacks = {sig: max_lookback for sig in sigsplustime}
     else:
         max_lookback = 0
         for val in lookbacks.values():
             if val > max_lookback:
                 max_lookback = val
-    for sig in sigsplustime:
-        if sig not in lookbacks.keys():
-            lookbacks[sig] = max_lookback
+        for sig in sigsplustime:
+            if sig not in lookbacks.keys():
+                lookbacks[sig] = max_lookback
+            
+    ##############################
+    # find which shots have all the signals needed
+    ##############################
+    usabledata = []
     all_shots = sorted(list(rawdata.keys()))
     for shot in all_shots:
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
@@ -426,25 +444,29 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     gc.collect()
     if nshots is not None:
         nshots = np.minimum(nshots, len(usabledata))
+        usabledata = usabledata[:nshots]
     else:
         nshots = len(usabledata)
     if verbose:
         print('Number of useable shots: ', str(len(usabledata)))
         print('Number of shots used: ', str(nshots))
-
-    usabledata = usabledata[:nshots]
-    if verbose:
         t = 0
         for shot in usabledata:
             t += shot['time'].size
         print('Total number of timesteps: ', str(t))
+        sys.stdout.flush()
+        
+    ##############################
+    # some helper functions
+    ##############################          
+    def moving_average(a, n):
+        """moving average of array a with window size n"""
+        ret = np.nancumsum(a, axis=0)
+        ret[n:] = ret[n:] - ret[:-n]
+        return ret[n - 1:] / n
 
-    def binavg(array, start):
-        """averages over bins"""
-        return np.nanmean(array[start:start+window_length], axis=0)
-
-    # check if each sig is not completely nan
     def is_valid(shot):
+        """checks if a shot is completely NaN or if it never reached flattop"""
         for sig in sigsplustime:
             if np.isnan(shot[sig]).all():  # or np.isinf(shot[sig]).any():
                 return False
@@ -454,27 +476,27 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         return True
 
     def get_non_nan_inds(arr):
+        """gets indices of array where value is not NaN"""
         if len(arr.shape) == 1:
             return np.where(~np.isnan(arr))[0]
         else:
             return np.where(np.any(~np.isnan(arr), axis=1))[0]
 
-    delta_sigs = kwargs.get('delta_sigs', [])
-
     def get_first_index(shot):
+        """gets index of first valid timeslice for a shot"""
         input_max = max([get_non_nan_inds(shot[sig])[0] +
-                         lookbacks[sig] +
-                         int(sig in delta_sigs) for sig in sig_names])
+                         lookbacks[sig] for sig in sig_names])
         output_max = max([get_non_nan_inds(shot[sig])[0] -
                           lookahead for sig in sig_names])
         if (flattop_only) and (shot['t_ip_flat'] != None):
             current_max = np.searchsorted(
                 shot['time'], shot['t_ip_flat'], side='left')
-            return max(input_max, output_max, current_max)
+            return np.ceil(max(input_max, output_max, current_max)).astype(int)
         else:
-            return max(input_max, output_max)
+            return np.ceil(max(input_max, output_max)).astype(int)
 
     def get_last_index(shot):
+        """gets index of last valid timeslice for a shot"""
         partial_min = min([get_non_nan_inds(shot[sig])[-1]
                            for sig in sig_names])
         full_min = min([get_non_nan_inds(shot[sig])[-1] -
@@ -482,81 +504,92 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         if (flattop_only) and (shot['t_ip_flat'] != None) and (shot['ip_flat_duration'] != None):
             current_min = np.searchsorted(
                 shot['time'], shot['t_ip_flat']+shot['ip_flat_duration'], side='right')
-            return min(full_min, partial_min, current_min)
+            return np.floor(min(full_min, partial_min, current_min)).astype(int)
         else:
-            return min(full_min, partial_min)
-
+            return np.floor(min(full_min, partial_min)).astype(int)
+    
+    @numba.njit
+    def group_data(array,first,last,sample_step,lookback, lookahead):
+        """groups shot data into i/o chunks"""
+        data = []
+        for i in range(first,last,sample_step):
+            data.append(array[i-lookback:i+lookahead+1])
+        return data
+    
+    ##############################
+    # loop through shots and do stuff
+    ##############################
     alldata = {}
     shots_with_complete_nan = []
     for sig in sigsplustime:
         alldata[sig] = []  # initalize empty lists
     for shot in tqdm(usabledata, desc='Gathering', ascii=True, dynamic_ncols=True,
                      disable=not verbose == 1):
-        # check to see if each sig in the shot is not completely nan
-
+        ##############################
+        # take moving average of data and bin it
+        ##############################
         binned_shot = {}
         for sig in sigsplustime:
-
             if np.any(np.isinf(shot[sig])):
-                shot[sig][np.isinf(shot[sig])] = np.nan
-            nbins = int(np.floor(shot[sig].shape[0] /
-                                 (window_length-window_overlap)))
-            binned_shot[sig] = []
-            for i in range(nbins):
-                # populate array of binned/windowed data for each shot
-                binned_shot[sig].append(
-                    binavg(shot[sig], i*(window_length-window_overlap)))
-
-            binned_shot[sig] = np.stack(np.array(binned_shot[sig]))
+                shot[sig][np.isinf(shot[sig])] = np.nan            
+            binned_shot[sig] = moving_average(shot[sig],window_length)[::window_length-window_overlap]
         binned_shot['t_ip_flat'] = shot['t_ip_flat']
         binned_shot['ip_flat_duration'] = shot['ip_flat_duration']
-
         if not is_valid(binned_shot):
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
             continue
-        first = int(np.ceil(get_first_index(binned_shot)))
-        last = int(np.floor(get_last_index(binned_shot)))
 
+        ##############################
+        # group into arrays of input/output pairs
+        ##############################
+        first = get_first_index(binned_shot)
+        last = get_last_index(binned_shot)
         for sig in sigsplustime:
-            for i in range(first, last, sample_step):
-                # group into arrays of input/output pairs
-                if sig in sig_names:
-                    if sig in delta_sigs:
-                        alldata[sig].append(
-                            np.diff(binned_shot[sig][i-lookbacks[sig]-1:i+lookahead+1]))
-                    else:
-                        alldata[sig].append(
-                            binned_shot[sig][i-lookbacks[sig]:i+lookahead+1])
-                else:
-                    alldata[sig].append(
-                        binned_shot[sig][i-max_lookback:i+lookahead+1])
+            alldata[sig] += group_data(binned_shot[sig],first,last,sample_step,lookbacks[sig],lookahead)
 
-    print("Shots with Complete NaN: " + ', '.join(str(e)
-                                                  for e in shots_with_complete_nan))
+    if verbose:
+        print("Shots with Complete NaN: " + ', '.join(str(e)
+                                                      for e in shots_with_complete_nan))
+    sys.stdout.flush()
     del usabledata
     gc.collect()
+    
+    ##############################
+    # stack data from all shots together
+    ##############################    
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose == 1):
         alldata[sig] = np.stack(alldata[sig])
-
     print("{} samples total".format(len(alldata['time'])))
-
-    for fun in pruning_functions:
-        alldata = fun(alldata, verbose)
+    sys.stdout.flush()
+    ##############################
+    # apply pruning functions
+    ##############################
+    # call fns in the right order to speed things up
+    if remove_ECH in pruning_functions:
+        alldata = remove_ECH(alldata,verbose)
+    if remove_gas in pruning_functions:
+        alldata = remove_gas(alldata,verbose)
+    if remove_I_coil in pruning_functions:
+        alldata = remove_I_coil(alldata,verbose)
+    if remove_nan in pruning_functions:
+        alldata = remove_nan(alldata,verbose)
+    if remove_dudtrip in pruning_functions:
+        alldata = remove_dudtrip(alldata,verbose)
 
     print("{} samples remaining after pruning".format(len(alldata['time'])))
-
+    sys.stdout.flush()
+    ##############################
+    # normalize data
+    ##############################    
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
+    
+    ##############################
+    # split into train and validation sets
+    ##############################    
     nsamples = alldata['time'].shape[0]
-
-    #  to keep everything in order
-    if randomize:
-        inds = np.random.permutation(nsamples)
-    else:
-        print('nonrandomized')
-        inds = np.arange(nsamples)
-
+    inds = np.random.permutation(nsamples) if randomize else np.arange(nsamples)
     traininds = inds[:int(nsamples*train_frac)]
     valinds = inds[int(nsamples*train_frac)
                        :int(nsamples*(val_frac+train_frac))]
@@ -566,6 +599,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     disable=not verbose == 1):
         traindata[sig] = alldata[sig][traininds]
         valdata[sig] = alldata[sig][valinds]
+    time.sleep(0.1)
     if verbose:
         print('Total number of samples: ', str(nsamples))
         print('Number of training samples: ', str(traininds.size))
