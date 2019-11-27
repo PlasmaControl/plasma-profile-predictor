@@ -2,6 +2,7 @@ import pickle
 import gc
 import sys
 import time
+import copy
 import numba
 from pathlib import Path
 from tqdm import tqdm
@@ -363,7 +364,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################
     # get pruning functions
     ##############################
-    pruning_functions = kwargs.get('pruning_functions', [])
+    pruning_functions = copy.copy(kwargs.get('pruning_functions', []))
     if 'ech' not in sig_names:
         pruning_functions.append('remove_ECH')
     if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
@@ -380,7 +381,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################
     # get excluded shots
     ##############################
-    excluded_shots = kwargs.get('excluded_shots', [])
+    excluded_shots = copy.copy(kwargs.get('excluded_shots', []))
     exclude_dict = {'topology_TOP': exclude_shots.topology_TOP,
                     'topology_SNT': exclude_shots.topology_SNT,
                     'topology_SNB': exclude_shots.topology_SNB,

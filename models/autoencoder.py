@@ -59,10 +59,12 @@ def get_state_splitter(profile_names, scalar_names, timesteps, profile_length, b
 
     yi = Input(batch_shape=(batch_size,state_dim))
     y = Reshape((state_dim, 1))(yi)
-    profile_outputs = [Reshape((profile_length,))(Cropping1D((i*profile_length, state_dim-(i+1)*profile_length),
-                                                               name='output_' + nm)(y)) for i, nm in enumerate(profile_names)]
-    scalar_outputs = [Reshape((1,))(Cropping1D((num_profiles*profile_length + i, state_dim-num_profiles*profile_length - (i+1)),
-                                                 name='output_' + scalar_names[i])(y)) for i, nm in enumerate(scalar_names)]
+    profile_outputs = [Reshape((profile_length,),name='output_' + nm)(
+        Cropping1D((i*profile_length, state_dim-(i+1)*profile_length))(y)) 
+                       for i, nm in enumerate(profile_names)]
+    scalar_outputs = [Reshape((1,),name='output_' + scalar_names[i])(
+        Cropping1D((num_profiles*profile_length + i, state_dim-num_profiles*profile_length - (i+1)))(y))
+                      for i, nm in enumerate(scalar_names)]
     splitter_model = Model(
         inputs=yi, outputs=profile_outputs + scalar_outputs, name='state_splitter')
     return splitter_model
@@ -105,8 +107,8 @@ def get_control_splitter(actuator_names, timesteps, batch_size=None):
 
     ui = Input(batch_shape=(batch_size,num_actuators))
     u = Reshape((num_actuators, 1))(ui)
-    actuator_outputs = [Reshape((1, 1))(Cropping1D(
-        (i, num_actuators-(i+1)), name='output_' + nm)(u)) for i, nm in enumerate(actuator_names)]
+    actuator_outputs = [Reshape((1, 1),name='output_' + nm)(Cropping1D(
+        (i, num_actuators-(i+1)))(u)) for i, nm in enumerate(actuator_names)]
     splitter = Model(inputs=ui, outputs=actuator_outputs,
                      name='control_splitter')
     return splitter

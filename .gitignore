@@ -19,3 +19,4 @@ log*
 willdelete
 *.png
 *.jpg
+drive-credentials.json
