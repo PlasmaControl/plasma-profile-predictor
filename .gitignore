@@ -20,3 +20,4 @@ willdelete
 *.png
 *.jpg
 drive-credentials.json
+client_secrets.json

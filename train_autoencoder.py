@@ -175,6 +175,7 @@ def main(scenario_index=-2):
                                                               pruning_functions=scenario['pruning_functions'],
                                                               excluded_shots=scenario['excluded_shots'])
 
+        scenario['dt'] = np.mean(np.diff(traindata['time']))*scenario['window_length']/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
     else:
