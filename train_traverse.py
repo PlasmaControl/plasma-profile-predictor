@@ -9,6 +9,7 @@ from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
 from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
 from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
+from helpers.results_processing import write_conv_results
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from time import strftime, localtime
@@ -382,8 +383,13 @@ def main(scenario_index=-2):
     # Save Results
     ############### 
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     scenario['history'] = history.history
     scenario['history_params'] = history.params
+    
+    write_conv_results(model,scenario)
+    print('Wrote to google sheet')
+    
     if not any([isinstance(cb,ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:

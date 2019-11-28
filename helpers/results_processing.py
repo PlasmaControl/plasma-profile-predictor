@@ -6,21 +6,81 @@ import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
 
+def write_autoencoder_results(scenario,model):
+    """opens a google sheet and writes results, and generates images and html"""
 
-
-def write_results_autoencoder(model,analysis_params):
-    """opens a google sheet and writes results"""
+    if 'image_path' not in scenario.keys():
+        scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     
+    base_sheet_path = "https://docs.google.com/spreadsheets/d/1GbU2FaC_Kz3QafGi5ch97mHbziqGz9hkH5wFjiWpIRc/edit#gid=0"
     scope = ['https://spreadsheets.google.com/feeds',
          'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1GbU2FaC_Kz3QafGi5ch97mHbziqGz9hkH5wFjiWpIRc/edit#gid=0").sheet1
-    write_scenario(analysis_params,sheet)
+    sheet = client.open_by_url(base_sheet_path).sheet1
     
-def write_scenario(scenario,sheet):
+    write_scenario_to_sheets(scenario,sheet)
+    rowid = sheet.find(analysis_params['runname']).row
+    scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
+    
+    results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
+    os.chdir(results_dir)
+    f = open('index.html','w+')
+    f.write('<html><head></head><body>')
+    
+    html = scenario_to_html(scenario)
+    f.write(html + '<p>\n')
+    
+    _, html = plot_autoencoder_training(model,scenario, filename='training.png')
+    f.write(html + '<p>\n')
+    
+    _, html = plot_autoencoder_AB(model,scenario, filename='AB.png')
+    f.write(html + '<p>\n')
+    
+    _, html = plot_autoencoder_spectrum(model,scenario, filename='spectrum.png')
+    f.write(html + '<p>\n')
+
+    f.write('</body></html>')
+    f.close()
+
+def write_conv_results(scenario,model):
+    """opens a google sheet and writes results, and generates images and html"""
+
+    if 'image_path' not in scenario.keys():
+        scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
+    
+    base_sheet_path = "https://docs.google.com/spreadsheets/d/10ImJmFpVGYwE-3AsJxiqt0SyTDBCimcOh35au6qsh_k/edit#gid=0"
+    scope = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_url(base_sheet_path).sheet1
+    
+    write_scenario_to_sheets(scenario,sheet)
+    rowid = sheet.find(analysis_params['runname']).row
+    scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
+    
+    results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
+    os.chdir(results_dir)
+    f = open('index.html','w+')
+    f.write('<html><head></head><body>')
+
+    html = scenario_to_html(scenario)
+    f.write(html + '<p>\n')
+    
+    _, html = plot_conv_training(model,scenario, filename='training.png')
+    f.write(html + '<p>\n')
+ 
+    f.write('</body></html>')
+    f.close()
+    
+def write_scenario_to_sheets(scenario,sheet):
     """writes a scenario to google sheets"""
-    
+
     sheet_keys = sheet.row_values(1)
     row = [None]*len(sheet_keys)
     for i,key in enumerate(sheet_keys):
@@ -29,7 +89,27 @@ def write_scenario(scenario,sheet):
         elif key in scenario.get('history',{}):
             row[i] = str(scenario['history'][key][-1])
     sheet.append_row(row)
+
+def scenario_to_html(scenario):
+    """converts scenario dict to html"""
     
+    foo = {k:v for k,v in scenario.items() if k not in ['history','normalization_dict','history_params','mse_weight_vector']}
+    def printitems(dictObj, indent=0):
+        p=[]
+        p.append('<ul>\n')
+        for k,v in dictObj.items():
+            if isinstance(v, dict):
+                p.append('<li><b>'+ str(k)+ '</b>: ')
+                p.append(printitems(v))
+                p.append('</li>\n')
+            elif k in ['image_path','sheet_path']:
+                p.append("<a href=\"" + str(v) + "\">" + str(k) + "</a>\n")          
+            else:
+                p.append('<li><b>'+ str(k)+ '</b>: '+ str(v)+ '</li>\n')
+        p.append('</ul>\n')
+        return ''.join(p)
+    return printitems(foo)
+
 def get_AB(model):
     """gets A,B matrices from autoencoder model"""
     
@@ -51,15 +131,14 @@ def get_submodels(model):
  
     return state_encoder, state_decoder, control_encoder, control_decoder
 
-def plot_AB(model,analysis_params, filename=None, **kwargs):
-    """plots heatmaps of A,B matrices"""
-    
+def plot_autoencoder_AB(model,analysis_params, filename=None, **kwargs):
+
     
     font={'family': 'DejaVu Serif',
       'size': 18}
     plt.rc('font', **font)
     matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
-
+    
     A,B = get_AB(model)
     f, axes = plt.subplots(1, 2, figsize=(28, 14),
                            gridspec_kw={'width_ratios': [analysis_params['state_latent_dim'], 
@@ -76,18 +155,21 @@ def plot_AB(model,analysis_params, filename=None, **kwargs):
                 square=kwargs.get('square',True), 
                 robust=kwargs.get('robust',False), 
                 ax=axes[1]).set_title('B')
+
     if filename:
         f.savefig(filename,bbox_inches='tight')
+        html = """<img src=\"""" + filename + """\"><p>"""
+        return f, html
+    return f
         
-def plot_spectrum(model,analysis_params, filename=None, **kwargs):
-    """plots spectrum of eigenvales of A, both regular and log"""
+def plot_autoencoder_spectrum(model,analysis_params, filename=None, **kwargs):
     
     font={'family': 'DejaVu Serif',
-      'size': 18}
+          'size': 18}
     plt.rc('font', **font)
     matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
     
-    dt = kwargs.get('dt',50/1000)
+    dt = analysis_params['dt']
     A,B = get_AB(model)
     eigvals, eigvecs = np.linalg.eig(A)
     logeigvals = np.log(eigvals)
@@ -115,11 +197,13 @@ def plot_spectrum(model,analysis_params, filename=None, **kwargs):
     axes[1].set_xlim((1.1*np.min(np.real(logeigvals)),np.maximum(1.1*np.max(np.real(logeigvals)),0)))
     
     if filename:
-        f.savefig(filename, bbox_inches='tight')
+        f.savefig(filename,bbox_inches='tight')
+        html = """<img src=\"""" + filename + """\"><p>"""
+        return f, html
     return f
 
 def plot_autoencoder_training(model,analysis_params,filename=None,**kwargs):
-    """plots training/validation history (loss, residuals from outputs)"""
+
     
     font={'family': 'DejaVu Serif',
       'size': 18}
@@ -149,4 +233,42 @@ def plot_autoencoder_training(model,analysis_params,filename=None,**kwargs):
     
     if filename:
         f.savefig(filename,bbox_inches='tight')
+        html = """<img src=\"""" + filename + """\"><p>"""
+        return f, html
+    return f
+
+
+def plot_conv_training(model,analysis_params,filename=None,**kwargs):
+    
+    font={'family': 'DejaVu Serif',
+      'size': 18}
+    plt.rc('font', **font)
+    matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
+
+    targets = analysis_params['target_profile_names']
+    nout = len(targets)
+    nrows = int(np.ceil((nout+1)/2))
+    f, axes = plt.subplots(nrows, 2, figsize=(28, 14*nrows))
+    axes[0,0].semilogy(analysis_params['history']['loss'],label='train')
+    axes[0,0].semilogy(analysis_params['history']['val_loss'],label='val')
+    axes[0,0].set_title('Loss')
+    axes[0,0].legend()
+    i=1
+    for i,targ in enumerate(targets):
+        idx = np.unravel_index(i+1,(nrows,2))
+        if 'target_' + targ + '_mean_squared_error' in analysis_params['history'].keys():
+            axes[idx].semilogy(analysis_params['history']['target_' + targ + '_mean_squared_error'],label='train')
+            axes[idx].semilogy(analysis_params['history']['val_target_' + targ + '_mean_squared_error'],label='val')
+            axes[idx].set_title(targ + ' MSE')
+            axes[idx].legend()
+        else:
+            axes[idx].semilogy(analysis_params['history']['target_' + targ + '_loss'],label='train')
+            axes[idx].semilogy(analysis_params['history']['val_target_' + targ + '_loss'],label='val')
+            axes[idx].set_title(targ + ' loss')
+            axes[idx].legend()
+    
+    if filename:
+        f.savefig(filename,bbox_inches='tight',quality=25)
+        html = """<img src=\"""" + filename + """\"><p>"""
+        return f, html
     return f

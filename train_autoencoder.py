@@ -5,7 +5,7 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
-from helpers.results_processing import write_results_autoencoder
+from helpers.results_processing import write_autoencoder_results
 import models.autoencoder
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -348,7 +348,7 @@ def main(scenario_index=-2):
     scenario['history'] = history.history
     scenario['history_params'] = history.params
     
-    write_results_autoencoder(model,scenario)
+    write_autoencoder_results(model,scenario)
     print('Wrote to google sheet')
     
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
