@@ -344,6 +344,7 @@ def main(scenario_index=-2):
     # Save Results
     ###############
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     scenario['history'] = history.history
     scenario['history_params'] = history.params
     
