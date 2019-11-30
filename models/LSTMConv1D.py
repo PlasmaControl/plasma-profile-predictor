@@ -32,7 +32,7 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
         if lookbacks[sig] > max_scalar_lookback:
             max_scalar_lookback = lookbacks[sig]
 
-    past_scalar_inshape = (max(max_scalar_lookback, max_actuator_lookback),)
+    past_scalar_inshape = (max(max_scalar_lookback+1, max_actuator_lookback+1),)
     future_actuator_inshape = (lookahead,)
     num_profiles = len(input_profile_names)
     num_targets = len(target_profile_names)
@@ -65,7 +65,7 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
    (lookahead, num actu)
    
    Notes:
-   a) Lookback is defined to include *current* timestep 
+   a) Lookback is defined NOT to include *current* timestep 
    b) lookahead is all timesteps *after* current timestep
    c) multiple prediction sigs not working yet, need to 
    for loop probabaly to get multiple output layers?
@@ -108,7 +108,7 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
         )
         previous_scalars.append(
             # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
-            layers.Reshape((max(max_scalar_lookback, max_actuator_lookback), 1))(past_scalar_inputs[i]))
+            layers.Reshape((max(max_scalar_lookback+1, max_actuator_lookback+1), 1))(past_scalar_inputs[i]))
 
     for i in range(num_scalars):
         past_scalar_inputs.append(
@@ -117,7 +117,7 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
         )
         previous_scalars.append(
             # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
-            layers.Reshape((max(max_scalar_lookback, max_actuator_lookback), 1))(past_scalar_inputs[i]))
+            layers.Reshape((max(max_scalar_lookback+1, max_actuator_lookback+1), 1))(past_scalar_inputs[i]))
 
     future_actuators = layers.Concatenate(axis=-1)(future_actuators)
     previous_scalars = layers.Concatenate(axis=-1)(previous_scalars)

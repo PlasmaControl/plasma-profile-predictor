@@ -48,7 +48,7 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type='EFITRT1'
+    efit_type='EFIT02'
 
     default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
                         'input_profile_names': ['thomson_temp_{}'.format(efit_type), 
@@ -58,18 +58,19 @@ def main(scenario_index=-2):
                         'target_profile_names': ['thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type)],
                         'scalar_input_names' : [],
                         'profile_downsample' : 2,
-                        'model_type' : 'conv1d',
+                        'model_type' : 'conv2d',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
+                        'sample_weighting':'std',
                         'hinge_weight' : 0,
                         'mse_weight_power' : 2,
                         'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
-                        'epochs' : 100,
+                        'epochs' : 2,
                         'flattop_only': True,
-                        'predict_deltas' : False,
-                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'predict_deltas' : True,
+                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data_batch_150.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -79,7 +80,7 @@ def main(scenario_index=-2):
                         'normalization_method': 'RobustScaler',
                         'window_length': 1,
                         'window_overlap': 0,
-                        'profile_lookback': 1,
+                        'profile_lookback': 0,
                         'actuator_lookback': 6,
                         'lookahead': 3,
                         'sample_step': 1,
@@ -202,6 +203,7 @@ def main(scenario_index=-2):
                                                               pruning_functions=scenario['pruning_functions'],
                                                               excluded_shots = scenario['excluded_shots'])
 
+        scenario['dt'] = np.mean(np.diff(traindata['time']))*scenario['window_length']/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
     else:        
@@ -256,7 +258,8 @@ def main(scenario_index=-2):
                                     scenario['lookahead'],
                                     scenario['predict_deltas'],
                                     scenario['profile_downsample'],
-                                    scenario['shuffle_generators'])
+                                    scenario['shuffle_generators'],
+                                    sample_weights=scenario['sample_weighting'])
     val_generator = DataGenerator(valdata,
                                   scenario['batch_size'],
                                   scenario['input_profile_names'],
@@ -267,7 +270,8 @@ def main(scenario_index=-2):
                                   scenario['lookahead'],
                                   scenario['predict_deltas'],
                                   scenario['profile_downsample'],
-                                  scenario['shuffle_generators'])
+                                  scenario['shuffle_generators'],
+                                  sample_weights=scenario['sample_weighting'])
     print('Made Generators')
 
 
