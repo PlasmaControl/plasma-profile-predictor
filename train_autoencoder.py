@@ -5,7 +5,6 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
-from helpers.results_processing import write_autoencoder_results
 import models.autoencoder
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -24,7 +23,8 @@ def main(scenario_index=-2):
     ###################
     # set session
     ###################
-    num_cores = 32
+    num_cores = 8
+    req_mem = 96 # gb
     ngpu = 1
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
@@ -49,8 +49,8 @@ def main(scenario_index=-2):
     efit_type = 'EFIT02'
 
     default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA'],
-                        'profile_names': ['thomson_temp_{}'.format(efit_type),
-                                          'thomson_dens_{}'.format(efit_type),
+                        'profile_names': ['temp',
+                                          'dens',
                                           'ffprime_{}'.format(efit_type),
                                           'press_{}'.format(efit_type),
                                           'q_{}'.format(efit_type)],
@@ -78,9 +78,9 @@ def main(scenario_index=-2):
                         'u_weight':1,
                         'discount_factor':1,
                         'batch_size': 128,
-                        'epochs': 2,
+                        'epochs': 200,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data_batch_150.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data': True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -88,7 +88,7 @@ def main(scenario_index=-2):
                         'shuffle_generators': True,
                         'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil'],
                         'normalization_method': 'RobustScaler',
-                        'window_length': 1,
+                        'window_length': 3,
                         'window_overlap': 0,
                         'lookback': 0,
                         'lookahead': 3,
@@ -101,27 +101,53 @@ def main(scenario_index=-2):
 
     scenarios_dict = OrderedDict()
     scenarios_dict['process_data'] = [{'process_data':True}]
-    scenarios_dict['x_weight'] = [{'x_weight':0.5},
-                                 {'x_weight':1},
-                                 {'x_weight':2},
-                                 {'x_weight':5}]
-    scenarios_dict['u_weight'] = [{'u_weight':0.5},
-                                 {'u_weight':1},
-                                 {'u_weight':2},
-                                 {'u_weight':5}]
-    scenarios_dict['discount_factor'] = [{'discount_factor':0.5},
-                                 {'discount_factor':0.9},
-                                 {'discount_factor':0.8},
-                                 {'discount_factor':0.7}]
-    scenarios_dict['window_length'] = [{'window_length': 3}]
+    scenarios_dict['x_weight'] = [{'x_weight':0.1},
+                                  {'x_weight':1}]
+    scenarios_dict['u_weight'] = [{'u_weight':1},
+                                  {'u_weight':10}]
+    scenarios_dict['discount_factor'] = [{'discount_factor':1.0},
+                                         {'discount_factor':0.8}]
+    scenarios_dict['lookahead'] = [{'lookahead':3}]
+    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 20},
+                                          {'state_latent_dim': 50},
+                                          {'state_latent_dim': 100}]
+    scenarios_dict['control_latent_dim'] = [{'control_latent_dim': 5},
+                                            {'control_latent_dim': 10},
+                                            {'control_latent_dim': 15}]
+    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 6,
+                                                 'layer_scale': 2,
+                                                 'std_activation':'elu'},
+                                              'state_decoder_kwargs': {'num_layers': 6,
+                                                 'layer_scale': 2,
+                                                 'std_activation':'elu'}},
+                                             {'state_encoder_kwargs': {'num_layers': 10,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
+                                              'state_decoder_kwargs': {'num_layers': 10,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'}}]
+    scenarios_dict['control_encoder_kwargs'] = [{'control_encoder_kwargs': {'num_layers': 6,
+                                                 'layer_scale': 2,
+                                                 'std_activation':'elu'},
+                                              'control_decoder_kwargs': {'num_layers': 6,
+                                                 'layer_scale': 2,
+                                                 'std_activation':'elu'}},
+                                             {'control_encoder_kwargs': {'num_layers': 10,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
+                                              'control_decoder_kwargs': {'num_layers': 10,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'}}]
 
-
+    
+    
+    
     scenarios = []
     runtimes = []
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        runtimes.append(4*60)
+        runtimes.append(6*60)
     num_scenarios = len(scenarios)
 
     ###############
@@ -129,7 +155,7 @@ def main(scenario_index=-2):
     ###############
     if scenario_index == -1:
         make_bash_scripts(num_scenarios, checkpt_dir,
-                          num_cores, ngpu, runtimes, mode='autoencoder')
+                          num_cores, ngpu, req_mem, runtimes, mode='autoencoder')
         print('Created Driver Scripts in ' + checkpt_dir)
         for i in range(num_scenarios):
             os.system('sbatch {}'.format(os.path.join(
@@ -175,7 +201,7 @@ def main(scenario_index=-2):
                                                               pruning_functions=scenario['pruning_functions'],
                                                               excluded_shots=scenario['excluded_shots'])
 
-        scenario['dt'] = np.mean(np.diff(traindata['time']))*scenario['window_length']/1000 # in seconds
+        scenario['dt'] = np.mean(np.diff(traindata['time']))/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
     else:
@@ -344,12 +370,8 @@ def main(scenario_index=-2):
     # Save Results
     ###############
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
-    scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     scenario['history'] = history.history
     scenario['history_params'] = history.params
-    
-    write_autoencoder_results(model,scenario)
-    print('Wrote to google sheet')
     
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])

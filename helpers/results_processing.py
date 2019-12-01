@@ -14,25 +14,77 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator, DataG
 import copy
 from helpers.normalization import normalize, denormalize, renormalize
 import scipy
+from helpers.results_processing import write_autoencoder_results, write_conv_results
 
+
+
+def clean_dir(dir_path):
+    all_files = os.listdir(os.path.abspath(dir_path))
+    model_files = [f for f in all_files if f.endswith('.h5')]
+    scenario_files = [f for f in all_files if f.endswith('params.pkl')]
+    drivers = [f for f in all_files if f.endswith('.sh')]
+    for f in drivers:
+        os.remove(f)
+    for f in model_files:
+        scenario_path = f[:-3] + '_params.pkl'
+        if not os.path.exists(scenario_path):
+            print('No scenario found for {}'.format(f))
+            os.remove(f)
+    for f in scenario_files:
+        model_path = f[:-11] + '.h5'
+        if not os.path.exists(model_path):
+            print('No model found for {}'.format(f))
+            os.remove(f)
+
+def process_results_folder(dir_path):
+    clean_dir(dir_path)
+    all_files = os.listdir(os.path.abspath(dir_path))
+    model_files = [f for f in all_files if f.endswith('.h5')]
+    drivers = [f for f in all_files if f.endswith('.sh')]
+    for f in tqdm(model_files):
+        model_path = os.path.abspath(dir_path) +'/'+ f
+        model = keras.models.load_model(model_path, compile=False)
+        scenario_path = model_path[:-3] + '_params.pkl'
+        try:
+            with open(scenario_path, 'rb') as fo:
+                scenario = pickle.load(fo, encoding='latin1')
+        except:
+            print('No scenario file found for model {}'.format(str(f)))
+            os.remove(f)
+
+        if 'autoencoder' in scenario['runname']:
+            try:
+                write_autoencoder_results(model, scenario)
+            except KeyError as key:
+                print('missing key {} for run {}'.format(key.args[0],str(f)))
+                
+        else:
+            try:
+                write_conv_results(model,scenario)
+            except KeyError as key:
+                print('missing key {} for run {}'.format(key.args[0],str(f)))
 
 def write_autoencoder_results(model, scenario):
     """opens a google sheet and writes results, and generates images and html"""
 
     if 'image_path' not in scenario.keys():
         scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
-    
+
     base_sheet_path = "https://docs.google.com/spreadsheets/d/1GbU2FaC_Kz3QafGi5ch97mHbziqGz9hkH5wFjiWpIRc/edit#gid=0"
     scope = ['https://spreadsheets.google.com/feeds',
-         'https://www.googleapis.com/auth/drive']
+             'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_url(base_sheet_path).sheet1
-    
-    write_scenario_to_sheets(scenario,sheet)
+
+    col = sheet.find('runname').col
+    runs = sheet.col_values(col)
+    if scenario['runname'] not in runs:
+        write_scenario_to_sheets(scenario,sheet)
     rowid = sheet.find(scenario['runname']).row
     scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
-    
+
+    curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
@@ -43,7 +95,7 @@ def write_autoencoder_results(model, scenario):
     html = scenario_to_html(scenario)
     f.write(html + '<p>\n')
     
-    _, html = plot_autoencoder_training(model,scenario, filename='training.png')
+    html = plot_autoencoder_training(model,scenario, filename='training.png')
     f.write(html + '<p>\n')
     
     datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
@@ -65,8 +117,8 @@ def write_autoencoder_results(model, scenario):
                                                           0,
                                                           scenario['flattop_only'],
                                                           randomize=False)
-    traindata = denormalize(traindata, normalization_dict)
-    traindata = renormalize(traindata, scenario['normalization_dict'])
+    traindata = denormalize(traindata, normalization_dict,verbose=0)
+    traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
     generator = AutoEncoderDataGenerator(traindata,
                                                    scenario['batch_size'],
                                                    scenario['profile_names'],
@@ -82,21 +134,22 @@ def write_autoencoder_results(model, scenario):
                                                    scenario['shuffle_generators'])
     times = [2000, 2480, 3080, 4040, 4820, 5840]
     shots = [163303]*len(times)
-    _, html = plot_autoencoder_profiles(model,scenario, generator,shots,times)
+    html = plot_autoencoder_profiles(model,scenario, generator,shots,times)
     f.write(html + '<p>\n')
 
-    _, html = plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filename='control_encoding.png')
+    html = plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filename='control_encoding.png')
     f.write(html + '<p>\n')
     
-    _, html = plot_autoencoder_AB(model,scenario, filename='AB.png')
+    html = plot_autoencoder_AB(model,scenario, filename='AB.png')
     f.write(html + '<p>\n')
     
-    _, html = plot_autoencoder_spectrum(model,scenario, filename='spectrum.png')
+    html = plot_autoencoder_spectrum(model,scenario, filename='spectrum.png')
     f.write(html + '<p>\n')
 
     f.write('</body></html>')
     f.close()
-    return
+    os.chdir(curr_dir)
+    return scenario
 
 
 def write_conv_results(model,scenario):
@@ -104,18 +157,23 @@ def write_conv_results(model,scenario):
 
     if 'image_path' not in scenario.keys():
         scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
-    
+
+
     base_sheet_path = "https://docs.google.com/spreadsheets/d/10ImJmFpVGYwE-3AsJxiqt0SyTDBCimcOh35au6qsh_k/edit#gid=0"
     scope = ['https://spreadsheets.google.com/feeds',
-         'https://www.googleapis.com/auth/drive']
+             'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_url(base_sheet_path).sheet1
-    
-    write_scenario_to_sheets(scenario,sheet)
+
+    col = sheet.find('runname').col
+    runs = sheet.col_values(col)
+    if scenario['runname'] not in runs:
+        write_scenario_to_sheets(scenario,sheet)
     rowid = sheet.find(scenario['runname']).row
     scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
-    
+
+    curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
@@ -126,7 +184,7 @@ def write_conv_results(model,scenario):
     html = scenario_to_html(scenario)
     f.write(html + '<p>\n')
     
-    _, html = plot_conv_training(model,scenario, filename='training.png')
+    html = plot_conv_training(model,scenario, filename='training.png')
     f.write(html + '<p>\n')
 
     datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
@@ -148,8 +206,8 @@ def write_conv_results(model,scenario):
                                                           0,
                                                           scenario['flattop_only'],
                                                           randomize=False)
-    traindata = denormalize(traindata, normalization_dict)
-    traindata = renormalize(traindata, scenario['normalization_dict'])
+    traindata = denormalize(traindata, normalization_dict, verbose=0)
+    traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
     generator = DataGenerator(traindata,
                               scenario['batch_size'],
                               scenario['input_profile_names'],
@@ -163,12 +221,13 @@ def write_conv_results(model,scenario):
                               shuffle=False)
     times = [2000, 2480, 3080, 4040, 4820, 5840]
     shots = [163303]*len(times)
-    _, html = plot_conv_profiles(model,scenario,generator,shots,times)
+    html = plot_conv_profiles(model,scenario,generator,shots,times)
     f.write(html + '<p>\n')
     
     f.write('</body></html>')
     f.close()
-    return
+    os.chdir(curr_dir)
+    return scenario
     
 def write_scenario_to_sheets(scenario,sheet):
     """writes a scenario to google sheets"""
@@ -225,6 +284,10 @@ def get_submodels(model):
 
 def plot_autoencoder_AB(model,scenario, filename=None, **kwargs):
     
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+        
     font={'family': 'DejaVu Serif',
       'size': 18}
     plt.rc('font', **font)
@@ -249,12 +312,18 @@ def plot_autoencoder_AB(model,scenario, filename=None, **kwargs):
 
     if filename:
         f.savefig(filename,bbox_inches='tight')
+        f.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return f, html
+        return html
     return f
         
 def plot_autoencoder_spectrum(model,scenario, filename=None, **kwargs):
-
+    
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+        
     font={'family': 'DejaVu Serif',
           'size': 18}
     plt.rc('font', **font)
@@ -289,12 +358,18 @@ def plot_autoencoder_spectrum(model,scenario, filename=None, **kwargs):
     
     if filename:
         f.savefig(filename,bbox_inches='tight')
+        f.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return f, html
+        return html
     return f
 
 def plot_autoencoder_training(model,scenario,filename=None,**kwargs):
-
+    
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+        
     font={'family': 'DejaVu Serif',
       'size': 18}
     plt.rc('font', **font)
@@ -323,8 +398,10 @@ def plot_autoencoder_training(model,scenario,filename=None,**kwargs):
     
     if filename:
         f.savefig(filename,bbox_inches='tight')
+        f.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return f, html
+        return html
     return f
 
 def get_autoencoder_predictions(state_encoder,state_decoder,control_encoder,A,B,scenario,inputs,shot,timestep,**kwargs):
@@ -360,7 +437,16 @@ def get_autoencoder_predictions(state_encoder,state_decoder,control_encoder,A,B,
     return state_inputs, state_predictions, residuals
     
 def plot_autoencoder_residuals(residuals,scenario,shot,timestep,filename=None, **kwargs):
+  
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
 
+    font={'family': 'DejaVu Serif',
+      'size': 18}
+    plt.rc('font', **font)
+    matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
+    
     psi = np.linspace(0,1,scenario['profile_length'])
     nsteps = scenario['lookahead']+1
 
@@ -379,12 +465,22 @@ def plot_autoencoder_residuals(residuals,scenario,shot,timestep,filename=None, *
 
     if filename:
         fig.savefig(filename,bbox_inches='tight')
+        fig.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return fig, html
+        return html
     return fig 
     
 def plot_autoencoder_predictions_timestep(state_inputs, state_predictions, scenario, shot, timestep, filename=None, **kwargs):
-    
+
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+
+    font={'family': 'DejaVu Serif',
+      'size': 18}
+    plt.rc('font', **font)
+    matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)    
 
     baseline = {k:v[0].reshape((scenario['profile_length'],)) for k,v in state_inputs.items()}
     true = {k:v[-1].reshape((scenario['profile_length'],)) for k,v in state_inputs.items()}
@@ -413,12 +509,13 @@ def plot_autoencoder_predictions_timestep(state_inputs, state_predictions, scena
     fig.subplots_adjust(top=0.88)    
     if filename:
         fig.savefig(filename,bbox_inches='tight')
+        fig.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return fig, html
+        return html
     return fig        
 
 def plot_autoencoder_profiles(model,scenario,generator,shots,times):
-    figs = []
     html = ''
     A,B = get_AB(model)
     state_encoder, state_decoder, control_encoder, control_decoder = get_submodels(model)
@@ -428,20 +525,27 @@ def plot_autoencoder_profiles(model,scenario,generator,shots,times):
         state_inputs, state_predictions, residuals = get_autoencoder_predictions(
             state_encoder,state_decoder,control_encoder,A,B,scenario,inp,shot,time)
         filename = 'residuals_shot' + str(int(shot)) + 'time' + str(int(time)) + '.png'
-        fig, newhtml = plot_autoencoder_residuals(residuals,scenario,shot,time,filename)
-        figs.append(fig)
+        newhtml = plot_autoencoder_residuals(residuals,scenario,shot,time,filename)
         html += newhtml + '\n'
         
         filename = 'profiles_shot' + str(int(shot)) + 'time' + str(int(time)) + '.png'
-        fig, newhtml = plot_autoencoder_predictions_timestep(state_inputs, state_predictions, scenario,shot,time,filename)
-        figs.append(fig)
+        newhtml = plot_autoencoder_predictions_timestep(state_inputs, state_predictions, scenario,shot,time,filename)
         html += newhtml + '\n'
     
-    return figs, html
+    return html
 
 
 def plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filename=None,**kwargs):
 
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+
+    font={'family': 'DejaVu Serif',
+      'size': 18}
+    plt.rc('font', **font)
+    matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
+    
     state_encoder, state_decoder, control_encoder, control_decoder = get_submodels(model)
     inputs, targets, actual = generator.get_data_by_shot_time(shots,times)
     control_inputs = {}
@@ -476,13 +580,19 @@ def plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filen
 
     if filename:
         fig.savefig(filename,bbox_inches='tight')
+        fig.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return fig, html    
+        return html    
     return fig
 
 
 def plot_conv_training(model,scenario,filename=None,**kwargs):
     
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+
     font={'family': 'DejaVu Serif',
       'size': 18}
     plt.rc('font', **font)
@@ -512,12 +622,13 @@ def plot_conv_training(model,scenario,filename=None,**kwargs):
     
     if filename:
         f.savefig(filename,bbox_inches='tight',quality=25)
+        fig.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return f, html
+        return html
     return f
 
 def plot_conv_profiles(model,scenario,generator,shots,times):
-    figs = []
     html = ''
     inputs, targets, actual = generator.get_data_by_shot_time(shots,times)
     for i, (shot,time) in enumerate(zip(actual['shots'],actual['times'])):
@@ -525,12 +636,20 @@ def plot_conv_profiles(model,scenario,generator,shots,times):
         targ = {sig:arr[np.newaxis,i] for sig, arr in targets.items()}
 
         filename = 'shot' + str(int(shot)) + 'time' + str(int(time)) + '.png'
-        fig,newhtml = plot_conv_profiles_timestep(model,scenario,inp,targ,shot,time,filename)
-        figs.append(fig)
+        newhtml = plot_conv_profiles_timestep(model,scenario,inp,targ,shot,time,filename)
         html += newhtml + '\n'
-    return figs, html
+    return html
     
 def plot_conv_profiles_timestep(model,scenario,inputs,targets,shot,timestep,filename=None, **kwargs):
+    
+    if filename:
+        matplotlib.use('Agg')
+        plt.ioff()
+
+    font={'family': 'DejaVu Serif',
+      'size': 18}
+    plt.rc('font', **font)
+    matplotlib.rcParams['figure.facecolor'] = (1,1,1,1)
 
     predictions = model.predict(inputs)
     perturbed_input_names = ['input_future_' + sig for sig in scenario['actuator_names']]
@@ -578,6 +697,12 @@ def plot_conv_profiles_timestep(model,scenario,inputs,targets,shot,timestep,file
     fig.subplots_adjust(top=0.88)    
     if filename:
         fig.savefig(filename,bbox_inches='tight')
+        fig.clear()
+        plt.close('all')
         html = """<img src=\"""" + filename + """\"><p>"""
-        return fig, html
+        return html
     return fig    
+
+
+if __name__ == '__main__':
+    process_results_folder(sys.argv[1])
