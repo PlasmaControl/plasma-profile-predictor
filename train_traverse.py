@@ -39,7 +39,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_11_2/")
+    checkpt_dir = os.path.expanduser("~/run_results_11_27/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -47,15 +47,16 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type='EFITRT1'
+    efit_type='EFIT01'
 
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
-                        'input_profile_names': ['thomson_temp_{}'.format(efit_type), 
-                                                'thomson_dens_{}'.format(efit_type), 
-                                                'press_{}'.format(efit_type),
-                                                'q_EFIT01'],
-                        'target_profile_names': ['thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type)],
-                        'scalar_input_names' : [],
+    default_scenario = {'actuator_names': ['target_density'],
+                        'input_profile_names': ['dens'],
+                            #'thomson_temp_{}'.format(efit_type), 
+                                                #'thomson_dens_{}'.format(efit_type), 
+                                                #'press_{}'.format(efit_type),
+                                                #'q_EFIT01'],
+                        'target_profile_names': ['dens'],#'thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type)],
+                        'scalar_input_names' : ['density_estimate'],
                         'profile_downsample' : 2,
                         'model_type' : 'conv1d',
                         'model_kwargs': {},
@@ -67,18 +68,22 @@ def main(scenario_index=-2):
                         'batch_size' : 128,
                         'epochs' : 100,
                         'flattop_only': True,
-                        'predict_deltas' : False,
-                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'predict_deltas' : True,
+                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data_batch_0.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
                         'optimizer_kwargs': {},
                         'shuffle_generators': True,
-                        'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil'],
+                        'pruning_functions':['remove_nan',
+                                             'remove_dudtrip',
+                                             'remove_I_coil',
+                                             'remove_non_gas_feedback',
+                                             'remove_ECH'],
                         'normalization_method': 'RobustScaler',
                         'window_length': 1,
                         'window_overlap': 0,
-                        'profile_lookback': 1,
+                        'profile_lookback': 0,
                         'actuator_lookback': 6,
                         'lookahead': 3,
                         'sample_step': 1,
@@ -86,48 +91,57 @@ def main(scenario_index=-2):
                         'train_frac': 0.8,
                         'val_frac': 0.2,
                         'nshots': 12000,
-                        'excluded_shots': ['topology_TOP', 'topology_OUT','topology_MAR','topology_IN','topology_DN','topology_BOT']} 
+                        'excluded_shots': ['topology_TOP', 
+                                           'topology_OUT',
+                                           'topology_MAR',
+                                           'topology_IN',
+                                           'topology_DN',
+                                           'topology_BOT']} 
 
 
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}},
-                                {'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':16}}]
-    scenarios_dict['actuators'] = [{'actuator_names': ['pinj']},
-                                   {'actuator_names': ['pinj', 'curr']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
-                                   {'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
+    scenarios_dict['models'] = [{'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
+    scenarios_dict['pruning_functions'] = [{'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_ECH']},
+                                           {'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_non_gas_feedback','remove_ECH']}]
                                 
-    scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate']}]
+    scenarios_dict['0d_signals'] = [{'actuator_names': ['gasA'],'scalar_input_names':[]},
+                                   {'actuator_names': ['density_estimate'],'scalar_input_names':[]},
+                                   {'actuator_names': ['target_density'],'scalar_input_names':['density_estimate']},
+                                   {'actuator_names': ['target_density'],'scalar_input_names':[]}]
+                                   #{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
+                                   #{'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
+                                
+    #scenarios_dict['scalars'] = [{'scalar_input_names': ['density_estimate']}]
 
 # [{'scalar_input_names': ['density_estimate', 'a_{}'.format(efit_type), 'drsep_{}'.format(efit_type), 'kappa_{}'.format(efit_type), 'rmagx_{}'.format(efit_type), 'triangularity_bot_{}'.format(efit_type),
                                                          #'triangularity_top_{}'.format(efit_type), 'zmagX_{}'.format(efit_type)]}]
-    scenarios_dict['flattop'] = [{'flattop_only': True}]
-    scenarios_dict['inputs'] = {'input_profile_names': ['temp','dens','ffprime_{}'.format(efit_type),'press_{}'.format(efit_type)]}, #'q_{}'.format(efit_type)]},
+#    scenarios_dict['flattop'] = [{'flattop_only': True}]
+#    scenarios_dict['inputs'] = {'input_profile_names': ['temp','dens','ffprime_{}'.format(efit_type),'press_{}'.format(efit_type)]}, #'q_{}'.format(efit_type)]},
         #                                {'input_profile_names': ['thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type),'press_{}'.format(efit_type),'ffprime_{}'.format(efit_type)]}] #,'q_{}'.format(efit_type)]}]
-    scenarios_dict['targets'] = [{'target_profile_names': ['temp']},
-                                 {'target_profile_names': ['dens']},
-                                 {'target_profile_names': ['idens']},
-                                 {'target_profile_names': ['itemp']},
-                                 {'target_profile_names': ['rotation']},
-                                 {'target_profile_names': ['q_{}'.format(efit_type)]},
-                                 {'target_profile_names': ['press_{}'.format(efit_type)]},
-                                 {'target_profile_names': ['ffprime_{}'.format(efit_type)]}]
-    scenarios_dict['inputs'] = [{'target_profile_names': ['temp']},
-                                 {'target_profile_names': ['dens']},
-                                 {'target_profile_names': ['idens']},
-                                 {'target_profile_names': ['itemp']},
-                                 {'target_profile_names': ['rotation']},
-                                 {'target_profile_names': ['q_{}'.format(efit_type)]},
-                                 {'target_profile_names': ['press_{}'.format(efit_type)]},
-                                 {'target_profile_names': ['ffprime_{}'.format(efit_type)]}] 
+    # scenarios_dict['targets'] = [{'target_profile_names': ['temp']},
+    #                              {'target_profile_names': ['dens']},
+    #                              {'target_profile_names': ['idens']},
+    #                              {'target_profile_names': ['itemp']},
+    #                              {'target_profile_names': ['rotation']},
+    #                              {'target_profile_names': ['q_{}'.format(efit_type)]},
+    #                              {'target_profile_names': ['press_{}'.format(efit_type)]},
+    #                              {'target_profile_names': ['ffprime_{}'.format(efit_type)]}]
+    # scenarios_dict['inputs'] = [{'target_profile_names': ['temp']},
+    #                              {'target_profile_names': ['dens']},
+    #                              {'target_profile_names': ['idens']},
+    #                              {'target_profile_names': ['itemp']},
+    #                              {'target_profile_names': ['rotation']},
+    #                              {'target_profile_names': ['q_{}'.format(efit_type)]},
+    #                              {'target_profile_names': ['press_{}'.format(efit_type)]},
+    #                              {'target_profile_names': ['ffprime_{}'.format(efit_type)]}] 
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
-    scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
-    scenarios_dict['window_length']=[{'window_length':3}]
-    scenarios_dict['lookahead'] = [{'lookahead':3},
-                                   {'lookahead':8}]
+    # scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
+    # scenarios_dict['window_length']=[{'window_length':3}]
+    # scenarios_dict['lookahead'] = [{'lookahead':3},
+    #                                {'lookahead':8}]
                                        
 
 

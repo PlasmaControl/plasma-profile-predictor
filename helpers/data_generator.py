@@ -9,7 +9,7 @@ import numpy as np
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
-from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan
+from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback
 from helpers import exclude_shots
 
 
@@ -67,7 +67,7 @@ class DataGenerator(Sequence):
         idx = self.inds[idx]
         inp = {}
         targ = {}
-        sample_weights = np.ones(self.batch_size)
+        #sample_weights = np.ones(self.batch_size)
         weights_dict = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
@@ -106,7 +106,7 @@ class DataGenerator(Sequence):
                                                    -1, ::self.profile_downsample] - baseline
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
-            weights_dict['target_' + sig] = sample_weights
+            #weights_dict['target_' + sig] = sample_weights
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
@@ -364,15 +364,16 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # get pruning functions
     ##############################
     pruning_functions = kwargs.get('pruning_functions', [])
-    if 'ech' not in sig_names:
-        pruning_functions.append('remove_ECH')
-    if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
-        pruning_functions.append('remove_gas')
+    # if 'ech' not in sig_names:
+    #     pruning_functions.append('remove_ECH')
+    # if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
+    #     pruning_functions.append('remove_gas')
     prun_dict = {'remove_nan': remove_nan,
                  'remove_ECH': remove_ECH,
                  'remove_I_coil': remove_I_coil,
                  'remove_gas': remove_gas,
-                 'remove_dudtrip': remove_dudtrip}
+                 'remove_dudtrip': remove_dudtrip,
+                 'remove_non_gas_feedback': remove_non_gas_feedback}
     for i, elem in enumerate(pruning_functions):
         if isinstance(elem, str):
             pruning_functions[i] = prun_dict[elem]
@@ -400,6 +401,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # get sig names
     ##############################
     extra_sigs = ['time', 'shotnum']
+    if remove_non_gas_feedback in pruning_functions:
+        extra_sigs += ['gas_feedback']
     if remove_dudtrip in pruning_functions:
         extra_sigs += ['dud_trip']
     if remove_I_coil in pruning_functions:
@@ -433,7 +436,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################
     usabledata = []
     all_shots = sorted(list(rawdata.keys()))
+    # remove unusable shots to reduce the number of iterations we do in vain
     for shot in all_shots:
+        # the shotnum entry simply gives the shot number
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
            and rawdata[shot]['time'].size > (max_lookback+lookahead) \
@@ -568,6 +573,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # call fns in the right order to speed things up
     if remove_ECH in pruning_functions:
         alldata = remove_ECH(alldata,verbose)
+    if remove_non_gas_feedback in pruning_functions:
+        alldata = remove_non_gas_feedback(alldata,verbose)
     if remove_gas in pruning_functions:
         alldata = remove_gas(alldata,verbose)
     if remove_I_coil in pruning_functions:
