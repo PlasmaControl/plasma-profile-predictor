@@ -9,6 +9,7 @@ from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from models.LSTMConv2D import get_model_lstm_conv2d, get_model_simple_lstm
 from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
 from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
+from helpers.results_processing import write_conv_results
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from time import strftime, localtime
@@ -47,7 +48,7 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type='EFIT01'
+    efit_type='EFIT02'
 
     default_scenario = {'actuator_names': ['target_density'],
                         'input_profile_names': ['dens'],
@@ -58,18 +59,19 @@ def main(scenario_index=-2):
                         'target_profile_names': ['dens'],#'thomson_temp_{}'.format(efit_type),'thomson_dens_{}'.format(efit_type)],
                         'scalar_input_names' : ['density_estimate'],
                         'profile_downsample' : 2,
-                        'model_type' : 'conv1d',
+                        'model_type' : 'conv2d',
                         'model_kwargs': {},
                         'std_activation' : 'relu',
+                        'sample_weighting':'std',
                         'hinge_weight' : 0,
                         'mse_weight_power' : 2,
                         'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
-                        'epochs' : 100,
+                        'epochs' : 2,
                         'flattop_only': True,
                         'predict_deltas' : True,
-                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data_batch_0.pkl',
+                        'raw_data_path':'/scratch/gpfs/jabbate/new_data/final_data_batch_150.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -102,14 +104,14 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv1d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
     scenarios_dict['pruning_functions'] = [{'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_ECH']},
                                            {'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_non_gas_feedback','remove_ECH']}]
                                 
-    scenarios_dict['0d_signals'] = [{'actuator_names': ['gasA'],'scalar_input_names':[]},
-                                   {'actuator_names': ['density_estimate'],'scalar_input_names':[]},
-                                   {'actuator_names': ['target_density'],'scalar_input_names':['density_estimate']},
-                                   {'actuator_names': ['target_density'],'scalar_input_names':[]}]
+    scenarios_dict['0d_signals'] = [{'actuator_names': ['gasA','pinj'],'scalar_input_names':[]},
+                                    {'actuator_names': ['density_estimate','pinj'],'scalar_input_names':[]},
+                                    {'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate']},
+                                    {'actuator_names': ['target_density','pinj'],'scalar_input_names':[]}]
                                    #{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
                                    #{'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
                                 
@@ -215,6 +217,7 @@ def main(scenario_index=-2):
                                                               pruning_functions=scenario['pruning_functions'],
                                                               excluded_shots = scenario['excluded_shots'])
 
+        scenario['dt'] = np.mean(np.diff(traindata['time']))*scenario['window_length']/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
     else:        
@@ -269,7 +272,8 @@ def main(scenario_index=-2):
                                     scenario['lookahead'],
                                     scenario['predict_deltas'],
                                     scenario['profile_downsample'],
-                                    scenario['shuffle_generators'])
+                                    scenario['shuffle_generators'],
+                                    sample_weights=scenario['sample_weighting'])
     val_generator = DataGenerator(valdata,
                                   scenario['batch_size'],
                                   scenario['input_profile_names'],
@@ -280,7 +284,8 @@ def main(scenario_index=-2):
                                   scenario['lookahead'],
                                   scenario['predict_deltas'],
                                   scenario['profile_downsample'],
-                                  scenario['shuffle_generators'])
+                                  scenario['shuffle_generators'],
+                                  sample_weights=scenario['sample_weighting'])
     print('Made Generators')
 
 
@@ -396,8 +401,13 @@ def main(scenario_index=-2):
     # Save Results
     ############### 
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     scenario['history'] = history.history
     scenario['history_params'] = history.params
+    
+    write_conv_results(model,scenario)
+    print('Wrote to google sheet')
+    
     if not any([isinstance(cb,ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:

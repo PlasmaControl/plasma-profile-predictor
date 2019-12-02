@@ -2,6 +2,10 @@ import numpy as np
 import numba
 
 
+#removes indices PLUS all later indices in the shot
+#e.g. if we turn ECH or weird I coils on in the beginning of the 
+#shot the plasma is fundamentally different so we don't want
+#to train on those timesteps
 @numba.njit
 def prune_loop(inds,shotnumarr,timearr):
     remove_inds = set()
@@ -14,6 +18,7 @@ def prune_loop(inds,shotnumarr,timearr):
             i += 1
             if i>=len(timearr):
                 break
+            
     return remove_inds
 
 
@@ -31,6 +36,19 @@ def remove_dudtrip(data, verbose):
         print("{} samples remaining".format(len(keep_inds)))
     for sig in data.keys():
         data[sig] = data[sig][list(keep_inds)]
+    return data
+
+# remove all samples where not all of the timesteps have gas feedback on
+def remove_non_gas_feedback(data, verbose):
+    if verbose:
+        print('Removing timesteps WITHOUT gas feedback')
+    keep_sample = np.all(data['gas_feedback']==1,axis=1)
+    if verbose:
+        print("Removed {} samples".format(len(data['gas_feedback'])-sum(keep_sample)))
+    if verbose:
+        print("{} samples remaining".format(sum(keep_sample)))
+    for sig in data.keys():
+        data[sig] = data[sig][keep_sample]
     return data
 
 

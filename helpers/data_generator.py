@@ -2,6 +2,7 @@ import pickle
 import gc
 import sys
 import time
+import copy
 import numba
 from pathlib import Path
 from tqdm import tqdm
@@ -53,6 +54,7 @@ class DataGenerator(Sequence):
         self.max_lookback = max_lookback
         self.shuffle = shuffle
         self.kwargs = kwargs
+        self.nsamples = self.data['time'].shape[0]
         self.times_called = 0
         if self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
@@ -73,6 +75,7 @@ class DataGenerator(Sequence):
                                                 (idx+1)*self.batch_size]
         self.cur_times = self.data['time'][idx * self.batch_size:
                                            (idx+1)*self.batch_size]
+        sample_weights = np.ones(len(self.cur_shotnum))
         for sig in self.profile_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -113,7 +116,7 @@ class DataGenerator(Sequence):
 
         return inp, targ, weights_dict
 
-    def get_data_by_shot_time(self, shots, times):
+    def get_data_by_shot_time(self, shots, times=None):
         """Gets input/target pairs for specific times within specified shots
 
         If no data is present for a given shot, that shot will be ignored.
@@ -122,26 +125,31 @@ class DataGenerator(Sequence):
 
         Args:
             shots (list or array): Array of shot numbers, as integers.
-            times (list or array): Array of times. Should be the same length as shots array.
+            times (list or array): Array of times (in ms). Should be the same length as shots array.
 
         Returns:
             inputs (dict): Dictionary of input arrays, with all data stored as 1 batch.
             targets (dict): Dictionary of target values.
+            actual (dict): Dictionary with keys 'shots','times' containing the actual shots and time values returned
         """
 
-        if type(shots) is not np.ndarray:
+        if not isinstance(shots,np.ndarray) and shots is not None:
             shots = np.array(shots)
-        if type(times) is not np.ndarray:
+        if not isinstance(times,np.ndarray) and times is not None:
             times = np.array(times)
-        inds = np.array([])
-        for shot, time in zip(shots, times):
-            shot_inds = np.nonzero(self.data['shotnum'][:, 0] == shot)[0]
-            if len(shot_inds) < 1:
-                continue
-            ind = shot_inds[np.argmin(
-                np.abs(time-self.data['time'][shot_inds, self.max_lookback-1]))]
-            inds = np.append(inds, ind)
-        inds = inds.astype(int)
+        idx_arr = np.empty((self.nsamples,3))
+        idx_arr[:,0] = self.data['shotnum'][:,self.max_lookback]
+        idx_arr[:,1] = self.data['time'][:,self.max_lookback]
+        idx_arr[:,2] = np.arange(self.nsamples)
+        if times is None:
+            inds = idx_arr[np.where(np.any(np.array([idx_arr[:,0] == foo for foo in shots]),axis=0))][:,2].astype(int)
+        else:
+            inds = []
+            for shot,time in zip(shots,times):
+                shot_inds = idx_arr[np.where(idx_arr[:,0] == shot)]
+                ind = shot_inds[np.argmin(np.abs(time-shot_inds),axis=0)[1]][2]
+                inds.append(ind)
+            inds = np.array(inds).astype(int)
 
         inp = {}
         targ = {}
@@ -156,7 +164,7 @@ class DataGenerator(Sequence):
             inp['input_past_' + sig] = self.data[sig][inds,
                                                       0:self.lookbacks[sig]+1]
             inp['input_future_' + sig] = self.data[sig][inds,
-                                                        self.lookbacks[sig]:
+                                                        self.lookbacks[sig]+1:
                                                         self.lookbacks[sig]+1+self.lookahead]
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][inds,
@@ -172,13 +180,15 @@ class DataGenerator(Sequence):
 
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
-        return inp, targ
+            actual_shots_times = {'shots': self.data['shotnum'][inds, self.max_lookback],
+                                 'times': self.data['time'][inds, self.max_lookback]}
+        return inp, targ, actual_shots_times
 
 
 class AutoEncoderDataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_names, actuator_names,
                  scalar_names, lookback, lookahead, profile_downsample,
-                 state_latent_dim, discount_factor, x_weight, u_weight, shuffle, **kwargs):
+                 state_latent_dim, discount_factor=1, x_weight=1, u_weight=1, shuffle=True, **kwargs):
         """Make a data generator for training or validation data for autoencoder model
 
         Args:
@@ -219,6 +229,7 @@ class AutoEncoderDataGenerator(Sequence):
         self.shuffle = shuffle
         self.kwargs = kwargs
         self.times_called = 0
+        self.nsamples = self.data['time'].shape[0]
         if self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
         else:
@@ -250,18 +261,18 @@ class AutoEncoderDataGenerator(Sequence):
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
-        weights_dict = {'x_residual': self.x_weight*np.ones((self.batch_size, self.lookahead+1)),
-                        'u_residual': self.u_weight*np.ones((self.batch_size, self.lookback+self.lookahead)),
+        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
+                        'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookback+self.lookahead)),
                         'linear_system_residual': np.repeat(np.array(
                             [self.discount_factor**i for i in range(self.lookahead)]).reshape(
-                                (1, self.lookahead)), self.batch_size, axis=0)}
+                                (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
         return inp, targ, weights_dict
 
-    def get_data_by_shot_time(self, shots, times):
+    def get_data_by_shot_time(self, shots, times=None):
         """Gets inputs for specific times within specified shots
 
         If no data is present for a given shot, that shot will be ignored.
@@ -274,21 +285,27 @@ class AutoEncoderDataGenerator(Sequence):
 
         Returns:
             inputs (dict): Dictionary of input arrays, with all data stored as 1 batch.
+            targets (dict): Dictionary of target values.
+            actual (dict): Dictionary with keys 'shots','times' containing the actual shots and time values returned
         """
 
-        if type(shots) is not np.ndarray:
+        if not isinstance(shots,np.ndarray) and shots is not None:
             shots = np.array(shots)
-        if type(times) is not np.ndarray:
+        if not isinstance(times,np.ndarray) and times is not None:
             times = np.array(times)
-        inds = np.array([])
-        for shot, time in zip(shots, times):
-            shot_inds = np.nonzero(self.data['shotnum'][:, 0] == shot)[0]
-            if len(shot_inds) < 1:
-                continue
-            ind = shot_inds[np.argmin(
-                np.abs(time-self.data['time'][shot_inds, self.max_lookback-1]))]
-            inds = np.append(inds, ind)
-        inds = inds.astype(int)
+        idx_arr = np.empty((self.nsamples,3))
+        idx_arr[:,0] = self.data['shotnum'][:,self.lookback]
+        idx_arr[:,1] = self.data['time'][:,self.lookback]
+        idx_arr[:,2] = np.arange(self.nsamples)
+        if times is None:
+            inds = idx_arr[np.where(np.any(np.array([idx_arr[:,0] == foo for foo in shots]),axis=0))][:,2].astype(int)
+        else:
+            inds = []
+            for shot,time in zip(shots,times):
+                shot_inds = idx_arr[np.where(idx_arr[:,0] == shot)]
+                ind = shot_inds[np.argmin(np.abs(time-shot_inds),axis=0)[1]][2]
+                inds.append(ind)
+            inds = np.array(inds).astype(int)
 
         inp = {}
         targ = {}
@@ -302,7 +319,14 @@ class AutoEncoderDataGenerator(Sequence):
             inp['input_' + sig] = self.data[sig][inds,:]
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][inds,:]
-        return inp
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
+                'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
+                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+
+        actual_shots_times = {'shots': self.data['shotnum'][inds, self.lookback],
+                              'times': self.data['time'][inds, self.lookback]}
+
+        return inp, targ, actual_shots_times
 
 
 
@@ -381,7 +405,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################
     # get excluded shots
     ##############################
-    excluded_shots = kwargs.get('excluded_shots', [])
+    excluded_shots = copy.copy(kwargs.get('excluded_shots', []))
     exclude_dict = {'topology_TOP': exclude_shots.topology_TOP,
                     'topology_SNT': exclude_shots.topology_SNT,
                     'topology_SNB': exclude_shots.topology_SNB,
@@ -435,16 +459,46 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # find which shots have all the signals needed
     ##############################
     usabledata = []
+    shots_without_sigs = []
+    shots_too_short = []
+    shots_excluded = []
     all_shots = sorted(list(rawdata.keys()))
     # remove unusable shots to reduce the number of iterations we do in vain
     for shot in all_shots:
         # the shotnum entry simply gives the shot number
         rawdata[shot]['shotnum'] = np.ones(rawdata[shot]['time'].shape[0])*shot
         if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
-           and rawdata[shot]['time'].size > (max_lookback+lookahead) \
+           and rawdata[shot]['time'].size > (max_lookback+lookahead)*(window_length-window_overlap) \
            and shot not in excluded_shots:
             usabledata.append(rawdata[shot])
+        if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
+           and shot not in excluded_shots:
+            # shot is too short
+            shots_too_short.append(shot)
+        if rawdata[shot]['time'].size > (max_lookback+lookahead)*(window_length-window_overlap) \
+           and shot not in excluded_shots:
+            # shot missing sigs
+            shots_without_sigs.append(shot)
+        if set(sigsplustime).issubset(set(rawdata[shot].keys())) \
+           and rawdata[shot]['time'].size > (max_lookback+lookahead)*(window_length-window_overlap):
+            shots_excluded.append(shot)
+        
+            
     usabledata = np.array(usabledata)
+    if len(usabledata) == 0:
+        s = 'No valid shots \n'
+        s += 'Num Total: {}\n'.format(len(all_shots))
+        s += 'Num without sigs: {}\n'.format(len(shots_without_sigs))
+        s += 'Num too short: {}\n'.format(len(shots_too_short))
+        s += 'Num excluded: {}\n'.format(len(shots_excluded))   
+        if len(shots_without_sigs) == len(all_shots):
+            missing_sigs = []
+            for shot in all_shots:
+                missing_sigs.append(set(sigsplustime).difference(set(rawdata[shot].keys())))
+            missing_sigs = missing_sigs[0].intersection(*missing_sigs[1:])
+            s += 'Missing sigs: ' + str(missing_sigs)
+        raise ValueError(s)
+        
     del rawdata
     gc.collect()
     if nshots is not None:

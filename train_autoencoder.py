@@ -1,11 +1,11 @@
 import pickle
 import keras
 import numpy as np
-
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
+from helpers.results_processing import write_autoencoder_results
 import models.autoencoder
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -48,7 +48,7 @@ def main(scenario_index=-2):
 
     efit_type = 'EFIT02'
 
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj'],
+    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA'],
                         'profile_names': ['thomson_temp_{}'.format(efit_type),
                                           'thomson_dens_{}'.format(efit_type),
                                           'ffprime_{}'.format(efit_type),
@@ -78,9 +78,9 @@ def main(scenario_index=-2):
                         'u_weight':1,
                         'discount_factor':1,
                         'batch_size': 128,
-                        'epochs': 100,
+                        'epochs': 2,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data_batch_150.pkl',
                         'process_data': True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -100,6 +100,7 @@ def main(scenario_index=-2):
                         'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
 
     scenarios_dict = OrderedDict()
+    scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['x_weight'] = [{'x_weight':0.5},
                                  {'x_weight':1},
                                  {'x_weight':2},
@@ -128,7 +129,7 @@ def main(scenario_index=-2):
     ###############
     if scenario_index == -1:
         make_bash_scripts(num_scenarios, checkpt_dir,
-                          num_cores, ngpu, runtimes)
+                          num_cores, ngpu, runtimes, mode='autoencoder')
         print('Created Driver Scripts in ' + checkpt_dir)
         for i in range(num_scenarios):
             os.system('sbatch {}'.format(os.path.join(
@@ -174,6 +175,7 @@ def main(scenario_index=-2):
                                                               pruning_functions=scenario['pruning_functions'],
                                                               excluded_shots=scenario['excluded_shots'])
 
+        scenario['dt'] = np.mean(np.diff(traindata['time']))*scenario['window_length']/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
     else:
@@ -292,7 +294,7 @@ def main(scenario_index=-2):
     ###############
 
     loss = 'mse'
-    metrics = {}
+    metrics = ['mse','mae']
     callbacks = []
     callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
                                        verbose=1, mode='auto', min_delta=0.001,
@@ -342,8 +344,13 @@ def main(scenario_index=-2):
     # Save Results
     ###############
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['image_path'] = 'https://jabbate7.github.io/plasma-profile-predictor/results/' + scenario['runname']
     scenario['history'] = history.history
     scenario['history_params'] = history.params
+    
+    write_autoencoder_results(model,scenario)
+    print('Wrote to google sheet')
+    
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:

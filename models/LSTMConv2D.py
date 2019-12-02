@@ -32,11 +32,14 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     profiles = []
     for i in range(num_profiles):
         profile_inputs.append(
-            Input((lookbacks[input_profile_names[i]], profile_length), name='input_' + input_profile_names[i]))
-        profiles.append(Reshape((max_profile_lookback, profile_length, 1))
+            Input((lookbacks[input_profile_names[i]]+1, profile_length), name='input_' + input_profile_names[i]))
+        profiles.append(Reshape((max_profile_lookback+1, profile_length, 1))
                         (ZeroPadding1D(padding=(max_profile_lookback - lookbacks[input_profile_names[i]], 0))(profile_inputs[i])))
 
-    profiles = Concatenate(axis=-1)(profiles)
+    if num_profiles>1:
+        profiles = Concatenate(axis=-1)(profiles)
+    else: 
+        profiles = profiles[0]
     # shape = (lookback, length, channels=num_profiles)
     profiles = Conv2D(filters=int(num_profiles*max_channels/8), kernel_size=(1, int(profile_length/12)),
                       strides=(1, 1), padding='same', activation=std_activation)(profiles)
@@ -47,8 +50,8 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(1, int(profile_length/4)),
                       strides=(1, 1), padding='same', activation=std_activation)(profiles)
     # shape = (lookback, length, channels)
-    if max_profile_lookback > 1:
-        profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(profile_lookback, 1),
+    if max_profile_lookback > 0:
+        profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(max_profile_lookback+1, 1),
                           strides=(1, 1), padding='valid', activation=std_activation)(profiles)
     profiles = Reshape((profile_length, int(
         num_profiles*max_channels)))(profiles)
@@ -59,8 +62,8 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         scalars = []
         for i in range(num_scalars):
             scalar_inputs.append(
-                Input((lookbacks[scalar_input_names[i]],), name='input_' + scalar_input_names[i]))
-            scalars.append(Reshape((lookbacks[scalar_input_names[i]],1))(scalar_inputs[i]))
+                Input((lookbacks[scalar_input_names[i]]+1,), name='input_' + scalar_input_names[i]))
+            scalars.append(Reshape((lookbacks[scalar_input_names[i]]+1,1))(scalar_inputs[i]))
             scalars[i] = ZeroPadding1D(padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], 0))(scalars[i])
         if num_scalars>1:
             scalars = Concatenate(axis=-1)(scalars)
@@ -97,13 +100,16 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         actuator_future_inputs.append(
             Input((lookahead, ), name='input_future_' + actuator_names[i]))
         actuator_past_inputs.append(
-            Input((lookbacks[actuator_names[i]], ), name='input_past_' + actuator_names[i]))
+            Input((lookbacks[actuator_names[i]]+1, ), name='input_past_' + actuator_names[i]))
         actuators.append(Concatenate(
             axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]]))
         actuators[i] = Reshape(
-            (lookbacks[actuator_names[i]]+lookahead, 1))(actuators[i])
+            (lookbacks[actuator_names[i]]+lookahead+1, 1))(actuators[i])
         actuators[i] = ZeroPadding1D(padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0))(actuators[i])
-    actuators = Concatenate(axis=-1)(actuators)
+    if num_actuators>1:
+        actuators = Concatenate(axis=-1)(actuators)
+    else:
+        actuators = actuators[0]
     # shaoe = (time, num_actuators)
     actuators = Dense(units=int(num_profiles*max_channels/8),
                       activation=std_activation)(actuators)

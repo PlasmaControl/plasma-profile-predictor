@@ -3,7 +3,7 @@ import yaml
 import re
 import datetime
 
-def make_bash_scripts(number, output_dir, ncpu, ngpu, times):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, times, mode='conv'):
        # make the directory
     os.makedirs(output_dir, exist_ok=True)
 
@@ -21,8 +21,10 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, times):
             f.write('root_dir=$HOME/plasma-profile-predictor \n')
             f.write('module load anaconda \n')
             f.write('conda activate tfgpu \n')
-
-            f.write('python $root_dir/train_traverse.py ' + str(i) + '\n')
+            if mode=='traverse':
+                f.write('python $root_dir/train_traverse.py ' + str(i) + '\n')
+            elif mode=='autoencoder':
+                f.write('python $root_dir/train_autoencoder.py ' + str(i) + '\n')
             f.write('exit')
 
 
