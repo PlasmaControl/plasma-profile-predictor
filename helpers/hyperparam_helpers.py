@@ -3,7 +3,7 @@ import yaml
 import re
 import datetime
 
-def make_bash_scripts(number, output_dir, ncpu, ngpu, times, mode='conv'):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='conv'):
        # make the directory
     os.makedirs(output_dir, exist_ok=True)
 
@@ -12,6 +12,7 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, times, mode='conv'):
             f.write('#!/bin/bash \n')
             f.write('#SBATCH -N 1 \n')
             f.write('#SBATCH -c ' + str(ncpu) + '\n')
+            f.write('#SBATCH --mem ' + str(req_mem) + 'G\n')
             if ngpu>0:
                 f.write('#SBATCH -G ' + str(ngpu) + '\n')
             f.write('#SBATCH -o ' +

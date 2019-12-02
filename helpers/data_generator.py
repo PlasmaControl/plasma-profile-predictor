@@ -619,7 +619,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose == 1):
         alldata[sig] = np.stack(alldata[sig])
-    print("{} samples total".format(len(alldata['time'])))
+    if verbose:
+        print("{} samples total".format(len(alldata['time'])))
     sys.stdout.flush()
     ##############################
     # apply pruning functions
@@ -637,8 +638,9 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata = remove_nan(alldata,verbose)
     if remove_dudtrip in pruning_functions:
         alldata = remove_dudtrip(alldata,verbose)
-
-    print("{} samples remaining after pruning".format(len(alldata['time'])))
+    
+    if verbose:
+        print("{} samples remaining after pruning".format(len(alldata['time'])))
     sys.stdout.flush()
     ##############################
     # normalize data
