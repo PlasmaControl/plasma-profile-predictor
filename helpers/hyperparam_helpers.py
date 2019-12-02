@@ -3,7 +3,7 @@ import yaml
 import re
 import datetime
 
-def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='conv'):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='traverse'):
        # make the directory
     os.makedirs(output_dir, exist_ok=True)
 
