@@ -83,7 +83,10 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
         profiles.append(keras.layers.Reshape(
             (1, profile_length, 1))(profile_inputs[i]))
 
-    current_profiles = layers.Concatenate(axis=-1)(profiles)
+    if num_profiles>1:
+        current_profiles = layers.Concatenate(axis=-1)(profiles)
+    else:
+        current_profiles = profiles[0]
     current_profiles = layers.Reshape(
         (profile_length, num_profiles))(current_profiles)
 
@@ -119,7 +122,10 @@ def build_lstmconv1d_joe(input_profile_names, target_profile_names, scalar_input
             # Reshape((lookbacks[actuator_names[i]], 1))(actuator_past_inputs[i]))
             layers.Reshape((max(max_scalar_lookback+1, max_actuator_lookback+1), 1))(past_scalar_inputs[i]))
 
-    future_actuators = layers.Concatenate(axis=-1)(future_actuators)
+    if num_actuators>1:
+        future_actuators = layers.Concatenate(axis=-1)(future_actuators)
+    else:
+        future_actuators = future_actuators[0]
     previous_scalars = layers.Concatenate(axis=-1)(previous_scalars)
 
     print(future_actuators.shape)

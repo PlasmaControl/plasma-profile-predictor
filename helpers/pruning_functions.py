@@ -30,6 +30,19 @@ def remove_dudtrip(data, verbose):
         data[sig] = data[sig][list(keep_inds)]
     return data
 
+# remove all samples where not all of the timesteps have gas feedback on
+def remove_non_gas_feedback(data, verbose):
+    if verbose:
+        print('Removing timesteps WITHOUT gas feedback')
+    keep_sample = np.all(data['gas_feedback']==1,axis=1)
+    if verbose:
+        print("Removed {} samples".format(len(data['gas_feedback'])-sum(keep_sample)))
+    if verbose:
+        print("{} samples remaining".format(sum(keep_sample)))
+    for sig in data.keys():
+        data[sig] = data[sig][keep_sample]
+    return data
+
 
 def remove_I_coil(data, verbose):
     if verbose:
