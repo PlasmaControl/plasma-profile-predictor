@@ -1,6 +1,13 @@
 import pickle
 import keras
 import numpy as np
+import random
+import os
+import sys
+import itertools
+import copy
+from time import strftime, localtime
+from collections import OrderedDict
 
 from helpers.data_generator import process_data, DataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
@@ -11,14 +18,9 @@ from models.LSTMConv2D import get_model_linear_systems, get_model_conv2d
 from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
 from utils.callbacks import CyclicLR, TensorBoardWrapper
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-from time import strftime, localtime
 import tensorflow as tf
 from keras import backend as K
-from collections import OrderedDict
-import os
-import sys
-import itertools
-import copy
+
 
 def main(scenario_index=-2):
 
@@ -26,8 +28,16 @@ def main(scenario_index=-2):
     # set session
     ###################
     num_cores = 8
-    req_mem = 96 # gb
+    req_mem = 48 # gb
     ngpu = 1
+    
+    
+    seed_value= 0
+    os.environ['PYTHONHASHSEED']=str(seed_value)
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    tf.set_random_seed(seed_value)
+    
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
                             allow_soft_placement=True,
