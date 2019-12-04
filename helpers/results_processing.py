@@ -14,15 +14,15 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator, DataG
 import copy
 from helpers.normalization import normalize, denormalize, renormalize
 import scipy
-from helpers.results_processing import write_autoencoder_results, write_conv_results
+#from helpers.results_processing import write_autoencoder_results, write_conv_results
 
 
 
 def clean_dir(dir_path):
     all_files = os.listdir(os.path.abspath(dir_path))
-    model_files = [f for f in all_files if f.endswith('.h5')]
-    scenario_files = [f for f in all_files if f.endswith('params.pkl')]
-    drivers = [f for f in all_files if f.endswith('.sh')]
+    model_files = [os.path.join(dir_path,f) for f in all_files if f.endswith('.h5')]
+    scenario_files = [os.path.join(dir_path,f) for f in all_files if f.endswith('params.pkl')]
+    drivers = [os.path.join(dir_path,f) for f in all_files if f.endswith('.sh')]
     for f in drivers:
         os.remove(f)
     for f in model_files:
@@ -41,7 +41,7 @@ def process_results_folder(dir_path):
     all_files = os.listdir(os.path.abspath(dir_path))
     model_files = [f for f in all_files if f.endswith('.h5')]
     drivers = [f for f in all_files if f.endswith('.sh')]
-    for f in tqdm(model_files):
+    for f in model_files: #tqdm(model_files):
         model_path = os.path.abspath(dir_path) +'/'+ f
         model = keras.models.load_model(model_path, compile=False)
         scenario_path = model_path[:-3] + '_params.pkl'
@@ -602,6 +602,8 @@ def plot_conv_training(model,scenario,filename=None,**kwargs):
     nout = len(targets)
     nrows = int(np.ceil((nout+1)/2))
     f, axes = plt.subplots(nrows, 2, figsize=(28, 14*nrows))
+    if nrows<2:
+        axes=np.array([axes])
     axes[0,0].semilogy(scenario['history']['loss'],label='train')
     axes[0,0].semilogy(scenario['history']['val_loss'],label='val')
     axes[0,0].set_title('Loss')

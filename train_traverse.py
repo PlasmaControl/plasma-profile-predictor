@@ -40,7 +40,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_11_27/")
+    checkpt_dir = os.path.expanduser("~/run_results_12_2_real/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -68,10 +68,10 @@ def main(scenario_index=-2):
                         'mse_weight_edge' : 10,
                         'mse_power':2,
                         'batch_size' : 128,
-                        'epochs' : 2,
+                        'epochs' : 100,
                         'flattop_only': True,
                         'predict_deltas' : True,
-                        'raw_data_path':'/scratch/gpfs/jabbate/new_data/final_data_batch_150.pkl',
+                        'raw_data_path':'/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data':True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
@@ -81,9 +81,10 @@ def main(scenario_index=-2):
                                              'remove_dudtrip',
                                              'remove_I_coil',
                                              'remove_non_gas_feedback',
+                                             'remove_non_beta_feedback',
                                              'remove_ECH'],
                         'normalization_method': 'RobustScaler',
-                        'window_length': 1,
+                        'window_length': 3,
                         'window_overlap': 0,
                         'profile_lookback': 0,
                         'actuator_lookback': 6,
@@ -104,14 +105,22 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':32}}]
-    scenarios_dict['pruning_functions'] = [{'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_ECH']},
-                                           {'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_non_gas_feedback','remove_ECH']}]
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'epochs': 100, 'model_kwargs': {'max_channels':16}}]
+#    scenarios_dict['pruning_functions'] = [{'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_ECH']},
+#                                           {'pruning_functions':['remove_nan','remove_dudtrip','remove_I_coil','remove_non_gas_feedback','remove_ECH']}]
                                 
-    scenarios_dict['0d_signals'] = [{'actuator_names': ['gasA','pinj'],'scalar_input_names':[]},
-                                    {'actuator_names': ['density_estimate','pinj'],'scalar_input_names':[]},
-                                    {'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate']},
-                                    {'actuator_names': ['target_density','pinj'],'scalar_input_names':[]}]
+    scenarios_dict['0d_signals'] = [{'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['pinj'],'scalar_input_names':['density_estimate']},
+                                    {'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['gasA'],'scalar_input_names':['density_estimate']},
+                                    {'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['target_density'],'scalar_input_names':[]},
+                                    {'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['target_density'],'scalar_input_names':['density_estimate']},
+                                    {'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate']},
+                                    {'input_profile_names': ['dens'], 'target_profile_names': ['dens'], 'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate','realtime_betan']},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['beam_target_power'],'scalar_input_names':['realtime_betan']},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['pinj'],'scalar_input_names':[]},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['pinj'],'scalar_input_names':['realtime_betan']},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['target_density','pinj'],'scalar_input_names':[]},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate']},
+                                    {'input_profile_names': ['temp'], 'target_profile_names': ['temp'], 'actuator_names': ['target_density','pinj'],'scalar_input_names':['density_estimate','realtime_betan']}]
                                    #{'actuator_names': ['pinj', 'curr', 'tinj', 'gasA']},
                                    #{'actuator_names': ['pinj', 'curr', 'tinj', 'target_density']}]
                                 
