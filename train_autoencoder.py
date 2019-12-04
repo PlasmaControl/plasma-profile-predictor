@@ -1,21 +1,24 @@
 import pickle
 import keras
 import numpy as np
+import random
+import os
+import sys
+import itertools
+import copy
+from collections import OrderedDict
+from time import strftime, localtime
+
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 import models.autoencoder
-from utils.callbacks import CyclicLR, TensorBoardWrapper
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-from time import strftime, localtime
+from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
 from keras import backend as K
-from collections import OrderedDict
-import os
-import sys
-import itertools
-import copy
+
 
 
 def main(scenario_index=-2):
@@ -24,8 +27,15 @@ def main(scenario_index=-2):
     # set session
     ###################
     num_cores = 8
-    req_mem = 96 # gb
+    req_mem = 48 # gb
     ngpu = 1
+    
+    seed_value= 0
+    os.environ['PYTHONHASHSEED']=str(seed_value)
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    tf.set_random_seed(seed_value)
+    
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
                             allow_soft_placement=True,
@@ -38,7 +48,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = os.path.expanduser("~/run_results_11_19/")
+    checkpt_dir = os.path.expanduser("~/run_results_12_01/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -78,11 +88,10 @@ def main(scenario_index=-2):
                         'u_weight':1,
                         'discount_factor':1,
                         'batch_size': 128,
-                        'epochs': 200,
+                        'epochs': 300,
                         'flattop_only': True,
                         'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data': True,
-                        'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
                         'optimizer': 'adagrad',
                         'optimizer_kwargs': {},
                         'shuffle_generators': True,
@@ -100,14 +109,12 @@ def main(scenario_index=-2):
                         'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
 
     scenarios_dict = OrderedDict()
-    scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['x_weight'] = [{'x_weight':0.1},
                                   {'x_weight':1}]
     scenarios_dict['u_weight'] = [{'u_weight':1},
                                   {'u_weight':10}]
     scenarios_dict['discount_factor'] = [{'discount_factor':1.0},
                                          {'discount_factor':0.8}]
-    scenarios_dict['lookahead'] = [{'lookahead':3}]
     scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 20},
                                           {'state_latent_dim': 50},
                                           {'state_latent_dim': 100}]
@@ -170,6 +177,8 @@ def main(scenario_index=-2):
         verbose = 2
         print('Loading Scenario ' + str(scenario_index) + ':')
         scenario = scenarios[scenario_index]
+        scenario.update(
+            {k: v for k, v in default_scenario.items() if k not in scenario.keys()})
     else:
         verbose = 1
         print('Loading Default Scenario:')
@@ -177,13 +186,9 @@ def main(scenario_index=-2):
     print(scenario)
 
     if scenario['process_data']:
-        scenario.update(
-            {k: v for k, v in default_scenario.items() if k not in scenario.keys()})
         scenario['sig_names'] = scenario['profile_names'] + \
             scenario['actuator_names'] + scenario['scalar_names']
 
-        if 'raw_data_path' not in scenario.keys():
-            scenario['raw_data_path'] = default_scenario['raw_data_path']
         traindata, valdata, normalization_dict = process_data(scenario['raw_data_path'],
                                                               scenario['sig_names'],
                                                               scenario['normalization_method'],
@@ -204,27 +209,6 @@ def main(scenario_index=-2):
         scenario['dt'] = np.mean(np.diff(traindata['time']))/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
 
-    else:
-        if 'processed_filename_base' not in scenario.keys():
-            scenario['processed_filename_base'] = default_scenario['processed_filename_base']
-
-        if scenario['flattop_only']:
-            scenario['processed_filename_base'] += 'flattop/'
-        else:
-            scenario['processed_filename_base'] += 'all/'
-
-        with open(os.path.join(scenario['processed_filename_base'], 'param_dict.pkl'), 'rb') as f:
-            param_dict = pickle.load(f)
-        with open(os.path.join(scenario['processed_filename_base'], 'train.pkl'), 'rb') as f:
-            traindata = pickle.load(f)
-        with open(os.path.join(scenario['processed_filename_base'], 'val.pkl'), 'rb') as f:
-            valdata = pickle.load(f)
-        print('Data Loaded')
-        scenario.update({k: v for k, v in param_dict.items()
-                         if k not in scenario.keys()})
-        scenario.update(
-            {k: v for k, v in default_scenario.items() if k not in scenario.keys()})
-
     scenario['profile_length'] = int(
         np.ceil(65/scenario['profile_downsample']))
 
@@ -237,7 +221,6 @@ def main(scenario_index=-2):
                           '_act-' + '-'.join(scenario['actuator_names']) + \
                           '_LB-' + str(scenario['lookback']) + \
                           '_LA-' + str(scenario['lookahead']) +\
-                          '_ftop-' + str(scenario['flattop_only']) + \
                           strftime("_%d%b%y-%H-%M", localtime())
 
     if scenario_index >= 0:
@@ -322,9 +305,23 @@ def main(scenario_index=-2):
     loss = 'mse'
     metrics = ['mse','mae']
     callbacks = []
-    callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10,
-                                       verbose=1, mode='auto', min_delta=0.001,
-                                       cooldown=1, min_lr=0))
+    callbacks.append(ReduceLROnPlateau(monitor='val_loss', 
+                                       factor=0.5, 
+                                       patience=5,
+                                       verbose=1, 
+                                       mode='auto', 
+                                       min_delta=0.001,
+                                       cooldown=1, 
+                                       min_lr=0))
+    
+    callbacks.append(EarlyStopping(monitor='val_loss', 
+                                   min_delta=0, 
+                                   patience=10, 
+                                   verbose=1, 
+                                   mode='min'))
+    
+    callbacks.append(TimingCallback(time_limit=(runtimes[scenario_index]-30)*60))
+    
     if ngpu <= 1:
         callbacks.append(ModelCheckpoint(checkpt_dir+scenario['runname']+'.h5', monitor='val_loss',
                                          verbose=0, save_best_only=True,
@@ -375,9 +372,10 @@ def main(scenario_index=-2):
     
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
+        print('Saved model after training')
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
-    print('Saved Analysis params after completion')
+    print('Saved Analysis params after training')
 
 
 if __name__ == '__main__':

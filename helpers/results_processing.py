@@ -14,15 +14,16 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator, DataG
 import copy
 from helpers.normalization import normalize, denormalize, renormalize
 import scipy
-#from helpers.results_processing import write_autoencoder_results, write_conv_results
-
+from tqdm import tqdm
 
 
 def clean_dir(dir_path):
     all_files = os.listdir(os.path.abspath(dir_path))
-    model_files = [os.path.join(dir_path,f) for f in all_files if f.endswith('.h5')]
-    scenario_files = [os.path.join(dir_path,f) for f in all_files if f.endswith('params.pkl')]
-    drivers = [os.path.join(dir_path,f) for f in all_files if f.endswith('.sh')]
+    model_files = [f for f in all_files if f.endswith('.h5')]
+    scenario_files = [f for f in all_files if f.endswith('params.pkl')]
+    drivers = [f for f in all_files if f.endswith('.sh')]
+    curdir = os.getcwd()
+    os.chdir(os.path.abspath(dir_path))
     for f in drivers:
         os.remove(f)
     for f in model_files:
@@ -35,34 +36,34 @@ def clean_dir(dir_path):
         if not os.path.exists(model_path):
             print('No model found for {}'.format(f))
             os.remove(f)
+    os.chdir(os.path.abspath(curdir))
+
 
 def process_results_folder(dir_path):
     clean_dir(dir_path)
     all_files = os.listdir(os.path.abspath(dir_path))
-    model_files = [f for f in all_files if f.endswith('.h5')]
-    drivers = [f for f in all_files if f.endswith('.sh')]
-    for f in model_files: #tqdm(model_files):
-        model_path = os.path.abspath(dir_path) +'/'+ f
+    model_files = [os.path.abspath(dir_path) +'/'+ f for f in all_files if f.endswith('.h5')]
+    for model_path in tqdm(model_files):
         model = keras.models.load_model(model_path, compile=False)
         scenario_path = model_path[:-3] + '_params.pkl'
         try:
             with open(scenario_path, 'rb') as fo:
                 scenario = pickle.load(fo, encoding='latin1')
         except:
-            print('No scenario file found for model {}'.format(str(f)))
-            os.remove(f)
+            print('No scenario file found for model {}'.format(str(model_path)))
+            os.remove(model_path)
 
         if 'autoencoder' in scenario['runname']:
             try:
                 write_autoencoder_results(model, scenario)
             except KeyError as key:
-                print('missing key {} for run {}'.format(key.args[0],str(f)))
+                print('missing key {} for run {}'.format(key.args[0],str(model_path)))
                 
         else:
             try:
                 write_conv_results(model,scenario)
             except KeyError as key:
-                print('missing key {} for run {}'.format(key.args[0],str(f)))
+                print('missing key {} for run {}'.format(key.args[0],str(model_path)))
 
 def write_autoencoder_results(model, scenario):
     """opens a google sheet and writes results, and generates images and html"""

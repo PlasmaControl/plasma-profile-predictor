@@ -525,7 +525,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         """moving average of array a with window size n"""
         ret = np.nancumsum(a, axis=0)
         ret[n:] = ret[n:] - ret[:-n]
-        return ret[n - 1:] / n
+        return (ret[n - 1:] / n).astype('float32')
 
     def is_valid(shot):
         """checks if a shot is completely NaN or if it never reached flattop"""
@@ -595,8 +595,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             if np.any(np.isinf(shot[sig])):
                 shot[sig][np.isinf(shot[sig])] = np.nan            
             binned_shot[sig] = moving_average(shot[sig],window_length)[::window_length-window_overlap]
-        binned_shot['t_ip_flat'] = shot['t_ip_flat']
-        binned_shot['ip_flat_duration'] = shot['ip_flat_duration']
+        binned_shot['t_ip_flat'] = shot['t_ip_flat'].astype('float32')
+        binned_shot['ip_flat_duration'] = shot['ip_flat_duration'].astype('float32')
         if not is_valid(binned_shot):
             shots_with_complete_nan.append(np.unique(shot["shotnum"]))
             continue
@@ -621,10 +621,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################    
     for sig in tqdm(sigsplustime, desc='Stacking', ascii=True, dynamic_ncols=True,
                     disable=not verbose == 1):
-        alldata[sig] = np.stack(alldata[sig])
+        alldata[sig] = np.stack(alldata[sig]).astype('float32')
+        gc.collect()
+
     if verbose:
         print("{} samples total".format(len(alldata['time'])))
     sys.stdout.flush()
+    gc.collect()
+
     ##############################
     # apply pruning functions
     ##############################
@@ -647,11 +651,14 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print("{} samples remaining after pruning".format(len(alldata['time'])))
     sys.stdout.flush()
+    gc.collect()
+
     ##############################
     # normalize data
     ##############################    
     alldata, normalization_params = normalize(
         alldata, normalization_method, uniform_normalization, verbose)
+    gc.collect()
     
     ##############################
     # split into train and validation sets

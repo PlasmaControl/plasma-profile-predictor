@@ -2,23 +2,13 @@ import numpy as np
 import numba
 
 
-#removes indices PLUS all later indices in the shot
-#e.g. if we turn ECH or weird I coils on in the beginning of the 
-#shot the plasma is fundamentally different so we don't want
-#to train on those timesteps
-@numba.njit
 def prune_loop(inds,shotnumarr,timearr):
     remove_inds = set()
-    for ind in inds:
-        shot = shotnumarr[ind]
-        time = timearr[ind]
-        i = ind
-        while np.any(shotnumarr[i] == shot) and np.any(timearr[i] >= time):
-            remove_inds.add(i)
-            i += 1
-            if i>=len(timearr):
-                break
-            
+    shot_remove = shotnumarr[inds]
+    time_remove = timearr[inds]
+    for shot in np.unique(shot_remove):
+        min_time = np.min(time_remove[shot_remove==shot])
+        remove_inds = remove_inds.union(set(np.where(np.logical_and(shotnumarr==shot,timearr>min_time))[0]))
     return remove_inds
 
 
@@ -27,6 +17,8 @@ def remove_dudtrip(data, verbose):
         print('Removing dudtrip')
     dud_trip_inds = np.nonzero(data['dud_trip'])[0]
     if len(dud_trip_inds)==0:
+        if verbose:
+            print("Removed 0 samples")
         return data
     remove_inds = prune_loop(dud_trip_inds,data['shotnum'],data['time'])
     if verbose:
@@ -105,6 +97,8 @@ def remove_I_coil(data, verbose):
                                           data['C_coil_method'].astype(int),
                                           data['I_coil_method'].astype(int)))
     if len(coil_inds)==0:
+        if verbose:
+            print("Removed 0 samples")
         return data
     remove_inds = prune_loop(coil_inds,data['shotnum'],data['time'])
     if verbose:
@@ -131,6 +125,8 @@ def remove_gas(data, verbose):
     gas_inds = reduce(np.union1d, (gasB_inds, gasC_inds,
                                    gasD_inds, gasE_inds, pfx1_inds, pfx2_inds))
     if len(gas_inds)==0:
+        if verbose:
+            print("Removed 0 samples")
         return data
     remove_inds = prune_loop(gas_inds,data['shotnum'],data['time'])
     if verbose:
@@ -148,6 +144,8 @@ def remove_ECH(data, verbose):
         print('Removing ECH')
     ech_inds = np.nonzero(np.any(data['ech'] > .5, axis=1))[0]
     if len(ech_inds)==0:
+        if verbose:
+            print("Removed 0 samples")
         return data
     remove_inds = prune_loop(ech_inds,data['shotnum'],data['time'])
     if verbose:
