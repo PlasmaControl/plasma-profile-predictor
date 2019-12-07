@@ -43,6 +43,20 @@ def remove_non_gas_feedback(data, verbose):
         data[sig] = data[sig][keep_sample]
     return data
 
+# remove all samples where not all of the timesteps have betan feedback on
+def remove_non_beta_feedback(data, verbose):
+    if verbose:
+        print('Removing timesteps WITHOUT betan feedback')
+    # beam_feedback_switch of 2 means there is feedback on power
+    # beam_feedback_power_target_quantity of 9 means the power quantity is betan
+    keep_sample = np.all(np.logical_and(data['beam_feedback_switch']==2,data['beam_feedback_power_target_quantity']==9),axis=1)
+    if verbose:
+        print("Removed {} samples".format(len(data['beam_feedback_switch'])-sum(keep_sample)))
+    if verbose:
+        print("{} samples remaining".format(sum(keep_sample)))
+    for sig in data.keys():
+        data[sig] = data[sig][keep_sample]
+    return data
 
 def remove_I_coil(data, verbose):
     if verbose:

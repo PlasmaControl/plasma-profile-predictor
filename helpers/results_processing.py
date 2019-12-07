@@ -613,6 +613,8 @@ def plot_conv_training(model,scenario,filename=None,**kwargs):
     nout = len(targets)
     nrows = int(np.ceil((nout+1)/2))
     f, axes = plt.subplots(nrows, 2, figsize=(28, 14*nrows))
+    if nrows<2:
+        axes=np.array([axes])
     axes[0,0].semilogy(scenario['history']['loss'],label='train')
     axes[0,0].semilogy(scenario['history']['val_loss'],label='val')
     axes[0,0].set_title('Loss')

@@ -10,7 +10,7 @@ import numpy as np
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
-from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback
+from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback, remove_non_beta_feedback
 from helpers import exclude_shots
 
 
@@ -397,7 +397,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  'remove_I_coil': remove_I_coil,
                  'remove_gas': remove_gas,
                  'remove_dudtrip': remove_dudtrip,
-                 'remove_non_gas_feedback': remove_non_gas_feedback}
+                 'remove_non_gas_feedback': remove_non_gas_feedback,
+                 'remove_non_beta_feedback': remove_non_beta_feedback}
     for i, elem in enumerate(pruning_functions):
         if isinstance(elem, str):
             pruning_functions[i] = prun_dict[elem]
@@ -427,6 +428,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     extra_sigs = ['time', 'shotnum']
     if remove_non_gas_feedback in pruning_functions:
         extra_sigs += ['gas_feedback']
+    if remove_non_beta_feedback in pruning_functions: 
+        extra_sigs += ['beam_feedback_switch', 'beam_feedback_power_target_quantity']
     if remove_dudtrip in pruning_functions:
         extra_sigs += ['dud_trip']
     if remove_I_coil in pruning_functions:
@@ -634,6 +637,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata = remove_ECH(alldata,verbose)
     if remove_non_gas_feedback in pruning_functions:
         alldata = remove_non_gas_feedback(alldata,verbose)
+    if remove_non_beta_feedback in pruning_functions:
+        alldata = remove_non_beta_feedback(alldata,verbose)
     if remove_gas in pruning_functions:
         alldata = remove_gas(alldata,verbose)
     if remove_I_coil in pruning_functions:
