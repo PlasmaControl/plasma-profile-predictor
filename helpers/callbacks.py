@@ -68,7 +68,7 @@ class TimingCallback(Callback):
             logs['start_times'] = [self.start_times[-1]]
 
     def on_epoch_end(self, epoch, logs={}):
-        self.end_times.append(times())
+        self.end_times.append(time())
         if 'end_times' in logs:
             logs['end_times'].append(self.end_times[-1])
         else:

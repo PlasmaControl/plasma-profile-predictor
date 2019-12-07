@@ -52,16 +52,19 @@ def process_results_folder(dir_path):
         except:
             print('No scenario file found for model {}'.format(str(model_path)))
             os.remove(model_path)
+            continue
 
         if 'autoencoder' in scenario['runname']:
             try:
                 write_autoencoder_results(model, scenario)
+                pickle.dump(copy.deepcopy(scenario),scenario_path)
             except KeyError as key:
                 print('missing key {} for run {}'.format(key.args[0],str(model_path)))
                 
         else:
             try:
                 write_conv_results(model,scenario)
+                pickle.dump(copy.deepcopy(scenario),scenario_path)
             except KeyError as key:
                 print('missing key {} for run {}'.format(key.args[0],str(model_path)))
 
@@ -74,81 +77,83 @@ def write_autoencoder_results(model, scenario):
     base_sheet_path = "https://docs.google.com/spreadsheets/d/1GbU2FaC_Kz3QafGi5ch97mHbziqGz9hkH5wFjiWpIRc/edit#gid=0"
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_url(base_sheet_path).sheet1
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_url(base_sheet_path).sheet1
 
-    col = sheet.find('runname').col
-    runs = sheet.col_values(col)
-    if scenario['runname'] not in runs:
-        write_scenario_to_sheets(scenario,sheet)
-    rowid = sheet.find(scenario['runname']).row
-    scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
-
+        col = sheet.find('runname').col
+        runs = sheet.col_values(col)
+        if scenario['runname'] not in runs:
+            write_scenario_to_sheets(scenario,sheet)
+        rowid = sheet.find(scenario['runname']).row
+        scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
+    except:
+        print("Couldn't connect to gsheet")
+        
     curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
     os.chdir(results_dir)
-    f = open('index.html','w+')
-    f.write('<html><head></head><body>')
     
-    html = scenario_to_html(scenario)
-    f.write(html + '<p>\n')
-    
-    html = plot_autoencoder_training(model,scenario, filename='training.png')
-    f.write(html + '<p>\n')
-    
-    datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
-    with open(datapath,'rb') as fo:
-        rawdata = pickle.load(fo,encoding='latin1')
-    data = {163303: rawdata[163303]}
-    traindata, valdata, normalization_dict = process_data(data,
-                                                          scenario['sig_names'],
-                                                          scenario['normalization_method'],
-                                                          scenario['window_length'],
-                                                          scenario['window_overlap'],
-                                                          scenario['lookback'],
-                                                          scenario['lookahead'],
-                                                          scenario['sample_step'],
-                                                          scenario['uniform_normalization'],
-                                                          1,
-                                                          0,
-                                                          scenario['nshots'],
-                                                          0,
-                                                          scenario['flattop_only'],
-                                                          randomize=False)
-    traindata = denormalize(traindata, normalization_dict,verbose=0)
-    traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
-    generator = AutoEncoderDataGenerator(traindata,
-                                                   scenario['batch_size'],
-                                                   scenario['profile_names'],
-                                                   scenario['actuator_names'],
-                                                   scenario['scalar_names'],
-                                                   scenario['lookback'],
-                                                   scenario['lookahead'],
-                                                   scenario['profile_downsample'],
-                                                   scenario['state_latent_dim'],
-                                                   scenario['discount_factor'],
-                                                   scenario['x_weight'],
-                                                   scenario['u_weight'],                                            
-                                                   scenario['shuffle_generators'])
-    times = [2000, 2480, 3080, 4040, 4820, 5840]
-    shots = [163303]*len(times)
-    html = plot_autoencoder_profiles(model,scenario, generator,shots,times)
-    f.write(html + '<p>\n')
+    if not os.path.exists('training.png'):
+        try:
+            datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
+            with open(datapath,'rb') as fo:
+                rawdata = pickle.load(fo,encoding='latin1')
+            data = {163303: rawdata[163303]}
+            times = [2000, 2480, 3080, 4040, 4820, 5840]
+            shots = [163303]*len(times)
+            traindata, valdata, normalization_dict = process_data(data,
+                                                                  scenario['sig_names'],
+                                                                  scenario['normalization_method'],
+                                                                  scenario['window_length'],
+                                                                  scenario['window_overlap'],
+                                                                  scenario['lookback'],
+                                                                  scenario['lookahead'],
+                                                                  scenario['sample_step'],
+                                                                  scenario['uniform_normalization'],
+                                                                  1,
+                                                                  0,
+                                                                  scenario['nshots'],
+                                                                  0,
+                                                                  scenario['flattop_only'],
+                                                                  randomize=False)
+            traindata = denormalize(traindata, normalization_dict,verbose=0)
+            traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
+            generator = AutoEncoderDataGenerator(traindata,
+                                                           scenario['batch_size'],
+                                                           scenario['profile_names'],
+                                                           scenario['actuator_names'],
+                                                           scenario['scalar_names'],
+                                                           scenario['lookback'],
+                                                           scenario['lookahead'],
+                                                           scenario['profile_downsample'],
+                                                           scenario['state_latent_dim'],
+                                                           scenario['discount_factor'],
+                                                           scenario['x_weight'],
+                                                           scenario['u_weight'],                                            
+                                                           scenario['shuffle_generators'])
+            scenario_html = scenario_to_html(scenario)
+            profile_html = plot_autoencoder_profiles(model,scenario, generator,shots,times)
+            control_html = plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filename='control_encoding.png')
+            AB_html = plot_autoencoder_AB(model,scenario, filename='AB.png')
+            spectrum_html = plot_autoencoder_spectrum(model,scenario, filename='spectrum.png')
+            train_html = plot_autoencoder_training(model,scenario, filename='training.png')
 
-    html = plot_autoencoder_control_encoding(model,scenario,generator,shots,times,filename='control_encoding.png')
-    f.write(html + '<p>\n')
-    
-    html = plot_autoencoder_AB(model,scenario, filename='AB.png')
-    f.write(html + '<p>\n')
-    
-    html = plot_autoencoder_spectrum(model,scenario, filename='spectrum.png')
-    f.write(html + '<p>\n')
-
-    f.write('</body></html>')
-    f.close()
+            f = open('index.html','w+')
+            f.write('<html><head></head><body>')
+            f.write(scenario_html + '<p>\n')
+            f.write(train_html + '<p>\n')
+            f.write(profile_html + '<p>\n')
+            f.write(control_html + '<p>\n')
+            f.write(AB_html + '<p>\n')
+            f.write(spectrum_html + '<p>\n')
+            f.write('</body></html>')
+            f.close()
+        except:
+            print("Couldn't generate images")
     os.chdir(curr_dir)
     return scenario
 
@@ -163,70 +168,75 @@ def write_conv_results(model,scenario):
     base_sheet_path = "https://docs.google.com/spreadsheets/d/10ImJmFpVGYwE-3AsJxiqt0SyTDBCimcOh35au6qsh_k/edit#gid=0"
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_url(base_sheet_path).sheet1
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_name(os.path.expanduser('~/plasma-profile-predictor/drive-credentials.json'), scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_url(base_sheet_path).sheet1
 
-    col = sheet.find('runname').col
-    runs = sheet.col_values(col)
-    if scenario['runname'] not in runs:
-        write_scenario_to_sheets(scenario,sheet)
-    rowid = sheet.find(scenario['runname']).row
-    scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
-
+        col = sheet.find('runname').col
+        runs = sheet.col_values(col)
+        if scenario['runname'] not in runs:
+            write_scenario_to_sheets(scenario,sheet)
+        rowid = sheet.find(scenario['runname']).row
+        scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
+    except:
+        print("Couldn't connect to gsheet")
+        
     curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
     os.chdir(results_dir)
-    f = open('index.html','w+')
-    f.write('<html><head></head><body>')
-
-    html = scenario_to_html(scenario)
-    f.write(html + '<p>\n')
     
-    html = plot_conv_training(model,scenario, filename='training.png')
-    f.write(html + '<p>\n')
+    if not os.path.exists('training.png'):
+        try:
+            datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
+            with open(datapath,'rb') as fo:
+                rawdata = pickle.load(fo,encoding='latin1')
+            data = {163303: rawdata[163303]}
+            times = [2000, 2480, 3080, 4040, 4820, 5840]
+            shots = [163303]*len(times) 
+            traindata, valdata, normalization_dict = process_data(data,
+                                                                  scenario['sig_names'],
+                                                                  scenario['normalization_method'],
+                                                                  scenario['window_length'],
+                                                                  scenario['window_overlap'],
+                                                                  scenario['lookbacks'],
+                                                                  scenario['lookahead'],
+                                                                  scenario['sample_step'],
+                                                                  scenario['uniform_normalization'],
+                                                                  1,
+                                                                  0,
+                                                                  scenario['nshots'],
+                                                                  0,
+                                                                  scenario['flattop_only'],
+                                                                  randomize=False)
+            traindata = denormalize(traindata, normalization_dict, verbose=0)
+            traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
+            generator = DataGenerator(traindata,
+                                      scenario['batch_size'],
+                                      scenario['input_profile_names'],
+                                      scenario['actuator_names'],
+                                      scenario['target_profile_names'],
+                                      scenario['scalar_input_names'],
+                                      scenario['lookbacks'],
+                                      scenario['lookahead'],
+                                      scenario['predict_deltas'],
+                                      scenario['profile_downsample'],
+                                      shuffle=False)
+            scenario_html = scenario_to_html(scenario)
+            profile_html = plot_conv_profiles(model,scenario,generator,shots,times)  
+            train_html = plot_conv_training(model,scenario, filename='training.png')
 
-    datapath = '/scratch/gpfs/jabbate/mixed_data/final_data_batch_80.pkl'
-    with open(datapath,'rb') as fo:
-        rawdata = pickle.load(fo,encoding='latin1')
-    data = {163303: rawdata[163303]}
-    traindata, valdata, normalization_dict = process_data(data,
-                                                          scenario['sig_names'],
-                                                          scenario['normalization_method'],
-                                                          scenario['window_length'],
-                                                          scenario['window_overlap'],
-                                                          scenario['lookbacks'],
-                                                          scenario['lookahead'],
-                                                          scenario['sample_step'],
-                                                          scenario['uniform_normalization'],
-                                                          1,
-                                                          0,
-                                                          scenario['nshots'],
-                                                          0,
-                                                          scenario['flattop_only'],
-                                                          randomize=False)
-    traindata = denormalize(traindata, normalization_dict, verbose=0)
-    traindata = renormalize(traindata, scenario['normalization_dict'],verbose=0)
-    generator = DataGenerator(traindata,
-                              scenario['batch_size'],
-                              scenario['input_profile_names'],
-                              scenario['actuator_names'],
-                              scenario['target_profile_names'],
-                              scenario['scalar_input_names'],
-                              scenario['lookbacks'],
-                              scenario['lookahead'],
-                              scenario['predict_deltas'],
-                              scenario['profile_downsample'],
-                              shuffle=False)
-    times = [2000, 2480, 3080, 4040, 4820, 5840]
-    shots = [163303]*len(times)
-    html = plot_conv_profiles(model,scenario,generator,shots,times)
-    f.write(html + '<p>\n')
-    
-    f.write('</body></html>')
-    f.close()
+            f = open('index.html','w+')
+            f.write('<html><head></head><body>')
+            f.write(scenario_html + '<p>\n')
+            f.write(train_html + '<p>\n')
+            f.write(profile_html + '<p>\n')
+            f.write('</body></html>')
+            f.close()
+        except:
+            print("Couldn't generate images")
     os.chdir(curr_dir)
     return scenario
     

@@ -13,6 +13,7 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
+from helpers.results_processing import write_autoencoder_results
 import models.autoencoder
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
@@ -88,7 +89,7 @@ def main(scenario_index=-2):
                         'u_weight':1,
                         'discount_factor':1,
                         'batch_size': 128,
-                        'epochs': 300,
+                        'epochs': 3,
                         'flattop_only': True,
                         'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
                         'process_data': True,
@@ -183,7 +184,8 @@ def main(scenario_index=-2):
         verbose = 1
         print('Loading Default Scenario:')
         scenario = default_scenario
-    print(scenario)
+    for k,v in scenario.items():
+        print('{}:{}'.format(k,v))
 
     if scenario['process_data']:
         scenario['sig_names'] = scenario['profile_names'] + \
@@ -369,6 +371,8 @@ def main(scenario_index=-2):
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
     scenario['history'] = history.history
     scenario['history_params'] = history.params
+    
+    write_autoencoder_results(model, scenario)
     
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
