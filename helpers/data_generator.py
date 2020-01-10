@@ -414,7 +414,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     'topology_MAR': exclude_shots.topology_MAR,
                     'topology_IN': exclude_shots.topology_IN,
                     'topology_DN': exclude_shots.topology_DN,
-                    'topology_BOT': exclude_shots.topology_BOT}
+                    'topology_BOT': exclude_shots.topology_BOT,
+                    'test_set': exclude_shots.test}
     for i, elem in enumerate(excluded_shots):
         if isinstance(elem, str):
             excluded_shots[i] = exclude_dict[elem]
