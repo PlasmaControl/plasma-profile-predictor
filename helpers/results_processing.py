@@ -57,14 +57,16 @@ def process_results_folder(dir_path):
         if 'autoencoder' in scenario['runname']:
             try:
                 write_autoencoder_results(model, scenario)
-                pickle.dump(copy.deepcopy(scenario),scenario_path)
+                with open(scenario_path, 'wb+') as f:
+                    pickle.dump(copy.deepcopy(scenario),f)
             except KeyError as key:
                 print('missing key {} for run {}'.format(key.args[0],str(model_path)))
                 
         else:
             try:
                 write_conv_results(model,scenario)
-                pickle.dump(copy.deepcopy(scenario),scenario_path)
+                with open(scenario_path, 'wb+') as f:
+                    pickle.dump(copy.deepcopy(scenario),f)
             except KeyError as key:
                 print('missing key {} for run {}'.format(key.args[0],str(model_path)))
 
@@ -89,7 +91,7 @@ def write_autoencoder_results(model, scenario):
         rowid = sheet.find(scenario['runname']).row
         scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
     except:
-        print("Couldn't connect to gsheet")
+        print("Couldn't connect to gsheet for scenario: " + scenario['runname'])
         
     curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
@@ -153,7 +155,7 @@ def write_autoencoder_results(model, scenario):
             f.write('</body></html>')
             f.close()
         except:
-            print("Couldn't generate images")
+            print("Couldn't generate images for scenario: " + scenario['runname'])
     os.chdir(curr_dir)
     return scenario
 
@@ -180,7 +182,7 @@ def write_conv_results(model,scenario):
         rowid = sheet.find(scenario['runname']).row
         scenario['sheet_path'] = base_sheet_path + "&range={}:{}".format(rowid,rowid)
     except:
-        print("Couldn't connect to gsheet")
+        print("Couldn't connect to gsheet for scenario: " + scenario['runname'])
         
     curr_dir = os.getcwd()
     results_dir =os.path.expanduser('~/plasma-profile-predictor/results/'+scenario['runname'])  
@@ -236,7 +238,7 @@ def write_conv_results(model,scenario):
             f.write('</body></html>')
             f.close()
         except:
-            print("Couldn't generate images")
+            print("Couldn't generate images for scenario: " + scenario['runname'])
     os.chdir(curr_dir)
     return scenario
     
