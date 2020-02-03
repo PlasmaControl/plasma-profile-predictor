@@ -249,3 +249,29 @@ def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, mse_power, predi
         hinge_loss = K.mean(K.maximum(-(delta_true * delta_pred), 0.), axis=-1)
         return mse_loss + hinge_weight*hinge_loss
     return hinge_mse
+
+
+def normed_mse(y_true, y_pred):
+    num = K.mean(K.pow(y_true-y_pred,2),axis=-1)
+    den = K.maximum(K.sqrt(K.mean(K.pow(y_true,2),axis=-1)),K.cast_to_floatx(K.epsilon()))
+    return num/den
+
+def max_diff_sum_2(y_true,y_pred):
+    num = y_true-y_pred
+    den = K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon()))
+    return K.max(K.pow(num/den,2),axis=-1)
+
+def max_diff2_sum2(y_true,y_pred):
+    num = K.max(K.pow(y_true-y_pred,2),axis=-1)
+    den = K.max(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon())),2),axis=-1)
+    return num/den
+
+def mean_diff_sum_2(y_true,y_pred):
+    num = y_true-y_pred
+    den = K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon()))
+    return K.mean(K.pow(num/den,2),axis=-1)
+    
+def mean_diff2_sum2(y_true,y_pred):
+    num = K.mean(K.pow(y_true-y_pred,2),axis=-1)
+    den = K.mean(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon())),2),axis=-1)
+    return num/den

@@ -177,3 +177,8 @@ def remove_nan(data, verbose):
     for sig in data.keys():
         data[sig] = data[sig][list(keep_inds)]
     return data
+
+def remove_outliers(data,verbose):
+    pass
+    
+

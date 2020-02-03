@@ -70,7 +70,6 @@ class DataGenerator(Sequence):
         inp = {}
         targ = {}
         #sample_weights = np.ones(self.batch_size)
-        weights_dict = {}
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
         self.cur_times = self.data['time'][idx * self.batch_size:
@@ -92,7 +91,7 @@ class DataGenerator(Sequence):
                                                         self.lookbacks[sig]+1+self.lookahead]
             if self.kwargs.get('sample_weights') == 'std':
                 sample_weights += np.std(self.data[sig][idx * self.batch_size:
-                                                        (idx+1)*self.batch_size,:])
+                                                        (idx+1)*self.batch_size,:],axis=1)
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,
@@ -113,8 +112,8 @@ class DataGenerator(Sequence):
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
-
-        return inp, targ, weights_dict
+        sample_weights_dict = {'target_'+sig: sample_weights for sig in self.targets}
+        return inp, targ, sample_weights_dict
 
     def get_data_by_shot_time(self, shots, times=None):
         """Gets input/target pairs for specific times within specified shots
