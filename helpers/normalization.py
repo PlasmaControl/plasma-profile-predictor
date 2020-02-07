@@ -161,10 +161,13 @@ def normalize(data, method, uniform_over_profile=True, verbose=1):
         param_dict = {}
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose==1):
-            if key not in ['time', 'shotnum']:
+            if key not in ['time', 'shotnum'] and 'error' not in key:
                 data[key], p = normalize_arr(
                     data[key], method, uniform_over_profile)
                 param_dict[key] = p
+        for key in data.keys():
+            if 'error' in key:
+                data[key] = renormalize(data[key]+denormalize_arr(data[key[6:]],param_dict[key[6:]]),param_dict[key[6:]]) - data[key[6:]]
         return data, param_dict
     else:
         return normalize_arr(data, method, uniform_over_profile)
@@ -244,8 +247,11 @@ def denormalize(data, param_dict, verbose=1):
         data=data.copy() # don't make changes in place
         for key in tqdm(data.keys(), desc='Denormalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose==1):
-            if key not in ['time', 'shotnum']:
+            if key not in ['time', 'shotnum'] and 'error' not in key:
                 data[key] = denormalize_arr(data[key], param_dict[key])
+        for key in data.keys():
+            if 'error' in key:
+                data[key] = denormalize_arr(data[key]+renormalize(data[key[6:]],param_dict[key[6:]]),param_dict[key[6:]]) - data[key[6:]]
         return data
     else:
         return denormalize_arr(data, param_dict)
@@ -266,8 +272,11 @@ def renormalize(data, param_dict, verbose=1):
     if type(data) is dict:
         for key in tqdm(data.keys(), desc='Normalizing', ascii=True, dynamic_ncols=True,
                         disable=not verbose==1):
-            if key not in ['time', 'shotnum']:
+            if key not in ['time', 'shotnum'] and 'error' not in key:
                 data[key] = renormalize(data[key], param_dict[key])
+        for key in data.keys():
+            if 'error' in key:
+                data[key] = renormalize(data[key]+denormalize_arr(data[key[6:]],param_dict[key[6:]]),param_dict[key[6:]]) - data[key[6:]]
         return data
     else:
         # first remove all inf/nan

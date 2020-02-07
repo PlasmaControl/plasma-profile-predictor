@@ -69,7 +69,8 @@ class DataGenerator(Sequence):
         idx = self.inds[idx]
         inp = {}
         targ = {}
-        #sample_weights = np.ones(self.batch_size)
+        uncertainties={sig:{} for sig in set(self.profile_inputs).union(self.targets)}
+
         self.cur_shotnum = self.data['shotnum'][idx * self.batch_size:
                                                 (idx+1)*self.batch_size]
         self.cur_times = self.data['time'][idx * self.batch_size:
@@ -80,8 +81,16 @@ class DataGenerator(Sequence):
                                                  (idx+1)*self.batch_size,
                                                  0:self.lookbacks[sig]+1,
                                                  ::self.profile_downsample]
-        for sig in self.actuator_inputs:
+            if self.kwargs.get('return_uncertainties'):
+                try:
+                    uncertainties[sig]['input'] = self.data['error_'+sig][idx * self.batch_size:
+                                                                          (idx+1)*self.batch_size,
+                                                                          0:self.lookbacks[sig]+1,
+                                                                          ::self.profile_downsample]
+                except:
+                    continue
 
+        for sig in self.actuator_inputs:
             inp['input_past_' + sig] = self.data[sig][idx * self.batch_size:
                                                       (idx+1)*self.batch_size,
                                                       0:self.lookbacks[sig]+1]
@@ -108,12 +117,21 @@ class DataGenerator(Sequence):
                                                    -1, ::self.profile_downsample] - baseline
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
-            #weights_dict['target_' + sig] = sample_weights
+            if self.kwargs.get('return_uncertainties'):
+                try:
+                    uncertainties[sig]['target'] = self.data['error_'+sig][idx * self.batch_size:
+                                                   (idx+1)*self.batch_size,
+                                                   -1, ::self.profile_downsample]
+                except:
+                    continue
 
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
         sample_weights_dict = {'target_'+sig: sample_weights for sig in self.targets}
-        return inp, targ, sample_weights_dict
+        if self.kwargs.get('return_uncertainties'):
+            return inp, targ, sample_weights_dict, uncertainties
+        else:
+            return inp, targ, sample_weights_dict
 
     def get_data_by_shot_time(self, shots, times=None):
         """Gets input/target pairs for specific times within specified shots
@@ -152,6 +170,7 @@ class DataGenerator(Sequence):
 
         inp = {}
         targ = {}
+        uncertainties={sig:{} for sig in set(self.profile_inputs).union(self.targets)}
         self.cur_shotnum = self.data['shotnum'][inds]
         self.cur_times = self.data['time'][inds]
 
@@ -159,6 +178,14 @@ class DataGenerator(Sequence):
             inp['input_' + sig] = self.data[sig][inds,
                                                  0:self.lookbacks[sig]+1,
                                                  ::self.profile_downsample]
+            if self.kwargs.get('return_uncertainties'):
+                try:
+                    uncertainties[sig]['input'] = self.data['error_'+sig][inds,
+                                                                     0:self.lookbacks[sig]+1,
+                                                                     ::self.profile_downsample]
+                except:
+                    continue
+                    
         for sig in self.actuator_inputs:
             inp['input_past_' + sig] = self.data[sig][inds,
                                                       0:self.lookbacks[sig]+1]
@@ -179,9 +206,19 @@ class DataGenerator(Sequence):
 
             if self.kwargs.get('predict_mean'):
                 targ['target_' + sig] = np.mean(targ['target_' + sig], axis=-1)
-            actual_shots_times = {'shots': self.data['shotnum'][inds, self.max_lookback],
+            if self.kwargs.get('return_uncertainties'):
+                try:
+                    uncertainties[sig]['target'] = self.data['error_'+sig][inds,
+                                                   -1, ::self.profile_downsample]
+                except:
+                    continue
+                    
+        actual_shots_times = {'shots': self.data['shotnum'][inds, self.max_lookback],
                                  'times': self.data['time'][inds, self.max_lookback]}
-        return inp, targ, actual_shots_times
+        if self.kwargs.get('return_uncertainties'):
+            return inp, targ, actual_shots_times, uncertainties
+        else:
+            return inp, targ, actual_shots_times
 
 
 class AutoEncoderDataGenerator(Sequence):
@@ -426,6 +463,10 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # get sig names
     ##############################
     extra_sigs = ['time', 'shotnum']
+    sigs_with_errors = ['temp', 'dens', 'itemp', 'idens', 'rotation']
+    for sig in sig_names:
+        if sig in sigs_with_errors and kwargs.get('uncertainties'):
+            extra_sigs += ['error_'+sig]   
     if remove_non_gas_feedback in pruning_functions:
         extra_sigs += ['gas_feedback']
     if remove_non_beta_feedback in pruning_functions: 
@@ -455,8 +496,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
             if val > max_lookback:
                 max_lookback = val
         for sig in sigsplustime:
-            if sig not in lookbacks.keys():
+            if sig not in lookbacks.keys() and 'error' not in sig:
                 lookbacks[sig] = max_lookback
+        for sig in sigsplustime:
+            if 'error' in sig:
+                lookbacks[sig] = lookbacks[sig[6:]]
             
     ##############################
     # find which shots have all the signals needed

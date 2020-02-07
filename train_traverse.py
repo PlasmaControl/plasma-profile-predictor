@@ -32,11 +32,11 @@ def main(scenario_index=-2):
     ngpu = 1
     
     
-    seed_value= 0
-    os.environ['PYTHONHASHSEED']=str(seed_value)
-    random.seed(seed_value)
-    np.random.seed(seed_value)
-    tf.set_random_seed(seed_value)
+#     seed_value= 0
+#     os.environ['PYTHONHASHSEED']=str(seed_value)
+#     random.seed(seed_value)
+#     np.random.seed(seed_value)
+#     tf.set_random_seed(seed_value)
     
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
@@ -50,7 +50,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_01_31/")
+    checkpt_dir = os.path.expanduser("~/run_results_02_06/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -113,12 +113,11 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':32}},
-                               {'model_type': 'conv2d', 'model_kwargs': {'max_channels':16}},
-                               {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64}}]
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':16}}]
     scenarios_dict['sigs'] = [{'input_profile_names': ['dens','temp','itemp','q','rotation'], 
                                'target_profile_names': ['dens','temp','itemp','q','rotation']}]
     scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weighting':None}]
+    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','triangularity_top_EFIT01','triangularity_bot_EFIT01']},{'scalar_input_names' : []}]
     # scenarios_dict['targets'] = [{'target_profile_names': ['temp']},
     #                              {'target_profile_names': ['dens']},
     #                              {'target_profile_names': ['idens']},
@@ -138,14 +137,14 @@ def main(scenario_index=-2):
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['predict_deltas'] = [{'predict_deltas': True}]
-    scenarios_dict['epochs'] = [{'epochs': 200}]
-    scenarios_dict['loss'] = [{'loss_function': 'mse'},
-                              {'loss_function':'mae'},
-                              {'loss_function':'normed_mse'},
-                              {'loss_function':'mean_diff_sum_2'},
-                              {'loss_function':'max_diff_sum_2'},
-                              {'loss_function':'mean_diff2_sum2'},
-                              {'loss_function':'max_diff2_sum2'}]
+    scenarios_dict['epochs'] = [{'epochs': 200},{'epochs': 199},{'epochs': 198},{'epochs': 197},{'epochs': 196},{'epochs': 195}]
+    scenarios_dict['loss'] = [{'loss_function': 'mse'}]
+#                               {'loss_function':'mae'},
+#                               {'loss_function':'normed_mse'},
+#                               {'loss_function':'mean_diff_sum_2'},
+#                               {'loss_function':'max_diff_sum_2'},
+#                               {'loss_function':'mean_diff2_sum2'},
+#                               {'loss_function':'max_diff2_sum2'}]
     
 
     scenarios = []
