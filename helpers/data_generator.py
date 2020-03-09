@@ -397,6 +397,24 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         nshots (int): How many shots to use. If None, all available will be used.
         verbose (int): verbosity level. 0 is no CL output, 1 shows progress, 2 is abbreviated.
         flattop_only (bool): Whether to only include data from flattop.
+        randomize (bool): Whether to randomize the order of data
+    Keyword Args:
+        pruning_functions (array-like of str or fn handle): Names of pruning functions to use.
+            Options are: 
+                "remove_nan": (on by default): remove all time slices with NaN data
+                "remove_ECH": remove time slices during and after ECH turn on
+                "remove_gas": remove time slices during and after non H/D/T gas injection
+                "remove_I_coil": remove time slices during and after non standard I coil operations
+                "remove_dudtrip": remove time slices during and after dudtrip signal (ie disruption, pcs crash etc)
+                "remove_non_gas_feedback": remove time slices where density feedback control is not used
+                "remove_non_beta_feedback": remove time slices where beta feedback is not used
+        excluded_shots (array): List of shot numbers to exclude, or name of standard set based on topology:
+            'topology_TOP','topology_SNT','topology_SNB','topology_OUT','topology_MAR','topology_IN',
+            'topology_DN','topology_BOT','test_set'
+        uncertainties (bool): Return uncertainties for signals that have them available.
+        invert_q (bool): Whether to use regular q or 1/q (iota)
+        val_idx (int, 1-9): Which set to use for validation. 0 is for testing.
+            If present, overrides val_frac & train_frac.
 
     Returns:
         traindata (dict): Dictionary of numpy arrays, one entry for each signal.
@@ -443,6 +461,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # get excluded shots
     ##############################
     excluded_shots = copy.copy(kwargs.get('excluded_shots', []))
+    if kwargs.get('val_idx') == 0 and 'test_set' in excluded_shots:
+        excluded_shots.remove('test_set')
     exclude_dict = {'topology_TOP': exclude_shots.topology_TOP,
                     'topology_SNT': exclude_shots.topology_SNT,
                     'topology_SNB': exclude_shots.topology_SNB,
@@ -673,6 +693,15 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     sys.stdout.flush()
     gc.collect()
 
+    if kwargs.get('invert_q'):
+        qs = ['q','q_EFIT01','q_EFIT02','q_EFITRT1','q_EFITRT2']
+        for sig in alldata.keys():
+            if sig in qs:
+                alldata[sig] = 1/alldata[sig]
+                alldata[sig][:,:,-1] = 0                
+    
+    
+    
     ##############################
     # apply pruning functions
     ##############################
@@ -708,10 +737,18 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     # split into train and validation sets
     ##############################    
     nsamples = alldata['time'].shape[0]
-    inds = np.random.permutation(nsamples) if randomize else np.arange(nsamples)
-    traininds = inds[:int(nsamples*train_frac)]
-    valinds = inds[int(nsamples*train_frac)
-                       :int(nsamples*(val_frac+train_frac))]
+    val_idx = kwargs.get('val_idx',None)
+    if val_idx is not None and val_idx in np.arange(10):
+        valinds = np.where(alldata['shotnum'][:,0]%10 == val_idx)[0]
+        traininds = np.where(alldata['shotnum'][:,0]%10 != val_idx)[0]
+        if randomize:
+            valinds = np.random.permutation(valinds)
+            traininds = np.random.permutation(traininds)
+    else:
+        inds = np.random.permutation(nsamples) if randomize else np.arange(nsamples)
+        traininds = inds[:int(nsamples*train_frac)]
+        valinds = inds[int(nsamples*train_frac)
+                           :int(nsamples*(val_frac+train_frac))]
     traindata = {}
     valdata = {}
     for sig in tqdm(sigsplustime, desc='Splitting', ascii=True, dynamic_ncols=True,
