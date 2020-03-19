@@ -16,6 +16,9 @@ core*
 ktf2cpp/predictor
 log*
 *.pkl
+*.png
+*.pdf
+*.gz
 willdelete
 drive-credentials.json
 client_secrets.json
