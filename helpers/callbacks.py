@@ -49,6 +49,9 @@ class TimingCallback(Callback):
     early if anticipated time for the next epoch exceeds time remaining.
     Useful when training on clusters where computation time must be limited in advance,
     so your job can exit cleanly rather than being killed.
+    
+    Args:
+        time_limit (int): Time limit, in seconds.
     """
 
     def __init__(self, time_limit=np.inf):
@@ -85,7 +88,7 @@ class TimingCallback(Callback):
         self.cum_time = np.sum(self.epoch_times)
         
         if self.cum_time + self.mean_time + 3*self.std_time > self.time_limit:
-            print('Stopping early due to time constraint')
+            print('Epoch {}: Stopping early due to time constraint'.format(epoch))
             self.stopped_epoch = epoch
             self.model.stop_training = True
             

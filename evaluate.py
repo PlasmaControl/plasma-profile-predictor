@@ -71,10 +71,8 @@ metrics = {'mean_squared_error':mean_squared_error,
 # load model and scenario
 ##########
 base_path = '/projects/EKOLEMEN/profile_predictor/'
-folders = ['run_results_02_16/',
-           'run_results_02_20/',
-           'run_results_02_27/']
-
+folders = ['run_results_03_10/']
+           
 for folder in folders:
     files =  [foo for foo in os.listdir(base_path+folder) if foo.endswith('.pkl')]
     for file in files:
@@ -113,13 +111,14 @@ for folder in folders:
                                                           pruning_functions=scenario['pruning_functions'],
                                                           excluded_shots = scenario['excluded_shots'],
                                                           delta_sigs = [],
-                                                          invert_q=scenario.setdefault('invert_q',False))
-        traindata = helpers.normalization.renormalize(
+                                                          invert_q=scenario.setdefault('invert_q',False),
+                                                          val_idx = scenario['val_idx'])
+        valdata = helpers.normalization.renormalize(
             helpers.normalization.denormalize(
-                traindata.copy(),normalization_dict, verbose=0),
+                valdata.copy(),normalization_dict, verbose=0),
             scenario['normalization_dict'],verbose=0)
 
-        train_generator = DataGenerator(traindata,
+        train_generator = DataGenerator(valdata,
                                         scenario['batch_size'],
                                         scenario['input_profile_names'],
                                         scenario['actuator_names'],

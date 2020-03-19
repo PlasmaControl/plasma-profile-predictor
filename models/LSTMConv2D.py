@@ -27,6 +27,8 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
 
     max_channels = kwargs.get('max_channels',32)
     l2 = kwargs.get('l2',0)
+    kernel_init = kwargs.get('kernel_initializer','glorot_uniform')
+    bias_init = kwargs.get('bias_initializer','zeros')
     
     profile_inputs = []
     profiles = []
@@ -43,21 +45,26 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     # shape = (lookback, length, channels=num_profiles)
     profiles = Conv2D(filters=int(num_profiles*max_channels/8), kernel_size=(1, int(profile_length/12)),
                       strides=(1, 1), padding='same', activation=std_activation,
-                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(profiles)
+                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                      kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
     profiles = Conv2D(filters=int(num_profiles*max_channels/4), kernel_size=(1, int(profile_length/8)),
                       strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(profiles)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
     profiles = Conv2D(filters=int(num_profiles*max_channels/2), kernel_size=(1, int(profile_length/6)),
                       strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(profiles)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
     profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(1, int(profile_length/4)),
                       strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(profiles)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
     # shape = (lookback, length, channels)
     if max_profile_lookback > 0:
         profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(max_profile_lookback+1, 1),
                           strides=(1, 1), padding='valid', activation=std_activation,
-                         kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(profiles)
+                         kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                         kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
     profiles = Reshape((profile_length, int(
         num_profiles*max_channels)))(profiles)
     # shape = (length, channels)
@@ -76,26 +83,33 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
             scalars = scalars[0]
             # shaoe = (time, num_actuators)
         scalars = Dense(units=int(num_profiles*max_channels/8),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
         #                    padding='causal', activation=std_activation)(actuators)
         scalars = Dense(units=int(num_profiles*max_channels/4),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
         #                    padding='causal', activation=std_activation)(actuators)
         scalars = Dense(units=int(num_profiles*max_channels/2),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         scalars = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
                        recurrent_activation='hard_sigmoid',recurrent_regularizer=regularizers.l2(l2),
-                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                      kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         scalars = Reshape((int(num_profiles*max_channels), 1))(scalars)
         # shape = (channels, 1)
         scalars = Dense(units=int(profile_length/4),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         scalars = Dense(units=int(profile_length/2),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
-        scalars = Dense(units=profile_length, activation=None,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(scalars)
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
+        scalars = Dense(units=profile_length, activation=std_activation,
+                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
         # shape = (channels, profile_length)
         scalars = Permute(dims=(2, 1))(scalars)
         # shape = (profile_length, channels)
@@ -119,26 +133,33 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         actuators = actuators[0]
     # shaoe = (time, num_actuators)
     actuators = Dense(units=int(num_profiles*max_channels/8),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
     #                    padding='causal', activation=std_activation)(actuators)
     actuators = Dense(units=int(num_profiles*max_channels/4),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
     #                    padding='causal', activation=std_activation)(actuators)
     actuators = Dense(units=int(num_profiles*max_channels/2),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     actuators = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
                      recurrent_activation='hard_sigmoid',recurrent_regularizer=regularizers.l2(l2),
-                    kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                    kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                    kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     actuators = Reshape((int(num_profiles*max_channels), 1))(actuators)
     # shape = (channels, 1)
     actuators = Dense(units=int(profile_length/4),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     actuators = Dense(units=int(profile_length/2),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
-    actuators = Dense(units=profile_length, activation=None,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(actuators)
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
+    actuators = Dense(units=profile_length, activation=std_activation,
+                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
     # shape = (channels, profile_length)
     actuators = Permute(dims=(2, 1))(actuators)
     # shape = (profile_length, channels)
@@ -154,23 +175,43 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     prof_act = []
     for i in range(num_targets):
         prof_act.append(Conv2D(filters=max_channels, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
-                               padding='same', activation=std_activation)(merged))
+                               padding='same', activation=std_activation,
+                              kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                              kernel_initializer=kernel_init, bias_initializer=bias_init)(merged))
         # shape = (1,length,max_channels)
         prof_act[i] = Conv2D(filters=int(max_channels/2), kernel_size=(1, int(profile_length/8)),
                              strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(prof_act[i])
+                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
         prof_act[i] = Conv2D(filters=int(max_channels/4), kernel_size=(1, int(profile_length/6)),
                              strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(prof_act[i])
+                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
         prof_act[i] = Conv2D(filters=int(max_channels/8), kernel_size=(1, int(profile_length/4)),
                              strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(prof_act[i])
+                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
         prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
                              padding='same', activation=None,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2))(prof_act[i])
+                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
+        if kwargs.get('last_dense'):
+            prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
+                                 padding='same', activation=std_activation,
+                                 kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                                 kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
+            prof_act[i] = Dense(units=profile_length, activation=None,
+                                kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                                kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
+        else:
+            prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
+                                 padding='same', activation=None,
+                                 kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
+                                 kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
         # shape = (1,length,1)
         if kwargs.get('predict_mean'):
-            prof_act[i] = GlobalAveragePooling2D()(prof_act[i])
+            prof_act[i] = GlobalAveragePooling2D(name='target_' +
+                                  target_profile_names[i])(prof_act[i])
         else:
             prof_act[i] = Reshape((profile_length,), name='target_' +
                                   target_profile_names[i])(prof_act[i])
