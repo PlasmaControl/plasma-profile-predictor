@@ -13,7 +13,7 @@ import helpers
 from helpers.data_generator import process_data, DataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE, percent_correct_sign
-from helpers.callbacks import CyclicLR, TensorBoardWrapper
+from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from models.LSTMConv2D import get_model_simple_lstm, get_model_conv2d, get_model_linear_systems
 from models.LSTMConv1D import build_lstmconv1d_joe, build_dumb_simple_model
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
@@ -49,7 +49,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_03_04/")
+    checkpt_dir = os.path.expanduser("~/run_results_03_10/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -65,7 +65,7 @@ def main(scenario_index=-2):
                         'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','triangularity_top_EFIT01','triangularity_bot_EFIT01'],
                         'profile_downsample' : 2,
                         'model_type' : 'conv2d',
-                        'model_kwargs': {'max_channels': 32},
+                        'model_kwargs': {'max_channels': 32,'kernel_initializer':'lecun_normal','l2':1e-3},
                         'std_activation' : 'relu',
                         'sample_weighting':'std',
                         'loss_function': 'mse',
@@ -74,8 +74,8 @@ def main(scenario_index=-2):
                         'epochs' : 200,
                         'flattop_only': True,
                         'predict_deltas' : True,
-#                         'raw_data_path':'/scratch/gpfs/jabbate/full_data/train_data_full.pkl',
-                        'raw_data_path':'/scratch/gpfs/jabbate/old_stuff/new_data/final_data.pkl',
+                        'raw_data_path':'/scratch/gpfs/jabbate/full_data/train_data_full.pkl',
+#                         'raw_data_path':'/scratch/gpfs/jabbate/old_stuff/new_data/final_data.pkl',
                         'process_data':True,
                         'invert_q': True,
                         'processed_filename_base': '/scratch/gpfs/jabbate/data_60_ms_randomized_',
@@ -98,7 +98,7 @@ def main(scenario_index=-2):
                         'uniform_normalization': True,
                         'train_frac': 0.8,
                         'val_frac': 0.2,
-                        'val_idx': np.random.randint(1,10)
+                        'val_idx': np.random.randint(1,10),
                         'nshots': 12000,
                         'excluded_shots': ['topology_TOP', 
                                            'topology_OUT',
@@ -112,41 +112,46 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':8}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':12}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':16, 'l2':1e-5}},
-                                {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
-                                {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
-                                {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
-    scenarios_dict['profiles'] = [{'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-                                                         'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1'], 
-                               'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-                                                         'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1']},
-#                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1'], 
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':16,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':32,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-4,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
+#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
+#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
+#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
+#     scenarios_dict['profiles'] = [{'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1'], 
 #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1']},
-                                {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-                                                         'q_EFITRT1','cerquick_rotation_EFITRT1'], 
-                               'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-                                                         'q_EFITRT1','cerquick_rotation_EFITRT1']}]
-#     scenarios_dict['profiles'] = [{'input_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
+#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1']},
+# #                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+# #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1'], 
+# #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+# #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1']},
+#                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1'], 
+#                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1']}]
+    scenarios_dict['profiles'] = [{'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
+                                   'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']}]
+#                                 {'input_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
 #                                    'target_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
 #                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
-#                                    'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
-#                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
-#                                    'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']}]
-    scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'}]
-    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
-                                                          'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
-                                 {'scalar_input_names':[]}]
-#     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','kappa_EFIT01',
-#                                                           'triangularity_top_EFIT01','triangularity_bot_EFIT01']},
+#                                   'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
+                                  
+    scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weightin':None}]
+#     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
+#                                                           'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
 #                                  {'scalar_input_names':[]}]
+    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','kappa_EFIT01',
+                                                          'triangularity_top_EFIT01','triangularity_bot_EFIT01']},
+                                 {'scalar_input_names':[]}]
+    scenarios_dict['activation'] = [{'std_activation' : 'relu'},{'std_activation' : 'elu'},{'std_activation' : 'selu'}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['predict_deltas'] = [{'predict_deltas': True},{'predict_deltas': False}]
-    scenarios_dict['epochs'] = [{'epochs': 200} for i in range(1)]
+    scenarios_dict['epochs'] = [{'epochs': 100} for i in range(1)]
     scenarios_dict['loss'] = [{'loss_function': 'mse'},
                               {'loss_function':'mae'}]
 #                               {'loss_function':'normed_mse'},
@@ -193,11 +198,11 @@ def main(scenario_index=-2):
     ###############    
     if scenario_index >= 0:
         verbose=2
-        print('Loading Scenario ' + str(scenario_index) + ':')
+        print(datetime.datetime.today().strftime('%c'),' Loading Scenario ' + str(scenario_index) + ':')
         scenario = scenarios[scenario_index]
     else:
         verbose=1
-        print('Loading Default Scenario:')
+        print(datetime.datetime.today().strftime('%c'),' Loading Default Scenario:')
         scenario = default_scenario
     print(scenario)
 
@@ -294,7 +299,7 @@ def main(scenario_index=-2):
                                   scenario['profile_downsample'],
                                   scenario['shuffle_generators'],
                                   sample_weights=scenario['sample_weighting'])
-    print('Made Generators')
+    print(datetime.datetime.today().strftime('%c'), ' Made Generators')
 
 
     ###############
@@ -363,10 +368,11 @@ def main(scenario_index=-2):
 
     callbacks = []
     callbacks.append(ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5,
-                                       verbose=1, mode='min', min_delta=0.001,
+                                       verbose=1, mode='min', min_delta=5e-3,
                                        cooldown=1, min_lr=0))
-    callbacks.append(EarlyStopping(monitor='val_loss', min_delta=0.001, patience=8, 
-                                   verbose=1, mode='min', restore_best_weights=True))
+    callbacks.append(EarlyStopping(monitor='val_loss', min_delta=2e-4, patience=8, 
+                                   verbose=1, mode='min'))
+    callbacks.append(TimingCallback(time_limit=60*runtimes[scenario_index]))    
     if ngpu<=1:
         callbacks.append(ModelCheckpoint(checkpt_dir+scenario['runname']+'.h5', monitor='val_loss',
                                          verbose=0, save_best_only=True,
@@ -375,7 +381,7 @@ def main(scenario_index=-2):
 
     scenario['steps_per_epoch'] = len(train_generator)
     scenario['val_steps'] = len(val_generator)
-    print('Train generator length: {}'.format(len(train_generator)))
+    print(datetime.datetime.today().strftime('%c'), ' Train generator length: {}'.format(len(train_generator)))
 
 
     ###############
@@ -383,7 +389,7 @@ def main(scenario_index=-2):
     ############### 
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
-    print('Saved Analysis params before run')
+    print(datetime.datetime.today().strftime('%c'), ' Saved Analysis params before run')
 
 
     ###############
@@ -391,7 +397,7 @@ def main(scenario_index=-2):
     ###############
     if ngpu>1:
         parallel_model.compile(optimizer, loss, metrics)
-        print('Parallel model compiled, starting training')
+        print(datetime.datetime.today().strftime('%c'), ' Parallel model compiled, starting training')
         history = parallel_model.fit_generator(train_generator,
                                                steps_per_epoch=scenario['steps_per_epoch'],
                                                epochs=scenario['epochs'],
@@ -401,7 +407,7 @@ def main(scenario_index=-2):
                                                verbose=verbose)
     else:
         model.compile(optimizer, loss, metrics)
-        print('Model compiled, starting training')
+        print(datetime.datetime.today().strftime('%c'), ' Model compiled, starting training')
         history = model.fit_generator(train_generator,
                                       steps_per_epoch=scenario['steps_per_epoch'],
                                       epochs=scenario['epochs'],
@@ -417,12 +423,13 @@ def main(scenario_index=-2):
     scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
     scenario['history'] = history.history
     scenario['history_params'] = history.params
+    scenario['epochs'] = scenario['history_params']['epochs']
       
     if not any([isinstance(cb,ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
     with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
-    print('Saved Analysis params after completion')
+    print(datetime.datetime.today().strftime('%c'), ' Saved Analysis params after completion')
 
 
 if __name__ == '__main__':
