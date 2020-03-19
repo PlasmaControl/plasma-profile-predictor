@@ -9,47 +9,54 @@ import numpy as np
 class DynamicWeighting(Callback):
     """Callback that updates weights of different losses to maintain 
     balance for multi-output models.
+
+    Args:
+        weights: list of keras tensor objects to be used as weights for loss functions
+        metrics: names of metrics to balance during training
+        mode: when to rebalance. Default is each epoch, can also be after each batch.
     """
 
-    def __init__(self,weights,metrics,mode='epoch'):
+    def __init__(self, weights, metrics, mode='epoch'):
         for weight in weights:
             if type(weight) is not type(K.variable(1)):
-                raise TypeError("All weights for dynamic weighting must be keras tensors. Got {}".format(type(weight)))
-        assert len(weights) == len(metrics), "Each weight must have a corresponding metric"
+                raise TypeError(
+                    "All weights for dynamic weighting must be keras tensors. Got {}".format(type(weight)))
+        assert len(weights) == len(
+            metrics), "Each weight must have a corresponding metric"
         self.weights = weights
         self.metrics = metrics
         self.mode = mode
         self.total_weight = np.sum([K.eval(weight) for weight in self.weights])
-        
-    def on_batch_end(self,batch,logs={}):
+
+    def on_batch_end(self, batch, logs={}):
         if self.mode == 'batch':
-            losses = [logs.get(metric,0) for metric in self.metrics]
+            losses = [logs.get(metric, 0) for metric in self.metrics]
             total_loss = np.sum(losses)
-            if total_loss >0:
-                for weight, loss in zip(weights,losses):
+            if total_loss > 0:
+                for weight, loss in zip(weights, losses):
                     K.set_value(weight, loss/total_loss)
         else:
             pass
-        
-    def on_epoch_end(self,epoch,logs):
+
+    def on_epoch_end(self, epoch, logs):
         if self.mode == 'epoch':
-            losses = [logs.get(metric,0) for metric in self.metrics]
+            losses = [logs.get(metric, 0) for metric in self.metrics]
             total_loss = np.sum(losses)
-            if total_loss >0:
-                for weight, loss in zip(weights,losses):
+            if total_loss > 0:
+                for weight, loss in zip(weights, losses):
                     K.set_value(weight, self.total_weight*loss/total_loss)
         else:
-            pass    
-            
-            
+            pass
+
+
 class TimingCallback(Callback):
     """A Keras Callback which records the time of each epoch
-    
+
     Can also set a maximum training time, and training will stop 
     early if anticipated time for the next epoch exceeds time remaining.
     Useful when training on clusters where computation time must be limited in advance,
     so your job can exit cleanly rather than being killed.
-    
+
     Args:
         time_limit (int): Time limit, in seconds.
     """
@@ -76,26 +83,30 @@ class TimingCallback(Callback):
             logs['end_times'].append(self.end_times[-1])
         else:
             logs['end_times'] = [self.end_times[-1]]
-            
+
         self.epoch_times.append(self.end_times[-1] - self.start_times[-1])
         if 'epoch_times' in logs:
             logs['epoch_times'].append(self.epoch_times[-1])
         else:
             logs['epoch_times'] = [self.epoch_times[-1]]
-        
+
         self.mean_time = np.mean(self.epoch_times)
         self.std_time = np.std(self.epoch_times)
         self.cum_time = np.sum(self.epoch_times)
-        
+
         if self.cum_time + self.mean_time + 3*self.std_time > self.time_limit:
             print('Epoch {}: Stopping early due to time constraint'.format(epoch))
             self.stopped_epoch = epoch
             self.model.stop_training = True
-            
+
+
 class TensorBoardWrapper(TensorBoard):
     """Sets the self.validation_data property for use with TensorBoard callback
     when training with a generator.
     Basically just grabs all the data from the generator and puts it in one array.
+
+    Args:
+       generator: DataGenerator object to pull validation data from.
     """
 
     def __init__(self, generator, **kwargs):

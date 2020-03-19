@@ -29,6 +29,7 @@ def percent_correct_sign(sig, model, predict_deltas):
         return K.mean(K.maximum(K.sign(delta_pred*delta_true), 0), axis=-1)
     return sgn_acc
 
+
 def percent_baseline_error(sig, model, predict_deltas):
     """Wrapper for metric to compare model MAE to baseline MAE
 
@@ -47,12 +48,15 @@ def percent_baseline_error(sig, model, predict_deltas):
     else:
         # get the current input to the model for baseline comparison
         baseline = model.get_layer('input_' + sig).input[:, -1]
+
     def perBLMAE(y_true, y_pred):
-        BLerr = K.maximum(K.mean(K.abs(y_true-baseline),axis=-1), K.cast_to_floatx(K.epsilon()))
-        MAE = K.mean(K.abs(y_true-y_pred),axis=-1)
+        BLerr = K.maximum(K.mean(K.abs(y_true-baseline),
+                                 axis=-1), K.cast_to_floatx(K.epsilon()))
+        MAE = K.mean(K.abs(y_true-y_pred), axis=-1)
         return K.minimum(MAE/BLerr, 1)
     return perBLMAE
-    
+
+
 def baseline_MAE(sig, model, predict_deltas):
     """Wrapper for metric to measure the accuracy of predicting baseline
 
@@ -96,7 +100,7 @@ def denorm_loss(sig, model, param_dict, loss, predict_deltas):
             a scalar loss value
     """
     if predict_deltas:
-        baseline = K.cast_to_floatx(0) 
+        baseline = K.cast_to_floatx(0)
     else:
         baseline = model.get_layer('input_' + sig).input[:, -1]
     method = param_dict['method']
@@ -245,33 +249,101 @@ def hinge_mse_loss(sig, model, hinge_weight, mse_weight_vector, mse_power, predi
     def hinge_mse(y_true, y_pred):
         delta_true = y_true-baseline
         delta_pred = y_pred-baseline
-        mse_loss = K.mean(K.pow(K.abs(y_pred-y_true),mse_power)*mse_weight_vector, axis=-1)
+        mse_loss = K.mean(K.pow(K.abs(y_pred-y_true), mse_power)
+                          * mse_weight_vector, axis=-1)
         hinge_loss = K.mean(K.maximum(-(delta_true * delta_pred), 0.), axis=-1)
         return mse_loss + hinge_weight*hinge_loss
     return hinge_mse
 
 
 def normed_mse(y_true, y_pred):
-    num = K.mean(K.pow(y_true-y_pred,2),axis=-1)
-    den = K.maximum(K.sqrt(K.mean(K.pow(y_true,2),axis=-1)),K.cast_to_floatx(K.epsilon()))
+    """Normalized mean square error, normalized by the true value
+
+    normed_mse = <(true-pred)>**2/<true>**2
+
+    Args:
+        y_true: true values
+        y_pred: model predictions
+
+    Returns:
+        loss: loss value
+
+    """
+    num = K.mean(K.pow(y_true-y_pred, 2), axis=-1)
+    den = K.maximum(K.mean(K.pow(y_true, 2), axis=-1),
+                    K.cast_to_floatx(K.epsilon()))
     return num/den
 
-def max_diff_sum_2(y_true,y_pred):
-    num = y_true-y_pred
-    den = K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon()))
-    return K.max(K.pow(num/den,2),axis=-1)
 
-def max_diff2_sum2(y_true,y_pred):
-    num = K.max(K.pow(y_true-y_pred,2),axis=-1)
-    den = K.max(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon())),2),axis=-1)
+def max_diff_sum_2(y_true, y_pred):
+    """Maximum difference over sum squared
+
+    max_diff_sum_2 = max(((|true - pred|)/(|true| + |pred|))**2)
+
+    Args:
+        y_true: true values
+        y_pred: model predictions
+
+    Returns:
+        loss: loss value
+
+    """
+    num = y_true-y_pred
+    den = K.maximum(K.abs(y_true)+K.abs(y_pred), K.cast_to_floatx(K.epsilon()))
+    return K.max(K.pow(num/den, 2), axis=-1)
+
+
+def max_diff2_sum2(y_true, y_pred):
+    """Maximum difference squared over sum squared
+
+    max_diff2_sum2 = max(|true - pred|**2/max(|true| + |pred|))**2)
+
+    Args:
+        y_true: true values
+        y_pred: model predictions
+
+    Returns:
+        loss: loss value
+
+    """
+    num = K.max(K.pow(y_true-y_pred, 2), axis=-1)
+    den = K.max(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),
+                                K.cast_to_floatx(K.epsilon())), 2), axis=-1)
     return num/den
 
-def mean_diff_sum_2(y_true,y_pred):
+
+def mean_diff_sum_2(y_true, y_pred):
+    """Mean difference over sum squared
+
+    mean_diff_sum_2 = <(|true - pred|)/(|true| + |pred|)**2>
+
+    Args:
+        y_true: true values
+        y_pred: model predictions
+
+    Returns:
+        loss: loss value
+
+    """
     num = y_true-y_pred
-    den = K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon()))
-    return K.mean(K.pow(num/den,2),axis=-1)
-    
-def mean_diff2_sum2(y_true,y_pred):
-    num = K.mean(K.pow(y_true-y_pred,2),axis=-1)
-    den = K.mean(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),K.cast_to_floatx(K.epsilon())),2),axis=-1)
+    den = K.maximum(K.abs(y_true)+K.abs(y_pred), K.cast_to_floatx(K.epsilon()))
+    return K.mean(K.pow(num/den, 2), axis=-1)
+
+
+def mean_diff2_sum2(y_true, y_pred):
+    """Mean difference squared over sum squared
+
+    mean_diff2_sum2 = <|true - pred|**2>/<(|true| + |pred|))**2>
+
+    Args:
+        y_true: true values
+        y_pred: model predictions
+
+    Returns:
+        loss: loss value
+
+    """
+    num = K.mean(K.pow(y_true-y_pred, 2), axis=-1)
+    den = K.mean(K.pow(K.maximum(K.abs(y_true)+K.abs(y_pred),
+                                 K.cast_to_floatx(K.epsilon())), 2), axis=-1)
     return num/den
