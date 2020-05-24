@@ -1,212 +1,168 @@
 # Plasma Profile Predictor
 
-This repository is largely adapted from material for the SC18 tutorial:
-*Deep Learning at Scale*. Please see [sc18-dl-tutorial](https://github.com/NERSC/sc18-dl-tutorial) on GitHub, and also see their readme below.  
 
-Here you will links to slides and resources as well as all the code
-for the hands-on sessions.
-It contains specifications for a few datasets, a couple of CNN models, and
-all the training code to enable training the models in a distributed fashion
-using Horovod.
+## Repository layout
 
-As part of the tutorial, you will
-1. Train a simple CNN to classify images from the CIFAR10 dataset on a single node
-2. Train a ResNet model to classify the same images on multiple nodes
 
-**Contents**
-* [Links](https://github.com/NERSC/sc18-dl-tutorial#links)
-* [Installation](https://github.com/NERSC/sc18-dl-tutorial#installation)
-* [Navigating the repository](https://github.com/NERSC/sc18-dl-tutorial#navigating-the-repository)
-* [Hands-on walk-through](https://github.com/NERSC/sc18-dl-tutorial#hands-on-walk-through)
-    * [Single node training example](https://github.com/NERSC/sc18-dl-tutorial#single-node-training-example)
-    * [Multi-node training example](https://github.com/NERSC/sc18-dl-tutorial#multi-node-training-example)
-    * [Advanced example: multi-node ResNet50 on ImageNet-100](https://github.com/NERSC/sc18-dl-tutorial#advanced-example-multi-node-resnet50-on-imagenet-100)
-* [Code references](https://github.com/NERSC/sc18-dl-tutorial#code-references)
+### `root/`
 
-## Links
+`combine_data.py`: merge multiple smaller datasets into one larger one. Mostly used by Joe.
 
-Presentation slides: https://drive.google.com/drive/folders/1m_BEBlkbgBHiNg1bzzo74uRh6lJFBjLL?usp=sharing
+`ensemble_evaluate.py`: Load a bunch of models and evaluate them as an ensemble model
 
-Join the Slack workspace: https://join.slack.com/t/sc18-tut177/shared_invite/enQtNDY3OTUyNzcwNjI4LWYyNTlkMTI0ZGM5YzI4MDFkNWJiZjBlMjAxMzdiMzI1NTZhYmE5NmNhMzcyYzFhYzQ0ZjczNmJkMzRkZWIyNGY
+`evaluate.py`: Run after training to compute a bunch of metrics that can't be computed during training. Uses the same metrics/data for each model so an apples to apples comparison can be made.
 
-NERSC JupyterHub: https://jupyter-dev.nersc.gov
+`train_traverse.py`: Main training script. 
 
-## Installation
+* Run without arguments, (`python train_traverse.py`) it runs the default "scenario" laid out at the beginning of the script. 
 
-1. Start a terminal on Cori, either via ssh or from the Jupyter interface.
-2. Clone the repository using git:\
-   `git clone https://github.com/NERSC/sc18-dl-tutorial.git`
+* Running with an argument of `-1` (`python train_traverse.py -1`) submits batch jobs to run a hyperparameter scan.
 
-That's it! The rest of the software (Keras, TensorFlow) is pre-installed on Cori
-and loaded via the scripts used below.
+* After training, outputs a model file (`.h5`) and parameter dictionary (`.pkl`) for each run. The parameter dictionary contains all the settings and training results from the run for analysis later.
 
-## Navigating the repository
+### `helpers/`
 
-**`train.py`** - the main training script which can be steered with YAML
-configuration files.
+`callbacks.py`: Some custom callbacks used during training.
 
-**`data/`** - folder containing the specifications of the datasets. Each dataset
-has a corresponding name which is mapped to the specification in `data/__init__.py`
+`custom_losses.py`: custom loss functions, though we've tended to stick with MSE or MAE lately.
 
-**`models/`** - folder containing the Keras model definitions. Again, each model
-has a name which is interpreted in `models/__init__.py`.
+`data_generator.py`: function for processing data to get ready for training, and class for a data generator to provide data during training.
 
-**`configs/`** - folder containing the configuration files. Each
-configuration specifies a dataset, a model, and all relevant configuration
-options (with some exceptions like the number of nodes, which is specified
-instead to SLURM via the command line).
+`exclude_shots.py`: list of shot numbers broken up by shot topology, in general we exclude shots if they have a "non standard" topology (ie, not enough training samples).
 
-**`scripts/`** - contains an environment setup script and some SLURM scripts
-for easily submitting the example jobs to the Cori batch system.
+`hyperparam_helpers.py`: functions to generate and submit slurm scripts for doing hyperparameter scans.
 
-**`utils/`** - contains additional useful code for the training script, e.g.
-custom callbacks, device configuration, and optimizers logic.
+`normalization.py`: functions for normalizing, denormalizing, and renormalizing data. Methods:
+*	`StandardScaler`: scales to mean 0, std 1 by subtracting mean and dividing by standard deviation
+*	`MinMax`: scale to between 0 and 1 by subtracting min and dividing by (max-min)
+*	`MaxAbs`: scales to between -1 and 1 by dividing by max absolute value
+*	`RobustScaler`: scales to approximately mean 0 std 1, by subtracting median and dividing by inter-quartile range
+*	`PowerTransform`: nonlinear scaling via Yeo-Johnson transform
 
-## Hands-on walk-through
+`profile_fitting.py`: some old stuff for fitting profiles from raw data for real time use.
 
-Go through the following steps as directed by the tutorial presenters.
-Discuss the questions with your neighbors.
+`pruning_functions.py`: functions to remove samples from training set based on various criteria, eg:
+*	`remove_dudtrip`: remove any samples during or after a disruption or PCS crash etc.
+*	`remove_non_gas_feedback`: remove samples where gas feedback was not used to control density
+*	`remove_non_beta_feedback`: remove samples where beta feedback was not used to control beams
+*	`remove_I_coil`: remove samples during and after non-standard 3d coil operation (ie, field perturbations etc)
+*	`remove_gas`: remove samples where gas other than H/D/T were used.
+*	`remove_ECH`: remove samples where ECH was used
+*	`remove_nan`: remove samples where any value is nan. (otherwise nan values will get replaced with a mean value during normalization)
 
-### Single node training example
+`results_processing.py`: some functions to automatically analyze models and generate some plots, though we mostly use notebooks for this now
 
-We will start with single node training of a simple CNN to classify images
-from the CIFAR10 dataset.
+### `models/`
 
-1. Take a look at the simple CNN model defined here: [models/cnn.py](models/cnn.py).
-   Consider the following things:
-    * Note how the model is constructed as a sequence of layers
-    * Note the structure of alternating convolutions, pooling, and dropout
-    * Identify the _classifier head_ of the model; the part which computes the
-      class probabilities.
-    * *Can you figure out what the `Flatten()` layer does here,
-      and why it is needed?*
+Basically a bunch of functions for creating trainable models. The main ones we use are in `LSTMConv1D.py` and `LSTMConv2D.py`
 
-2. Now take a look at the dataset code for CIFAR10: [data/cifar10.py](data/cifar10.py)
-    * Keras has a convenient API for CIFAR10 which will automatically download
-      the dataset for you.
-    * Ask yourself: *why do we scale the dataset by 1/255?*
-    * Note where we convert the labels (integers) to categorical class vectors.
-      Ask yourself: *why do we have to do this?*
-    * *What kinds of data augmentation are we applying?*
+The basic API is that each function should take the following arguments:
+*	`input_profile_names`: list of names of the profiles used as inputs (eg `temp`, `dens`, `press_EFIT01`)
+*	`target_profile_names`: list of names of profiles the model should predict  (eg `temp`, `dens`, `press_EFIT01`)
+*	`scalar_input_names`: list of names of scalar signals (eg `kappa_EFIT01`, `triangularity_top_EFITRT1`)
+*	`actuator_names`: list of names of actuators used by the model (eg `pinj`, `curr_target`)
+*	`lookbacks`: dictionary of lookback values. Keys should be the names of each signal, values should be integers of how many steps to use for lookback.
+*	`lookahead`: how many steps in the future to predict.
+*	`profile_length`: integer, size of the spatial grid the profiles are discretized on (ie, size of the input arrays).
+*	`std_activation`: name of the default activation function to use in the model (eg, `relu`, `elu`, `tanh`)
+*	`**kwargs`: keyword arugments passed to the model constructor. Common ones include:
+	*	`max_channels`: number of channels to use at the widest point in the model.
+	*	`l2`: coefficient for L2 regularization on model weights.
+	*	`kernel_init`: name of initializer to use for kernel weights.
+	*	`bias_init`: name of initializer to use for bias weights.
 
-3. Next, take a look at the training script: [train.py](train.py).
-    * Identify the part where we retrieve the dataset.
-    * Identify the section where we retrieve the CNN model, the optimizer, and
-      compile the model.
-    * Now identify the part where we do the actual training.
+Each constructor function should return a keras model. To work with the rest of the pipeline, the model should obey the following rules:
+*	Each input signal has its own input layer, and the layer should be named `input_<signal name>`. 
+*	Each output should have its own layer, named `target_<signal name>`
+*	If the model is intended to be used on the real time control system, try to stick to layer types / options supported by keras2c: https://github.com/f0uriest/keras2c
+	
+### `notebooks/`
+A bunch of jupyter notebooks used for plotting, analyzing results, examining data, prototyping new functions etc. Too many to list in detail, a lot haven't been used in a while, just look at the timestamps to see whats been used recently and use that as a template.
 
-4. Finally, look at the configuration file: [configs/cifar10_cnn.yaml](configs/cifar10_cnn.yaml).
-    * YAML allows to express configurations in rich, human-readable, hierarchical structure.
-    * Identify where you would edit to modify the optimizer, learning-rate, batch-size, etc.
+## General Linux helpers:
 
-5. Now we are ready to submit our training job to the Cori batch system.
-   We have provided SLURM scripts to make this as simple as possible.
-   To run the simple CNN training on CIFAR10 on a single KNL node, simply do:\
-   `sbatch scripts/cifar_cnn.sh`
-    * **Important:** the first time you run a CIFAR10 example, it will
-    autmoatically download the dataset. If you have more than one job attempting
-    this download simultaneously it will likely fail.
+* `cd path/to/file` change directory
+* `mkdir newfolder`: create a new folder/directory
+* `ls`: print a list of files in the current directory
+* `ll`: print list of files with details
+* `du -d 1`: show size of files/folders
+* `mv path/from path/to`: move or rename files
+* `cp path/from path/to`: copy files
+* `scp path/from path/to`: secure copy over SSH for moving stuff to and from traverse
+* `ssh-copy-id netID@traverse.princeton.edu`: copy ssh key so you dont have to type your password any time you connect
+* `slurmtop`: show currently running jobs and node usage. Use with the `-u netID` flag to only see your jobs.
 
-6. Check on the status of your job by running `sqs`.
-   Once the job starts running, you should see the output start to appear in the
-   slurm log file `logs/cifar-cnn-*.out`.
 
-7. When the job is finished, check the log to identify how well your model learned
-   to solve the CIFAR10 classification task. For every epoch you should see the
-   loss and accuracy reported for both the training set and the validation set.
-   Take note of the best validation accuracy achieved.
+Linux command line intro:
+http://linuxcommand.org/lc3_learning_the_shell.php
 
-### Multi-node training example
+Git intro (first 3 chapters):
+https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control
 
-To demonstrate scaling to multiple nodes, we will switch to a larger, more complex
-ResNet model. This model can achieve higher accuracy than our simple CNN, but
-it is quite a bit slower to train. By parallelizing the training across nodes
-we should be able to achieve a better result than our simple CNN in a practical
-amount of time.
 
-1. Check out the ResNet model code in [models/resnet.py](models/resnet.py).
-   Note this is quite a bit more complex than the simple CNN! In fact the model
-   code is broken into multiple functions for easy reuse. We provide here two
-   versions of ResNet models: a standard ResNet50 (with 50 layers) and a smaller
-   ResNet consisting of 26 layers.
-    * Identify the identy block and conv block functions. *How many convolutional
-      layers do each of these have*?
-    * Identify the functions that build the ResNet50 and the ResNetSmall. Given how
-      many layers are in each block, *see if you can confirm how many layers (conv
-      and dense) are in the models*. **Hint:** we don't normally count the
-      convolution applied to the shortcuts.
 
-2. Inspect the optimizer setup in [utils/optimizers.py](utils/optimizers.py).
-    * Note how we scale the learning rate (`lr`) according to the number of
-      processes (ranks).
-    * Note how we construct our optimizer and then wrap it in the Horovod
-      DistributedOptimizer.
+## Getting started on Traverse:
 
-3. Inspect [train.py](train.py) once again.
-    * Identify the `init_workers` function where we initialize Horovod.
-      Note where this is invoked in the main() function (right away).
-    * Identify where we setup our training callbacks.
-    * *Which callback ensures we have consistent model weights at the start of training?*
-    * Identify the callbacks responsible for the learning rate schedule (warmup and decay).
+Connect to the princeton VPN:
 
-That's mostly it for the code. Note that in general when training distributed
-you might want to use more complicated data handling, e.g. to ensure different
-workers are always processing different samples of your data within a training
-epoch. In this case we aren't worrying about that and are, for simplicity,
-relying on the independent random shuffling of the data by each worker as well
-as the random data augmentation.
+https://princeton.service-now.com/snap?sys_id=6023&id=kb_article
 
-4. (**optional**) To gain an appreciation for the speedup of training on
-   multiple nodes, you can first try to train the ResNet model on a single node.
-   Adjust the configuration in [configs/cifar10_resnet.yaml](configs/cifar10_resnet.yaml)
-   to train for just 1 epoch and then submit the job with\
-   `sbatch -N 1 scripts/cifar_resnet.sh`
+copy conda setup file to traverse:
 
-5. Now we are ready to train our ResNet model on multiple nodes using Horovod
-   and MPI! If you changed the config to 1 epoch above, be sure to change it back
-   to 32 epochs for this step. To launch the ResNet training on 8 nodes, do:\
-   `sbatch -N 8 scripts/cifar_resnet.sh`
+`scp conda-pkg-list.txt netID@traverse.princeton.edu:`
 
-6. As before, watch the log file (`logs/cifar-resnet-*.out`) when the job starts.
-   You'll see some printouts from every worker. Others are only printed from rank 0.
+connect:
 
-7. When the job is finished, look at the log and compare to the simple CNN case
-   above. If you ran step 4, compare the time to train one epoch between single-node
-   and multi-node. *Did your model manage to converge to a better validation accuracy
-   than the simple CNN?*
+`ssh netID@traverse.princeton.edu`
 
-Now that you've finished the main tutorial material, try to play with the code
-and/or configuration to see the effect on the training results. You can try changing
-things like
-* Change the optimizer (search for Keras optimizers on google).
-* Change the nominal learning rate, number of warmup epochs, decay schedule
-* Change the learning rate scaling (e.g. try "sqrt" scaling instead of linear)
+load anaconda:
 
-Most of these things can be changed entirely within the configuration.
-See [configs/imagenet_resnet.yaml](configs/imagenet_resnet.yaml) for examples.
+`module load anaconda`
 
-### Advanced example: multi-node ResNet50 on ImageNet-100
+create new environment using config file:
 
-We may not have the time and compute resources to do this (certainly not for
-all attendees), but this repository also includes a more advanced ResNet50 
-example and a 100-class subset of the ImageNet dataset. ResNet and ImageNet
-are a fairly standard benchmark for scalable deep learning methods.
-The configuration is available in
-[configs/imagenet_resnet.yaml](configs/imagenet_resnet.yaml)
+`conda create --name tfgpu --file conda-pkg-list.txt`
 
-Please check with the presenters before submitting large scale training jobs
-with this example, as we have a limited reservation of nodes on Cori and we
-want to make sure all tutorial attendees are able to complete the core content
-and have a chance to play with settings in the ResNet-CIFAR example.
 
-## Code references
 
-Keras ResNet50 official model:
-https://github.com/keras-team/keras-applications/blob/master/keras_applications/resnet50.py
+### Connecting to Traverse and using Jupyter lab:
 
-Horovod ResNet + ImageNet example:
-https://github.com/uber/horovod/blob/master/examples/keras_imagenet_resnet50.py
+From your local machine:
 
-CIFAR10 CNN and ResNet examples:
-https://github.com/keras-team/keras/blob/master/examples/cifar10_cnn.py
-https://github.com/keras-team/keras/blob/master/examples/cifar10_resnet.py
+`ssh -N -f -L localhost:8893:localhost:8893 netID@traverse.princeton.edu`
+
+this will open a connection to port 8893 on traverse. You sometimes might get an error saying that port is in use, in which case just change 8893 to another on, usually 8892, 8893, 8894, 8895 etc
+
+Then connect to traverse:
+
+`ssh netID@traverse.princeton.edu`
+
+Load anaconda and activate the environment:
+
+`module load anaconda`
+
+`conda activate tfgpu`
+
+Start jupyter:
+
+`jupyter lab --no-browser --port=8893 --ip=127.0.0.1`
+
+this will start a jupyter server using port 8893 (if you used a different port above change it here too)
+You should then see something like:
+```
+To access the notebook, open this file in a browser:
+        file:///home/wconlin/.local/share/jupyter/runtime/nbserver-83045-open.html
+    Or copy and paste one of these URLs:
+        http://127.0.0.1:8894/?token=6af4e8b5530a3d0b28d3d1c1038b306486840accd5b7802f
+     or http://127.0.0.1:8894/?token=6af4e8b5530a3d0b28d3d1c1038b306486840accd5b7802f
+```
+
+copy one of the last 2 links (starts with http://127....) and paste it in your local browser, and that should connect to jupyter lab.
+
+Further jupyter lab info:
+
+https://jupyterlab.readthedocs.io/en/stable/
+
+Project directory on traverse, where we store raw data and results of training:
+
+`/projects/EKOLEMEN/profile_predictor`
