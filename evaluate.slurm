@@ -4,7 +4,7 @@
 #SBATCH --mem 48G
 #SBATCH -G 1
 #SBATCH -o /home/wconlin/plasma-profile-predictor/evaluate_log.out 
-#SBATCH -t 48:00:00
+#SBATCH -t 96:00:00
 root_dir=$HOME/plasma-profile-predictor 
 module load anaconda 
 conda activate tfgpu 
