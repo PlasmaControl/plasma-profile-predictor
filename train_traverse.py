@@ -31,11 +31,11 @@ def main(scenario_index=-2):
     ngpu = 1
     
     
-#     seed_value= 0
-#     os.environ['PYTHONHASHSEED']=str(seed_value)
-#     random.seed(seed_value)
-#     np.random.seed(seed_value)
-#     tf.set_random_seed(seed_value)
+    seed_value= 0
+    os.environ['PYTHONHASHSEED']=str(seed_value)
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    tf.set_random_seed(seed_value)
     
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
@@ -49,7 +49,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_03_10/")
+    checkpt_dir = os.path.expanduser("~/run_results_04_09/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -57,15 +57,13 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type='EFIT02'
-
     default_scenario = {'actuator_names': ['target_density','pinj','tinj','curr_target'],
                         'input_profile_names': ['dens','temp','itemp','q','rotation'],
                         'target_profile_names': ['dens','temp','itemp','q','rotation'],
                         'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','triangularity_top_EFIT01','triangularity_bot_EFIT01'],
                         'profile_downsample' : 2,
                         'model_type' : 'conv2d',
-                        'model_kwargs': {'max_channels': 32,'kernel_initializer':'lecun_normal','l2':1e-3},
+                        'model_kwargs': {'max_channels': 32,'kernel_initializer':'lecun_normal','l2':1e-4},
                         'std_activation' : 'relu',
                         'sample_weighting':'std',
                         'loss_function': 'mse',
@@ -112,12 +110,8 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':16,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':32,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-4,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':192, 'l2':1e-3,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':192, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
 #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
 #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
 #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
@@ -140,18 +134,18 @@ def main(scenario_index=-2):
 #                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
 #                                   'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
                                   
-    scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weightin':None}]
+    scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weighting':None}]
 #     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
 #                                                           'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
 #                                  {'scalar_input_names':[]}]
     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','kappa_EFIT01',
                                                           'triangularity_top_EFIT01','triangularity_bot_EFIT01']},
                                  {'scalar_input_names':[]}]
-    scenarios_dict['activation'] = [{'std_activation' : 'relu'},{'std_activation' : 'elu'},{'std_activation' : 'selu'}]
+    scenarios_dict['activation'] = [{'std_activation' : 'elu'},{'std_activation' : 'selu'},{'std_activation' : 'relu'}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['predict_deltas'] = [{'predict_deltas': True},{'predict_deltas': False}]
-    scenarios_dict['epochs'] = [{'epochs': 100} for i in range(1)]
+    scenarios_dict['epochs'] = [{'epochs': 200}]
     scenarios_dict['loss'] = [{'loss_function': 'mse'},
                               {'loss_function':'mae'}]
 #                               {'loss_function':'normed_mse'},
