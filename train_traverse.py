@@ -49,7 +49,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("~/run_results_04_09/")
+    checkpt_dir = os.path.expanduser("/projects/EKOLEMEN/profile_predictor/run_results_06_24")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -110,68 +110,84 @@ def main(scenario_index=-2):
 
     
     scenarios_dict = OrderedDict()
-    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':192, 'l2':1e-3,'kernel_initializer':'lecun_normal'}},
-                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':192, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
-#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
-#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
-#                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
-#     scenarios_dict['profiles'] = [{'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1'], 
-#                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1']},
-# #                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-# #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1'], 
-# #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-# #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1']},
-#                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1'], 
-#                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
-#                                                          'q_EFITRT1','cerquick_rotation_EFITRT1']}]
+
+    scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':32,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-4,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-2,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-2,'kernel_initializer':'lecun_normal'}},
+                                {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
+    #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
+    #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
+    #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
+    #     scenarios_dict['profiles'] = [{'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1'], 
+    #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','press_EFITRT1']},
+    # #                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    # #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1'], 
+    # #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    # #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1','ffprime_EFITRT1','press_EFITRT1']},
+    #                                 {'input_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1'], 
+    #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
+    #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1']}]
     scenarios_dict['profiles'] = [{'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
-                                   'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']}]
-#                                 {'input_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
-#                                    'target_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
-#                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
-#                                   'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
-                                  
+                                   'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']},
+                                  {'input_profile_names': ['dens','temp','rotation'],
+                                   'target_profile_names': ['dens','temp', 'rotation']},
+                                  {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
+                                   'target_profile_names': ['dens','temp', 'rotation']},
+                                  {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
+                                   'target_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02']},
+                                  {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
+                                   'target_profile_names': ['dens','temp', 'rotation']}]
+    #                                 {'input_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
+    #                                    'target_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
+    #                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
+    #                                   'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
+    
     scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weighting':None}]
-#     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
-#                                                           'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
-#                                  {'scalar_input_names':[]}]
-    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','kappa_EFIT01',
-                                                          'triangularity_top_EFIT01','triangularity_bot_EFIT01']},
+    #     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
+    #                                                           'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
+    #                                  {'scalar_input_names':[]}]
+    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT02','volume_EFIT02','kappa_EFIT02',
+                                                          'triangularity_top_EFIT02','triangularity_bot_EFIT02',
+                                                          'a_EFIT02', 'zmagX_EFIT02', 'rmagx_EFIT02',
+                                                          'drsep_EFIT02']},
                                  {'scalar_input_names':[]}]
-    scenarios_dict['activation'] = [{'std_activation' : 'elu'},{'std_activation' : 'selu'},{'std_activation' : 'relu'}]
+    scenarios_dict['activation'] = [{'std_activation' : 'relu'},{'std_activation' : 'elu'},{'std_activation' : 'selu'}]
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
-    scenarios_dict['predict_deltas'] = [{'predict_deltas': True},{'predict_deltas': False}]
-    scenarios_dict['epochs'] = [{'epochs': 200}]
+    scenarios_dict['epochs'] = [{'epochs': 100} for i in range(1)]
     scenarios_dict['loss'] = [{'loss_function': 'mse'},
                               {'loss_function':'mae'}]
-#                               {'loss_function':'normed_mse'},
-#                               {'loss_function':'mean_diff_sum_2'},
-#                               {'loss_function':'max_diff_sum_2'},
-#                               {'loss_function':'mean_diff2_sum2'},
-#                               {'loss_function':'max_diff2_sum2'}]
-    
+    #                               {'loss_function':'normed_mse'},
+    #                               {'loss_function':'mean_diff_sum_2'},
+    #                               {'loss_function':'max_diff_sum_2'},
+    #                               {'loss_function':'mean_diff2_sum2'},
+    #                               {'loss_function':'max_diff2_sum2'}]
+
 
     scenarios = []
     runtimes = []
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        if foo['model_type'] == 'conv2d':
-            runtimes.append(2.5*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'simple_dense':
-            runtimes.append(1*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'conv1d':
-            runtimes.append(2*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'simple_lstm':
-            runtimes.append(1*128/foo['batch_size']*foo['epochs']+30)
-        elif foo['model_type'] == 'linear_systems':
-            runtimes.append(1.5*128/foo['batch_size']*foo['epochs']+30)
-        else:
-            runtimes.append(4*60)
+        # if foo['model_type'] == 'conv2d':
+        #     runtimes.append(2.5*128/foo['batch_size']*foo['epochs']+30)
+        # elif foo['model_type'] == 'simple_dense':
+        #     runtimes.append(1*128/foo['batch_size']*foo['epochs']+30)
+        # elif foo['model_type'] == 'conv1d':
+        #     runtimes.append(2*128/foo['batch_size']*foo['epochs']+30)
+        # elif foo['model_type'] == 'simple_lstm':
+        #     runtimes.append(1*128/foo['batch_size']*foo['epochs']+30)
+        # elif foo['model_type'] == 'linear_systems':
+        #     runtimes.append(1.5*128/foo['batch_size']*foo['epochs']+30)
+        # else:
+        #     runtimes.append(4*60)
+        runtimes.append(10*60)
     num_scenarios = len(scenarios)
 
 
