@@ -201,7 +201,7 @@ def get_state_encoder_dense(profile_names, scalar_names, profile_length,
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
     state_dim = num_profiles*profile_length + num_scalars
-
+    #initializer = keras.initializers.Identity()
     joiner = get_state_joiner(
         profile_names, scalar_names, 1, profile_length, batch_size)
     x = joiner(joiner.inputs)
@@ -238,15 +238,15 @@ def get_state_decoder_dense(profile_names, scalar_names, profile_length,
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
     state_dim = num_profiles*profile_length + num_scalars
-
+    initializer = keras.initializers.Identity()
     xi = Input(batch_shape=(batch_size,state_latent_dim))
     x = xi
-    for i in range(num_layers-1, 0, -1):
+    for i in range(num_layers):
         units = int(state_latent_dim + (state_dim-state_latent_dim)
-                    * ((num_layers-i-1)/(num_layers-1))**layer_scale)
+                    * (i/(num_layers-1))**layer_scale)
         x = Dense(units=units, activation=std_activation, use_bias=True)(x)
-    y = Dense(units=state_dim, activation='linear')(x)
-    y = Reshape((state_dim,))(y)
+    #y = Dense(units=state_dim, activation='linear')(x)
+    y = Reshape((state_dim,))(x)
     splitter = get_state_splitter(
         profile_names, scalar_names, 1, profile_length, batch_size)
     outputs = splitter(y)
@@ -395,7 +395,7 @@ def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_typ
     xi = state_input_model.outputs[0]
     x = TimeDistributed(state_encoder,batch_input_shape=(batch_size,lookahead+1,state_dim),name='state_encoder_time_dist')(xi)
     xo = TimeDistributed(state_decoder,batch_input_shape=(batch_size,lookahead+1,state_dim),name='state_decoder_time_dist')(x)
-    
+    '''
     ui = control_input_model.outputs[0]
     u = TimeDistributed(control_encoder,batch_input_shape=(batch_size,lookback+lookahead,num_actuators),name='ctrl_encoder_time_dist')(ui)
     uo = TimeDistributed(control_decoder,batch_input_shape=(batch_size,lookback+lookahead,num_actuators),name='ctrl_decoder_time_dist')(u)
@@ -405,7 +405,7 @@ def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_typ
         Cropping1D((0, lookahead))(x))
     x1 = Cropping1D((1, 0), name='x1')(x)
     u = Cropping1D((lookback, 0), name='u')(u)
-
+    
     AB = SimpleRNN(units=state_latent_dim,
                    activation='linear',
                    use_bias=False,
@@ -415,12 +415,13 @@ def make_autoencoder(state_encoder_type, state_decoder_type, control_encoder_typ
                    recurrent_regularizer=keras.regularizers.l1_l2(
                        l1=regularization['l1A'], l2=regularization['l2A']),
                    return_sequences=True)
-
+    
     x1est = Reshape((lookahead, state_latent_dim),
                     name='x1est')(AB(u, initial_state=x0))
     x1_residual = subtract([x1, x1est], name='linear_system_residual')
+    
     u_res = subtract([ui, uo], name='u_residual')
+    '''
     x_res = subtract([xi, xo], name='x_residual')
-    model = Model(inputs=state_input_model.inputs +
-                  control_input_model.inputs, outputs=[u_res, x_res, x1_residual])
+    model = Model(inputs=state_input_model.inputs, outputs= x_res)
     return model
