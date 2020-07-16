@@ -10,7 +10,7 @@ import numpy as np
 from keras.utils import Sequence
 from keras.callbacks import TensorBoard
 from helpers.normalization import normalize
-from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback, remove_non_beta_feedback
+from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback, remove_non_beta_feedback, remove_outliers
 from helpers import exclude_shots
 
 
@@ -452,7 +452,8 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                  'remove_gas': remove_gas,
                  'remove_dudtrip': remove_dudtrip,
                  'remove_non_gas_feedback': remove_non_gas_feedback,
-                 'remove_non_beta_feedback': remove_non_beta_feedback}
+                 'remove_non_beta_feedback': remove_non_beta_feedback,
+                 'remove_outliers': remove_outliers}
     for i, elem in enumerate(pruning_functions):
         if isinstance(elem, str):
             pruning_functions[i] = prun_dict[elem]
@@ -691,15 +692,7 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     if verbose:
         print("{} samples total".format(len(alldata['time'])))
     sys.stdout.flush()
-    gc.collect()
-
-    if kwargs.get('invert_q'):
-        qs = ['q','q_EFIT01','q_EFIT02','q_EFITRT1','q_EFITRT2']
-        for sig in alldata.keys():
-            if sig in qs:
-                alldata[sig] = 1/alldata[sig]
-                alldata[sig][:,:,-1] = 0                
-    
+    gc.collect()           
     
     
     ##############################
@@ -720,12 +713,21 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
         alldata = remove_nan(alldata,verbose)
     if remove_dudtrip in pruning_functions:
         alldata = remove_dudtrip(alldata,verbose)
-    
+    if remove_outliers in pruning_functions:
+        alldata = remove_outliers(alldata,verbose)
+        
     if verbose:
         print("{} samples remaining after pruning".format(len(alldata['time'])))
     sys.stdout.flush()
     gc.collect()
 
+    if kwargs.get('invert_q'):
+        qs = ['q','q_EFIT01','q_EFIT02','q_EFITRT1','q_EFITRT2']
+        for sig in alldata.keys():
+            if sig in qs:
+                alldata[sig] = 1/alldata[sig]
+                alldata[sig][:,:,-1] = 0   
+    
     ##############################
     # normalize data
     ##############################    

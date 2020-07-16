@@ -266,8 +266,8 @@ def remove_nan(data, verbose):
 def remove_outliers(data, verbose):
     """Remove all samples that contain outliers
 
-    Not currently implemented
-
+    Gets rid of jagged or all zero q profiles, negative values of pressure, etc
+    
     Args:
         data (dict): Dictionary of training samples.
         verbose (int or bool): Whether to print info to the screen
@@ -275,4 +275,73 @@ def remove_outliers(data, verbose):
     Returns:
         data (dict): Dictionary of training samples with values removed.
     """
+    if 'q_EFIT02' in data:
+        # get rid of jagged profiles
+        if verbose:
+            print('Removing jagged q profiles')
+        remove_inds = np.where(np.std(data['q_EFIT02'][:,:,:50],axis=-1)>5)[0]
+        remove_inds = np.unique(remove_inds)
+        if verbose:
+            print("Removed {} samples".format(len(remove_inds)))
+        keep_inds = set(range(len(data['time']))).difference(remove_inds)
+        if verbose:
+            print("{} samples remaining".format(len(keep_inds)))
+        for sig in data.keys():
+            data[sig] = data[sig][list(keep_inds)]
+        # get rid of all zero profiles
+        if verbose:
+            print('Removing zero q profiles')
+        remove_inds = np.where(np.sum(np.abs(data['q_EFIT02']),axis=-1)<0.1)[0]
+        remove_inds = np.unique(remove_inds)
+        if verbose:
+            print("Removed {} samples".format(len(remove_inds)))
+        keep_inds = set(range(len(data['time']))).difference(remove_inds)
+        if verbose:
+            print("{} samples remaining".format(len(keep_inds)))
+        for sig in data.keys():
+            data[sig] = data[sig][list(keep_inds)]
+        
+    if 'press_EFIT02' in data:
+        # get rid of extreme outliers
+        if verbose:
+            print('Removing outlier pressure profiles')
+        remove_inds = np.where( np.mean(np.abs(data['press_EFIT02']),axis=-1)>1e5)[0]
+        remove_inds = np.unique(remove_inds)
+        if verbose:
+            print("Removed {} samples".format(len(remove_inds)))
+        keep_inds = set(range(len(data['time']))).difference(remove_inds)
+        if verbose:
+            print("{} samples remaining".format(len(keep_inds)))
+        for sig in data.keys():
+            data[sig] = data[sig][list(keep_inds)]
+        # remove negative pressure profiles
+        if verbose:
+            print('Removing negative pressure profiles')
+        remove_inds = np.where(data['press_EFIT02']<0)[0]
+        remove_inds = np.unique(remove_inds)
+        if verbose:
+            print("Removed {} samples".format(len(remove_inds)))
+        keep_inds = set(range(len(data['time']))).difference(remove_inds)
+        if verbose:
+            print("{} samples remaining".format(len(keep_inds)))
+        for sig in data.keys():
+            data[sig] = data[sig][list(keep_inds)]
+
+    if 'press_EFIT01' in data:
+        # remove negative pressure profiles
+        if verbose:
+            print('Removing negative pressure profiles')
+        remove_inds = np.where(data['press_EFIT01']<0)[0]
+        remove_inds = np.unique(remove_inds)
+        if verbose:
+            print("Removed {} samples".format(len(remove_inds)))
+        keep_inds = set(range(len(data['time']))).difference(remove_inds)
+        if verbose:
+            print("{} samples remaining".format(len(keep_inds)))
+        for sig in data.keys():
+            data[sig] = data[sig][list(keep_inds)]
+        
+        
+        
+        
     return data

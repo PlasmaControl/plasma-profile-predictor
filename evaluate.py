@@ -71,7 +71,7 @@ metrics = {'mean_squared_error':mean_squared_error,
 # load model and scenario
 ##########
 base_path = '/projects/EKOLEMEN/profile_predictor/'
-folders = ['run_results_04_09/']
+folders = ['run_results_06_29/']
            
 for folder in folders:
     files =  [foo for foo in os.listdir(base_path+folder) if foo.endswith('.pkl')]
@@ -81,8 +81,8 @@ for folder in folders:
             with open(file_path, 'rb') as f:
                 scenario = pickle.load(f, encoding='latin1')
 
-    #         if 'evaluation_metrics' in scenario:
-    #             continue
+            if 'evaluation_metrics' in scenario:
+                continue
 
             model_path = file_path[:-11] + '.h5'
             if os.path.exists(model_path):
