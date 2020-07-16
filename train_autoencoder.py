@@ -8,15 +8,21 @@ import itertools
 import copy
 from collections import OrderedDict
 from time import strftime, localtime
-
+from helpers import schedulers
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from helpers.results_processing import write_autoencoder_results
 import models.autoencoder
+import models.id_autoencoder
+import models.LRAN_conv_id
+import models.LRAN_control
+import models.LRAN_control_conv
+import models.LRAN_control2
+import models.LRAN_control3
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
 from keras import backend as K
 
@@ -27,16 +33,16 @@ def main(scenario_index=-2):
     ###################
     # set session
     ###################
-    num_cores = 8
+    num_cores = 16
     req_mem = 48 # gb
     ngpu = 1
-    
+    '''
     seed_value= 0
     os.environ['PYTHONHASHSEED']=str(seed_value)
     random.seed(seed_value)
     np.random.seed(seed_value)
     tf.set_random_seed(seed_value)
-    
+    '''
     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
                             inter_op_parallelism_threads=4*num_cores,
                             allow_soft_placement=True,
@@ -49,7 +55,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = os.path.expanduser("~/run_results_12_01/")
+    checkpt_dir = '/scratch/gpfs/aaronwu/run_results_07_15_rot/'
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -58,11 +64,11 @@ def main(scenario_index=-2):
     ###############
 
     efit_type = 'EFIT02'
-
+   # 'ffprime_{}'.format(efit_type),
     default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA'],
                         'profile_names': ['temp',
                                           'dens',
-                                          'ffprime_{}'.format(efit_type),
+                                          'rotation',
                                           'press_{}'.format(efit_type),
                                           'q_{}'.format(efit_type)],
                         'scalar_names': [],
@@ -71,32 +77,36 @@ def main(scenario_index=-2):
                         'state_decoder_type': 'dense',
                         'control_encoder_type': 'dense',
                         'control_decoder_type': 'dense',
-                        'state_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'relu'},
-                        'state_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'relu'},
+                        'state_encoder_kwargs': {'num_layers': 20,
+                                                 'max_channels':20,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
+                        'state_decoder_kwargs': {'num_layers': 20,
+                                                 'max_channels':20,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
                         'control_encoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2,
-                                                   'std_activation':'relu'},
+                                                   'layer_scale': 1,
+                                                   'std_activation':'elu'},
                         'control_decoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2,
-                                                   'std_activation':'relu'},
-                        'state_latent_dim':50,
-                        'control_latent_dim':5,
+                                                   'layer_scale': 1,
+                                                   'std_activation':'elu'},
+                        'state_latent_dim': 50,
+                        'control_latent_dim':15,
                         'x_weight':1,
                         'u_weight':1,
-                        'discount_factor':1,
+                        'decode_weight':1,
+                        'discount_factor':0.8,
                         'batch_size': 128,
-                        'epochs': 3,
+                        'epochs': 200,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/full_data_with_error/train_data.pkl',
                         'process_data': True,
-                        'optimizer': 'adagrad',
-                        'optimizer_kwargs': {},
+                        'invert_q' : False,
+                        'optimizer': 'adam',
+                        'optimizer_kwargs': {'lr':0.0001},
                         'shuffle_generators': True,
-                        'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil'],
+                        'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil','remove_outliers'],
                         'normalization_method': 'RobustScaler',
                         'window_length': 3,
                         'window_overlap': 0,
@@ -105,35 +115,80 @@ def main(scenario_index=-2):
                         'sample_step': 1,
                         'uniform_normalization': True,
                         'train_frac': 0.8,
+                        'val_idx': 6,
                         'val_frac': 0.2,
                         'nshots': 12000,
                         'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
 
     scenarios_dict = OrderedDict()
-    scenarios_dict['x_weight'] = [{'x_weight':0.1},
-                                  {'x_weight':1}]
-    scenarios_dict['u_weight'] = [{'u_weight':1},
-                                  {'u_weight':10}]
+    '''
+    scenarios_dict['x_weight'] = [{'x_weight':0.5},
+                                  {'x_weight':0.8},
+				  {'x_weight':1.5},
+			          {'x_weight':2},
+			          {'x_weight':5}]
+   
+    scenarios_dict['u_weight'] = [{'u_weight':0.1},
+                                  {'u_weight':0.5},
+				  {'u_weight':0.8}]
+    
+    scenarios_dict['optimizer_kwargs']=[{'optimizer_kwargs': {'lr':0.0005}},
+                                        {'optimizer_kwargs':{'lr':0.0001}},
+                                        {'optimizer_kwargs':{'lr':0.00005}}]
+    
     scenarios_dict['discount_factor'] = [{'discount_factor':1.0},
                                          {'discount_factor':0.8}]
-    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 20},
-                                          {'state_latent_dim': 50},
-                                          {'state_latent_dim': 100}]
+    
+    '''
+    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 35},
+                                          {'state_latent_dim': 40},
+					  {'state_latent_dim': 50},
+                                          {'state_latent_dim': 55},
+                                          {'state_latent_dim': 60},
+                                          {'state_latent_dim': 65}]
+    '''
     scenarios_dict['control_latent_dim'] = [{'control_latent_dim': 5},
                                             {'control_latent_dim': 10},
                                             {'control_latent_dim': 15}]
-    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'},
-                                              'state_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'}},
-                                             {'state_encoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'},
-                                              'state_decoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'}}]
+    
+    scenarios_dict['batch_size'] = [{'batch_size':128},
+                                    {'batch_size':100},
+                                    {'batch_size':80},
+                                    {'batch_size':50}]
+    '''
+    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 15,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'},
+                                               'state_decoder_kwargs': {'num_layers': 15,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'}},
+                                              {'state_encoder_kwargs': {'num_layers': 20,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'},
+                                               'state_decoder_kwargs': {'num_layers': 20,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'}},
+                                              {'state_encoder_kwargs': {'num_layers': 25,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'},
+                                               'state_decoder_kwargs': {'num_layers': 25,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'}},
+                                              {'state_encoder_kwargs': {'num_layers': 30,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'},
+                                               'state_decoder_kwargs': {'num_layers': 30,
+                                                                        'max_channels':20,
+                                                                        'layer_scale': 1,
+                                                                        'std_activation':'elu'}}]
+    '''
     scenarios_dict['control_encoder_kwargs'] = [{'control_encoder_kwargs': {'num_layers': 6,
                                                  'layer_scale': 2,
                                                  'std_activation':'elu'},
@@ -147,15 +202,14 @@ def main(scenario_index=-2):
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'}}]
 
-    
-    
+    '''
     
     scenarios = []
     runtimes = []
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        runtimes.append(6*60)
+        runtimes.append(4*60)
     num_scenarios = len(scenarios)
 
     ###############
@@ -181,7 +235,7 @@ def main(scenario_index=-2):
         scenario.update(
             {k: v for k, v in default_scenario.items() if k not in scenario.keys()})
     else:
-        verbose = 1
+        verbose = 2
         print('Loading Default Scenario:')
         scenario = default_scenario
     for k,v in scenario.items():
@@ -202,11 +256,14 @@ def main(scenario_index=-2):
                                                               scenario['uniform_normalization'],
                                                               scenario['train_frac'],
                                                               scenario['val_frac'],
+                                                              
                                                               scenario['nshots'],
                                                               verbose,
                                                               scenario['flattop_only'],
                                                               pruning_functions=scenario['pruning_functions'],
-                                                              excluded_shots=scenario['excluded_shots'])
+							      invert_q = scenario['invert_q'],
+                                                              val_idx = scenario['val_idx'],
+                                             excluded_shots=scenario['excluded_shots'])
 
         scenario['dt'] = np.mean(np.diff(traindata['time']))/1000 # in seconds
         scenario['normalization_dict'] = normalization_dict
@@ -243,9 +300,11 @@ def main(scenario_index=-2):
                                                scenario['lookahead'],
                                                scenario['profile_downsample'],
                                                scenario['state_latent_dim'],
+                                               scenario['state_encoder_kwargs']['max_channels'],
                                                scenario['discount_factor'],
                                                scenario['x_weight'],
-                                               scenario['u_weight'],                                            
+                                               scenario['u_weight'],
+                                               scenario['decode_weight'],
                                                scenario['shuffle_generators'])
     val_generator = AutoEncoderDataGenerator(valdata,
                                              scenario['batch_size'],
@@ -256,9 +315,11 @@ def main(scenario_index=-2):
                                              scenario['lookahead'],
                                              scenario['profile_downsample'],
                                              scenario['state_latent_dim'],
+                                             scenario['state_encoder_kwargs']['max_channels'],
                                              scenario['discount_factor'],
                                              scenario['x_weight'],
                                              scenario['u_weight'],
+                                             scenario['decode_weight'],
                                              scenario['shuffle_generators'])
 
     print('Made Generators')
@@ -273,8 +334,8 @@ def main(scenario_index=-2):
                   'adam': keras.optimizers.Adam,
                   'adamax': keras.optimizers.Adamax,
                   'nadam': keras.optimizers.Nadam}
-
-    model = models.autoencoder.make_autoencoder(scenario['state_encoder_type'],
+   
+    model = models.LRAN_control_conv.make_LRAN(scenario['state_encoder_type'],
                                                 scenario['state_decoder_type'],
                                                 scenario['control_encoder_type'],
                                                 scenario['control_decoder_type'],
@@ -297,6 +358,7 @@ def main(scenario_index=-2):
     if ngpu > 1:
         parallel_model = keras.utils.multi_gpu_model(model, gpus=ngpu)
 
+    
     optimizer = optimizers[scenario['optimizer']](
         **scenario['optimizer_kwargs'])
 
@@ -307,9 +369,19 @@ def main(scenario_index=-2):
     loss = 'mse'
     metrics = ['mse','mae']
     callbacks = []
+    schedules = {'exp': schedulers.exp,
+                 'poly':schedulers.poly,
+                 'piece':schedulers.piece,
+                 'inverseT':schedulers.decayed_learning_rate}
+    '''
+    if scenario['lr_schedule']:
+        schedule = schedules[scenario['lr_schedule']](**scenario['lr_kwargs'])
+        callbacks.append(LearningRateScheduler(schedule=schedule,
+                                               verbose=1))
+    '''
     callbacks.append(ReduceLROnPlateau(monitor='val_loss', 
                                        factor=0.5, 
-                                       patience=5,
+                                       patience=50,
                                        verbose=1, 
                                        mode='auto', 
                                        min_delta=0.001,
@@ -318,10 +390,10 @@ def main(scenario_index=-2):
     
     callbacks.append(EarlyStopping(monitor='val_loss', 
                                    min_delta=0, 
-                                   patience=10, 
+                                   patience=50, 
                                    verbose=1, 
                                    mode='min'))
-    
+   
     callbacks.append(TimingCallback(time_limit=(runtimes[scenario_index]-30)*60))
     
     if ngpu <= 1:
@@ -372,7 +444,7 @@ def main(scenario_index=-2):
     scenario['history'] = history.history
     scenario['history_params'] = history.params
     
-    write_autoencoder_results(model, scenario)
+   # write_autoencoder_results(model, scenario)
     
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
