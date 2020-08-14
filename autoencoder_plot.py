@@ -118,12 +118,12 @@ def plot_autoencoder_training(model,scenario,filename=None,**kwargs):
     axes[0,1].semilogy(scenario['history']['val_x_residual_mean_squared_error'],label='val')
     axes[0,1].set_title('X residual MSE')
     axes[0,1].legend()
-    '''
+    
     axes[1,0].semilogy(scenario['history']['u_residual_mean_squared_error'],label='train')
     axes[1,0].semilogy(scenario['history']['val_u_residual_mean_squared_error'],label='val')
     axes[1,0].set_title('U residual MSE')
     axes[1,0].legend()
-    '''
+    
     axes[1,1].semilogy(scenario['history']['linear_system_residual_mean_squared_error'],label='train')
     axes[1,1].semilogy(scenario['history']['val_linear_system_residual_mean_squared_error'],label='val')
     axes[1,1].set_title('Linear Model MSE')
@@ -138,7 +138,7 @@ def plot_autoencoder_training(model,scenario,filename=None,**kwargs):
     return f
         
 
-def get_autoencoder_predictions(state_encoder,state_decoder,control_encoder,A,B,scenario,inputs,shot,timestep,**kwargs):
+def get_autoencoder_predictions(state_encoder,state_decoder,control_encoder,A,B,scenario,inputs,**kwargs):
     import numpy as np
     state_inputs = {}
     x0 = {}
@@ -161,12 +161,7 @@ def get_autoencoder_predictions(state_encoder,state_decoder,control_encoder,A,B,
     x0 = np.squeeze(state_encoder.predict(x0))
     x = [x0]
     for i in range(scenario['lookahead']):
-        x.append(A.dot(x[i]+B.dot(u[i])))
-        '''
-        print(x[i])
-        print('Control')
-        print(B.dot(u[i]))
-        '''
+        x.append(A.dot(x[i])+B.dot(u[i]))
     # decode state and organize
     x_decoded = []
     for elem in x:
@@ -192,7 +187,7 @@ def plot_autoencoder_residuals(model,scenario,generator,shots,times, filename = 
     for k, (shot,time) in enumerate(zip(actual['shots'],actual['times'])):
         inp = {sig:arr[np.newaxis,k] for sig, arr in inputs.items()}
         state_inputs, state_predictions, residuals = get_autoencoder_predictions(
-            state_encoder,state_decoder,control_encoder,A,B,scenario,inp,shot,time)
+            state_encoder,state_decoder,control_encoder,A,B,scenario,inp)
         
         outerax = fig.add_subplot(outer_grid[k])
         outerax.set_title(label='Shot ' + str(int(shot)) + '   Time ' + str(int(time)),pad = 30)
@@ -227,7 +222,7 @@ def plot_autoencoder_predictions_timestep(model,scenario,generator,shots,times, 
     for i, (shot,time) in enumerate(zip(actual['shots'],actual['times'])):
         inp = {sig:arr[np.newaxis,i] for sig, arr in inputs.items()}
         state_inputs, state_predictions, residuals = get_autoencoder_predictions(
-            state_encoder,state_decoder,control_encoder,A,B,scenario,inp,shot,time)
+            state_encoder,state_decoder,control_encoder,A,B,scenario,inp)
         baseline = {k:v[0].reshape((scenario['profile_length'],)) for k,v in state_inputs.items() if k in scenario['profile_names']}
         true = {k:v[-1].reshape((scenario['profile_length'],)) for k,v in state_inputs.items() if k in scenario['profile_names']}
         pred = {k:v[-1].reshape((scenario['profile_length'],)) for k,v in state_predictions.items() if k in scenario['profile_names']}
@@ -388,8 +383,8 @@ def scenario_to_html(scenario):
 if __name__=='__main__':
     
     num_cores = int(sys.argv[1])
-    run_path=sys.argv[2]
     compute_node_flag = int(sys.argv[3])
+    run_path=sys.argv[3]
     sheet_idx = int(sys.argv[4])
 
     # Environment and plotting setup. 

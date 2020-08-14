@@ -2,6 +2,7 @@ import keras
 from keras import layers
 from keras.models import Model    
 from keras import regularizers
+from helpers.custom_init import downsample
 
 def get_state_joiner(profile_names, scalar_names, timesteps, profile_length,
                      batch_size=None):
@@ -151,7 +152,7 @@ def get_state_encoder(profile_names, scalar_names,
     joiner = get_state_joiner(
         profile_names, scalar_names, 1, profile_length, batch_size)
     x = joiner(joiner.inputs)
-    #x = layers.GaussianNoise(5)(x)
+    x = layers.GaussianNoise(1.5)(x)
     # initializer = downsample()
     for i in range(num_layers):
         units = int(state_dim + (state_latent_dim-state_dim)
@@ -167,7 +168,7 @@ def get_state_encoder(profile_names, scalar_names,
         '''
         x = layers.Dense(units = units, activation = std_activation, 
                          use_bias = True)(x)
-       # x = layers.Dropout(rate = 1-(1/units))(x)
+        x = layers.Dropout(rate = 0.2)(x)
     x = layers.Reshape((state_latent_dim,))(x)
     state_encoder = Model(inputs=joiner.inputs, outputs=x,
                              name='dense_state_encoder')
@@ -275,12 +276,12 @@ def get_state_decoder(profile_names, scalar_names, profile_length,
     num_layers = kwargs.get('num_layers', 6)
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
-    state_dim = num_profiles*profile_length + num_scalars
+    state_dim = num_profiles*profile_length
     xi = layers.Input(batch_shape=(batch_size,state_latent_dim))
     x = xi
     #x = layers.GaussianNoise(5)(x)
     #initializer = downsample()
-    for i in range(num_layers):
+    for i in range(num_layers-1):
         units = int(state_latent_dim + (state_dim-state_latent_dim)
                     * ((1+i)/(num_layers))**layer_scale)
         '''
@@ -295,8 +296,9 @@ def get_state_decoder(profile_names, scalar_names, profile_length,
         x = layers.Dense(units=units, activation=std_activation, 
                              use_bias=True)(x)
 
-       # x = layers.Dropout(rate = 1/units)(x)
+        x = layers.Dropout(rate = 0.2)(x)
     # y = layers.Dense(units=state_dim, activation=std_activation)(x)
+    x = layers.Dense(units = state_dim, activation = 'linear', use_bias = True)(x)
     outputs = layers.Reshape((state_dim,))(x)
     decoder = Model(inputs=xi, outputs=outputs, name='dense_state_decoder')
     return decoder
@@ -325,13 +327,21 @@ def get_control_encoder(actuator_names, control_latent_dim,
     num_actuators = len(actuator_names)
     joiner = get_control_joiner(actuator_names, 1, batch_size)
     u = joiner(joiner.inputs)
-    for i in range(num_layers):
-        units = int(control_latent_dim + (num_actuators-control_latent_dim)
-                    * ((num_layers-i-1)/(num_layers-1))**layer_scale)
-        u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
-    u = layers.Reshape((control_latent_dim,))(u)
-    encoder = Model(inputs=joiner.inputs, outputs=u,
-                    name='dense_control_encoder')
+    assert num_layers > 0 
+    if num_layers > 1:
+        for i in range(num_layers):
+            units = int(num_actuators + (control_latent_dim-num_actuators)
+                        * ((i+1)/(num_layers))**layer_scale)
+            u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
+        u = layers.Reshape((control_latent_dim,))(u)
+        encoder = Model(inputs=joiner.inputs, outputs=u,
+                        name='dense_control_encoder')
+    else:
+        u = layers.Dense(units=control_latent_dim, activation=std_activation, 
+                         kernel_initializer='identity')(u)
+        u = layers.Reshape((control_latent_dim,))(u)
+        encoder = Model(inputs=joiner.inputs, outputs=u,
+                        name='dense_control_encoder')
     return encoder
 
 
@@ -357,13 +367,20 @@ def get_control_decoder(actuator_names, control_latent_dim,
     num_actuators = len(actuator_names)
     ui = layers.Input(batch_shape=(batch_size,control_latent_dim))
     u = ui
-    for i in range(num_layers-1):
-        units = int(num_actuators - (num_actuators-control_latent_dim)
-                    * ((num_layers-i-1)/(num_layers-1))**layer_scale)
-        u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
-    u = layers.Dense(units=num_actuators, activation='linear')(u)
-    outputs = layers.Reshape((num_actuators,))(u)
-    decoder = Model(inputs=ui, outputs=outputs, name='dense_control_decoder')
+    assert num_layers > 0
+    if num_layers>1:
+        for i in range(num_layers-1):
+            units = int(control_latent_dim + (num_actuators-control_latent_dim)
+                        * ((i+1)/(num_layers))**layer_scale)
+            u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
+        u = layers.Dense(units=num_actuators, activation='linear')(u)
+        outputs = layers.Reshape((num_actuators,))(u)
+        decoder = Model(inputs=ui, outputs=outputs, name='dense_control_decoder')
+    else:
+        u = layers.Dense(units=num_actuators, activation=std_activation, 
+                         kernel_initializer='identity')(u)
+        outputs = layers.Reshape((num_actuators,))(u)
+        decoder = Model(inputs=ui, outputs=outputs, name='dense_control_decoder')
     return decoder
 
 
@@ -453,6 +470,9 @@ def make_LRAN(state_encoder_type, state_decoder_type, control_encoder_type, cont
     x_input = state_input_model.outputs[0]
     u_input = control_input_model.outputs[0]
     x_input_future = layers.Cropping1D((1,0), name='x_input_future')(x_input)
+    x_input_future = layers.Reshape((lookahead, 1, state_dim))(x_input_future)
+    x_input_future = layers.Cropping2D(((0,0),(0,num_scalars)), data_format='channels_first')(x_input_future)
+    x_input_future = layers.Reshape((lookahead, (state_dim-num_scalars)))(x_input_future)
 
     # Create Encoders that take combined tensor as input (TimeDistributed only allows 1 input)
     state_encoder = Model(state_splitter.inputs, state_encoder(state_splitter.outputs))
@@ -466,6 +486,11 @@ def make_LRAN(state_encoder_type, state_decoder_type, control_encoder_type, cont
                                batch_input_shape=(batch_size,
                                                   lookahead+lookback,num_actuators),
                                name='ctrl_encoder_time_dist')(u_input)
+
+    u_out = layers.TimeDistributed(control_decoder,
+                                   batch_input_shape=(batch_size,
+                                                      lookahead+lookback,control_latent_dim),
+                                   name='ctrl_decoder_time_dist')(u)
 
     
     # Initial latent state and future latent state
@@ -496,10 +521,10 @@ def make_LRAN(state_encoder_type, state_decoder_type, control_encoder_type, cont
     latent_residual = layers.subtract([latent_future, latent_future_predict],
                                       name='linear_system_residual')
     x_res = layers.subtract([x_input_future, x_out_future], name='x_residual')
-    #u_res = layers.subtract([u_out, u_input], name='u_residual')
+    u_res = layers.subtract([u_out, u_input], name='u_residual')
     
     
     model = Model(inputs=state_input_model.inputs+control_input_model.inputs,
-                        outputs = [x_res, latent_residual])
+                        outputs = [x_res, u_res, latent_residual])
     
     return model

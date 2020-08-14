@@ -224,7 +224,7 @@ class DataGenerator(Sequence):
 class AutoEncoderDataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_names, actuator_names,
                  scalar_names, lookback, lookahead, profile_downsample,
-                 state_latent_dim, discount_factor=1, x_weight=1, u_weight=1, shuffle=True, **kwargs):
+                 state_latent_dim, discount_factor=1, x_weight=1, u_weight=1,decode_weight=1, shuffle=True, **kwargs):
         """Make a data generator for training or validation data for autoencoder model
 
         Args:
@@ -255,15 +255,17 @@ class AutoEncoderDataGenerator(Sequence):
         self.num_actuators = len(actuator_names)
         self.num_profiles = len(profile_names)
         self.num_scalars = len(scalar_names)
-        self.state_dim = self.num_profiles*self.profile_length + self.num_scalars
+        self.state_dim = self.num_profiles*self.profile_length
         self.state_latent_dim = state_latent_dim
         self.cur_shotnum = np.zeros(self.batch_size)
         self.cur_times = np.zeros(self.batch_size)
         self.discount_factor = discount_factor
         self.x_weight = x_weight
         self.u_weight = u_weight
+        self.decode_weight = decode_weight
         self.shuffle = shuffle
         self.kwargs = kwargs
+        self.max_channels = kwargs.get('max_channels', None)
         self.times_called = 0
         self.nsamples = self.data['time'].shape[0]
         if self.shuffle:
@@ -294,15 +296,40 @@ class AutoEncoderDataGenerator(Sequence):
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,:,np.newaxis]
-        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
+        '''
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead, self.state_dim)),
+                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
+
+        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), 
+                                                             self.lookahead)), 
+                        'linear_system_residual': np.repeat(np.array(
+                            [self.discount_factor**i for i in range(self.lookahead)]).reshape(
+                                (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
+        '''
+         
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
-        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
+        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead)),
                         'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookback+self.lookahead)),
                         'linear_system_residual': np.repeat(np.array(
                             [self.discount_factor**i for i in range(self.lookahead)]).reshape(
                                 (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
+        
+        
 
+        '''
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
+                'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
+                'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim)),
+                'coord_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim))}
+        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
+                        'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookback+self.lookahead)),
+                        'coord_residual':self.coord_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
+                        'linear_system_residual': np.repeat(np.array(
+                            [self.discount_factor**i for i in range(self.lookahead)]).reshape(
+                                (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
+        '''
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 

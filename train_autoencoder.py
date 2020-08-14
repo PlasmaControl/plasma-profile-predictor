@@ -33,7 +33,7 @@ def main(scenario_index=-2):
     ###################
     # set session
     ###################
-    num_cores = 16
+    num_cores = 8
     req_mem = 48 # gb
     ngpu = 1
     '''
@@ -55,7 +55,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = '/scratch/gpfs/aaronwu/run_results_07_15_rot/'
+    checkpt_dir = '/scratch/gpfs/aaronwu/run_results_08_05/'
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -71,7 +71,8 @@ def main(scenario_index=-2):
                                           'rotation',
                                           'press_{}'.format(efit_type),
                                           'q_{}'.format(efit_type)],
-                        'scalar_names': [],
+                        'scalar_names': ['density_estimate','li_{}'.format(efit_type),'volume_{}'.format(efit_type),
+                                         'triangularity_top_{}'.format(efit_type),'triangularity_bot_{}'.format(efit_type)],
                         'profile_downsample': 2,
                         'state_encoder_type': 'dense',
                         'state_decoder_type': 'dense',
@@ -85,40 +86,40 @@ def main(scenario_index=-2):
                                                  'max_channels':20,
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'},
-                        'control_encoder_kwargs': {'num_layers': 10,
+                        'control_encoder_kwargs': {'num_layers': 1,
                                                    'layer_scale': 1,
-                                                   'std_activation':'elu'},
-                        'control_decoder_kwargs': {'num_layers': 10,
+                                                   'std_activation':'linear'},
+                        'control_decoder_kwargs': {'num_layers': 1,
                                                    'layer_scale': 1,
-                                                   'std_activation':'elu'},
+                                                   'std_activation':'linear'},
                         'state_latent_dim': 50,
-                        'control_latent_dim':15,
+                        'control_latent_dim':4,
                         'x_weight':1,
                         'u_weight':1,
                         'decode_weight':1,
-                        'discount_factor':0.8,
+                        'discount_factor':1,
                         'batch_size': 128,
                         'epochs': 200,
                         'flattop_only': True,
                         'raw_data_path': '/scratch/gpfs/jabbate/full_data_with_error/train_data.pkl',
                         'process_data': True,
-                        'invert_q' : False,
+                        'invert_q' : True,
                         'optimizer': 'adam',
                         'optimizer_kwargs': {'lr':0.0001},
                         'shuffle_generators': True,
                         'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil','remove_outliers'],
                         'normalization_method': 'RobustScaler',
-                        'window_length': 3,
+                        'window_length': 1,
                         'window_overlap': 0,
                         'lookback': 0,
-                        'lookahead': 3,
+                        'lookahead': 6,
                         'sample_step': 1,
                         'uniform_normalization': True,
                         'train_frac': 0.8,
                         'val_idx': 6,
                         'val_frac': 0.2,
                         'nshots': 12000,
-                        'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
+                        'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT','test_set']}
 
     scenarios_dict = OrderedDict()
     '''
@@ -140,12 +141,17 @@ def main(scenario_index=-2):
                                          {'discount_factor':0.8}]
     
     '''
-    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 35},
-                                          {'state_latent_dim': 40},
-					  {'state_latent_dim': 50},
-                                          {'state_latent_dim': 55},
-                                          {'state_latent_dim': 60},
-                                          {'state_latent_dim': 65}]
+    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 70},
+                                          {'state_latent_dim': 75},
+					  {'state_latent_dim': 80},
+                                          {'state_latent_dim': 85},
+                                          {'state_latent_dim': 90}]
+
+    scenarios_dict['lookahead'] = [{'lookahead': 6},
+                                   {'lookahead': 7},
+                                   {'lookahead': 8},
+                                   {'lookahead': 9},
+                                   {'lookahead': 10}]
     '''
     scenarios_dict['control_latent_dim'] = [{'control_latent_dim': 5},
                                             {'control_latent_dim': 10},
@@ -156,49 +162,39 @@ def main(scenario_index=-2):
                                     {'batch_size':80},
                                     {'batch_size':50}]
     '''
-    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 15,
+    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 9,
                                                                         'max_channels':20,
                                                                         'layer_scale': 1,
                                                                         'std_activation':'elu'},
-                                               'state_decoder_kwargs': {'num_layers': 15,
+                                               'state_decoder_kwargs': {'num_layers': 9,
                                                                         'max_channels':20,
                                                                         'layer_scale': 1,
                                                                         'std_activation':'elu'}},
-                                              {'state_encoder_kwargs': {'num_layers': 20,
+                                              {'state_encoder_kwargs': {'num_layers': 10,
                                                                         'max_channels':20,
                                                                         'layer_scale': 1,
                                                                         'std_activation':'elu'},
-                                               'state_decoder_kwargs': {'num_layers': 20,
-                                                                        'max_channels':20,
-                                                                        'layer_scale': 1,
-                                                                        'std_activation':'elu'}},
-                                              {'state_encoder_kwargs': {'num_layers': 25,
-                                                                        'max_channels':20,
-                                                                        'layer_scale': 1,
-                                                                        'std_activation':'elu'},
-                                               'state_decoder_kwargs': {'num_layers': 25,
-                                                                        'max_channels':20,
-                                                                        'layer_scale': 1,
-                                                                        'std_activation':'elu'}},
-                                              {'state_encoder_kwargs': {'num_layers': 30,
-                                                                        'max_channels':20,
-                                                                        'layer_scale': 1,
-                                                                        'std_activation':'elu'},
-                                               'state_decoder_kwargs': {'num_layers': 30,
+                                               'state_decoder_kwargs': {'num_layers': 10,
                                                                         'max_channels':20,
                                                                         'layer_scale': 1,
                                                                         'std_activation':'elu'}}]
     '''
-    scenarios_dict['control_encoder_kwargs'] = [{'control_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'},
-                                              'control_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'}},
-                                             {'control_encoder_kwargs': {'num_layers': 10,
+    scenarios_dict['control_encoder_kwargs'] = [{'control_encoder_kwargs': {'num_layers': 1,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'linear'},
+                                              'control_decoder_kwargs': {'num_layers': 1,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'linear'}},
+                                                {'control_encoder_kwargs': {'num_layers': 2,
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'},
-                                              'control_decoder_kwargs': {'num_layers': 10,
+                                              'control_decoder_kwargs': {'num_layers': 2,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'}},
+                                             {'control_encoder_kwargs': {'num_layers': 3,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
+                                              'control_decoder_kwargs': {'num_layers': 3,
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'}}]
 
@@ -209,7 +205,7 @@ def main(scenario_index=-2):
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        runtimes.append(4*60)
+        runtimes.append(6*60)
     num_scenarios = len(scenarios)
 
     ###############
@@ -300,12 +296,12 @@ def main(scenario_index=-2):
                                                scenario['lookahead'],
                                                scenario['profile_downsample'],
                                                scenario['state_latent_dim'],
-                                               scenario['state_encoder_kwargs']['max_channels'],
                                                scenario['discount_factor'],
                                                scenario['x_weight'],
                                                scenario['u_weight'],
                                                scenario['decode_weight'],
-                                               scenario['shuffle_generators'])
+                                               scenario['shuffle_generators'],
+                                               max_channels = scenario['state_encoder_kwargs']['max_channels'])
     val_generator = AutoEncoderDataGenerator(valdata,
                                              scenario['batch_size'],
                                              scenario['profile_names'],
@@ -315,12 +311,12 @@ def main(scenario_index=-2):
                                              scenario['lookahead'],
                                              scenario['profile_downsample'],
                                              scenario['state_latent_dim'],
-                                             scenario['state_encoder_kwargs']['max_channels'],
                                              scenario['discount_factor'],
                                              scenario['x_weight'],
                                              scenario['u_weight'],
                                              scenario['decode_weight'],
-                                             scenario['shuffle_generators'])
+                                             scenario['shuffle_generators'],
+                                             max_channels = scenario['state_encoder_kwargs']['max_channels'])
 
     print('Made Generators')
 
