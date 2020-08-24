@@ -383,7 +383,7 @@ def scenario_to_html(scenario):
 if __name__=='__main__':
     
     num_cores = int(sys.argv[1])
-    compute_node_flag = int(sys.argv[3])
+    compute_node_flag = int(sys.argv[2])
     run_path=sys.argv[3]
     sheet_idx = int(sys.argv[4])
 

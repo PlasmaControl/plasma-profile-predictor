@@ -14,13 +14,7 @@ from helpers.hyperparam_helpers import make_bash_scripts
 from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_error, baseline_MAE
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from helpers.results_processing import write_autoencoder_results
-import models.autoencoder
-import models.id_autoencoder
-import models.LRAN_conv_id
 import models.LRAN_control
-import models.LRAN_control_conv
-import models.LRAN_control2
-import models.LRAN_control3
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
@@ -331,7 +325,7 @@ def main(scenario_index=-2):
                   'adamax': keras.optimizers.Adamax,
                   'nadam': keras.optimizers.Nadam}
    
-    model = models.LRAN_control_conv.make_LRAN(scenario['state_encoder_type'],
+    model = models.LRAN_control.make_LRAN(scenario['state_encoder_type'],
                                                 scenario['state_decoder_type'],
                                                 scenario['control_encoder_type'],
                                                 scenario['control_decoder_type'],
