@@ -103,26 +103,21 @@ https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control
 
 ## Getting started on Traverse:
 
-Connect to the princeton VPN:
-
-https://princeton.service-now.com/snap?sys_id=6023&id=kb_article
-
-copy conda setup file to traverse:
-
-`scp conda-pkg-list.txt netID@traverse.princeton.edu:`
+Connect to the princeton VPN
 
 connect:
 
 `ssh netID@traverse.princeton.edu`
 
+clone this repository 
+
 load anaconda:
 
 `module load anaconda`
 
-create new environment using config file:
+create new environment using the config file in the headnode of this repository:
 
 `conda create --name tfgpu --file conda-pkg-list.txt`
-
 
 
 ### Connecting to Traverse and using Jupyter lab:
@@ -131,7 +126,7 @@ From your local machine:
 
 `ssh -N -f -L localhost:8893:localhost:8893 netID@traverse.princeton.edu`
 
-this will open a connection to port 8893 on traverse. You sometimes might get an error saying that port is in use, in which case just change 8893 to another on, usually 8892, 8893, 8894, 8895 etc
+this will open a connection to port 8893 on traverse. You sometimes might get an error saying that port is in use, in which case just change 8893 to another one, usually 8892, 8893, 8894, 8895 etc
 
 Then connect to traverse:
 
