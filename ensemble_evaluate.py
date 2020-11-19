@@ -27,29 +27,31 @@ config = tf.ConfigProto(intra_op_parallelism_threads=16,
 session = tf.Session(config=config)
 K.set_session(session)
 
-results_path = os.path.expanduser('~/ensemble_results_02_13.pkl')
+results_path = os.path.expanduser('~/ensemble_results_08_21.pkl')
 
-base_path = os.path.expanduser('~/')
-folders = ['run_results_02_13/']
+base_path = os.path.expanduser('/projects/EKOLEMEN/profile_predictor/')
+folders = ['run_results_08-19/']
 
-profiles = ['temp','dens','itemp','rotation','q']
-actuators = ['target_density', 'pinj', 'tinj', 'curr_target']
-scalars = ['density_estimate', 'li_EFIT01', 'volume_EFIT01', 'triangularity_top_EFIT01', 'triangularity_bot_EFIT01']
+# profiles = ['temp','dens','rotation']
+# actuators = ['target_density', 'pinj', 'tinj', 'curr_target']
+# scalars = ['density_estimate', 'li_EFIT01', 'volume_EFIT01', 'triangularity_top_EFIT01', 'triangularity_bot_EFIT01']
 scenarios = []
 model_paths = []
 for folder in folders:
-    files =  [foo for foo in os.listdir(base_path+folder) if foo.endswith('.pkl')]
-    for file in files:
-        file_path = base_path + folder + file
+    filenames =  [foo for foo in os.listdir(os.path.join(base_path,folder)) if foo.endswith('.pkl')]
+    for filename in filenames:
+        file_path = os.path.join(base_path, folder, filename)
         with open(file_path, 'rb') as f:
             scenario = pickle.load(f, encoding='latin1')
-        if set(scenario['input_profile_names']) == set(profiles) and \
-        set(scenario['target_profile_names']) == set(profiles) and \
-        set(scenario['actuator_names']) == set(actuators) and \
-        set(scenario['scalar_input_names']) == set(scalars):
+        if 'bt' in set(scenario['actuator_names']):
+        # if set(scenario['input_profile_names']) == set(profiles) and \
+        # set(scenario['target_profile_names']) == set(profiles) and \
+        # set(scenario['actuator_names']) == set(actuators) and \
+        # set(scenario['scalar_input_names']) == set(scalars):
             scenarios.append(scenario)
             model_path = file_path[:-11] + '.h5'
             model_paths.append(model_path)
+        break
 scenario = scenarios[0]
 
 
@@ -59,8 +61,8 @@ for model_path in model_paths:
     models.append(model)
 print('loaded models, time={}'.format(time.time()-t0))
     
-full_data_oath = '/scratch/gpfs/jabbate/full_data_with_error/train_data_full.pkl'
-test_data_path = '/scratch/gpfs/jabbate/full_data_with_error/test_data.pkl' 
+#full_data_path = '/scratch/gpfs/jabbate/full_data_with_error/train_data_full.pkl'
+test_data_path = '/projects/EKOLEMEN/profile_predictor/DATA/full_data_with_error/test_data.pkl'
 traindata, valdata, normalization_dict = helpers.data_generator.process_data(test_data_path,
                                                       scenario['sig_names'],
                                                       scenario['normalization_method'],
@@ -146,12 +148,11 @@ for index in range(len(train_generator)):
         pickle.dump(results_data,f)
     print('finished {}/{}'.format(index,len(train_generator)))
     print('time={}'.format(time.time()-t0))
-
+    break
             
             
 for key,val in ensemble_evaluation_metrics.items():
     ensemble_evaluation_metrics[key] = np.mean(val)
-
 
 for metric in losses:
     name = metric if isinstance(metric,str) else str(metric.__name__)

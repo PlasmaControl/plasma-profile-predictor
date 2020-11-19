@@ -1,4 +1,5 @@
 # This file may be used to create an environment using:
+# $ module load anaconda
 # $ conda create --name <env> --file <this file>
 # platform: linux-ppc64le
 @EXPLICIT

@@ -3,7 +3,7 @@
 #SBATCH -c 8
 #SBATCH --mem 48G
 #SBATCH -G 1
-#SBATCH -o /home/wconlin/plasma-profile-predictor/evaluate_log.out 
+#SBATCH -o /home/jabbate/plasma-profile-predictor/evaluate_time_log_test.out 
 #SBATCH -t 96:00:00
 root_dir=$HOME/plasma-profile-predictor 
 module load anaconda 

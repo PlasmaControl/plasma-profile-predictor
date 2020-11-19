@@ -472,13 +472,24 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
                     'topology_IN': exclude_shots.topology_IN,
                     'topology_DN': exclude_shots.topology_DN,
                     'topology_BOT': exclude_shots.topology_BOT,
+                    'year_2010': exclude_shots.year_2010,
+                    'year_2011': exclude_shots.year_2011,
+                    'year_2012': exclude_shots.year_2012,
+                    'year_2013': exclude_shots.year_2013,
+                    'year_2014': exclude_shots.year_2014,
+                    'year_2015': exclude_shots.year_2015,
+                    'year_2016': exclude_shots.year_2016,
+                    'year_2017': exclude_shots.year_2017,
+                    'year_2018': exclude_shots.year_2018,
+                    'year_2019': exclude_shots.year_2019,
                     'test_set': exclude_shots.test}
+
     for i, elem in enumerate(excluded_shots):
         if isinstance(elem, str):
             excluded_shots[i] = exclude_dict[elem]
-        if not isinstance(elem, list):
-            excluded_shots[i] = [elem]
-    excluded_shots = [item for sublist in excluded_shots for item in sublist]
+        #if not isinstance(elem, list):
+        #    excluded_shots[i] = [elem]
+    excluded_shots = np.unique([item for sublist in excluded_shots for item in sublist])
 
     ##############################
     # get sig names
@@ -551,14 +562,13 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
            and rawdata[shot]['time'].size > (max_lookback+lookahead)*(window_length-window_overlap):
             shots_excluded.append(shot)
         
-            
     usabledata = np.array(usabledata)
     if len(usabledata) == 0:
         s = 'No valid shots \n'
         s += 'Num Total: {}\n'.format(len(all_shots))
         s += 'Num without sigs: {}\n'.format(len(shots_without_sigs))
         s += 'Num too short: {}\n'.format(len(shots_too_short))
-        s += 'Num excluded: {}\n'.format(len(shots_excluded))   
+        s += 'Num excluded: {}\n'.format(len(shots_excluded))
         if len(shots_without_sigs) == len(all_shots):
             missing_sigs = []
             for shot in all_shots:

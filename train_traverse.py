@@ -49,7 +49,8 @@ def main(scenario_index=-2):
     # global stuff
     ###############
     
-    checkpt_dir = os.path.expanduser("/projects/EKOLEMEN/profile_predictor/run_results_06_24")
+    todays_date=datetime.datetime.today().strftime('%m-%d')
+    checkpt_dir = os.path.expanduser("/projects/EKOLEMEN/profile_predictor/run_results_rt") # run_results_{}".format(todays_date))
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
         
@@ -57,22 +58,24 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    default_scenario = {'actuator_names': ['target_density','pinj','tinj','curr_target'],
-                        'input_profile_names': ['dens','temp','itemp','q','rotation'],
-                        'target_profile_names': ['dens','temp','itemp','q','rotation'],
-                        'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','triangularity_top_EFIT01','triangularity_bot_EFIT01'],
+    default_scenario = {'actuator_names': ['target_density','pinj','tinj','curr_target', 'bt'],
+                        'input_profile_names': ['dens','temp','rotation','q_EFIT01', 'press_EFIT01'],
+                        'target_profile_names': ['dens','temp','rotation','q_EFIT01', 'press_EFIT01'],
+                        #'scalar_input_names' : ['density_estimate','li_EFIT01','volume_EFIT01','triangularity_top_EFIT01','triangularity_bot_EFIT01'],
+                        'scalar_input_names' : ['density_estimate','li','volume','triangularity_top','triangularity_bot'],
                         'profile_downsample' : 2,
                         'model_type' : 'conv2d',
-                        'model_kwargs': {'max_channels': 32,'kernel_initializer':'lecun_normal','l2':1e-4},
+                        'model_kwargs': {'max_channels': 32,'kernel_initializer':'lecun_normal'},
                         'std_activation' : 'relu',
                         'sample_weighting':'std',
                         'loss_function': 'mse',
                         'loss_function_kwargs':{},                  
                         'batch_size' : 128,
-                        'epochs' : 200,
+                        'epochs' : 10,
                         'flattop_only': True,
                         'predict_deltas' : True,
-                        'raw_data_path':'/scratch/gpfs/jabbate/full_data/train_data_full.pkl',
+                        'raw_data_path':'/projects/EKOLEMEN/profile_predictor/DATA/data_with_rt/final_data.pkl',
+                        #'/scratch/gpfs/jabbate/full_data/train_data_full.pkl',
 #                         'raw_data_path':'/scratch/gpfs/jabbate/old_stuff/new_data/final_data.pkl',
                         'process_data':True,
                         'invert_q': True,
@@ -91,7 +94,7 @@ def main(scenario_index=-2):
                         'window_overlap': 0,
                         'profile_lookback': 0,
                         'actuator_lookback': 6,
-                        'lookahead': 4,
+                        'lookahead': 6,
                         'sample_step': 1,
                         'uniform_normalization': True,
                         'train_frac': 0.8,
@@ -111,6 +114,7 @@ def main(scenario_index=-2):
     
     scenarios_dict = OrderedDict()
 
+    '''
     scenarios_dict['models'] = [{'model_type': 'conv2d', 'model_kwargs': {'max_channels':32,'kernel_initializer':'lecun_normal'}},
                                 {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
                                 {'model_type': 'conv2d', 'model_kwargs': {'max_channels':64, 'l2':1e-4,'kernel_initializer':'lecun_normal'}},
@@ -118,6 +122,10 @@ def main(scenario_index=-2):
                                 {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-5,'kernel_initializer':'lecun_normal'}},
                                 {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-2,'kernel_initializer':'lecun_normal'}},
                                 {'model_type': 'conv2d', 'model_kwargs': {'max_channels':128, 'l2':1e-4,'kernel_initializer':'lecun_normal'}}]
+    scenarios_dict['lookbacks'] = [{'actuator_lookbacks': 2},
+                                   {'actuator_lookbacks': 4},
+                                   {'actuator_lookbacks': 6}]
+    '''
     #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':8}},
     #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':12}},
     #                                 {'model_type': 'conv1d', 'model_kwargs': {'max_channels':16}}]
@@ -133,36 +141,62 @@ def main(scenario_index=-2):
     #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1'], 
     #                                'target_profile_names': ['thomson_dens_EFITRT1','thomson_temp_EFITRT1', 'cerquick_temp_EFITRT1',
     #                                                          'q_EFITRT1','cerquick_rotation_EFITRT1']}]
-    scenarios_dict['profiles'] = [{'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
-                                   'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']},
-                                  {'input_profile_names': ['dens','temp','rotation'],
-                                   'target_profile_names': ['dens','temp', 'rotation']},
-                                  {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
-                                   'target_profile_names': ['dens','temp', 'rotation']},
-                                  {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
-                                   'target_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02']},
-                                  {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
-                                   'target_profile_names': ['dens','temp', 'rotation']}]
-    #                                 {'input_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
-    #                                    'target_profile_names': ['dens','temp', 'itemp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
-    #                                   {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01'],
-    #                                   'target_profile_names': ['dens','temp','q_EFIT01','rotation','ffprime_EFIT01','press_EFIT01']},
+
+    # scenarios_dict['profiles'] = [{'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
+    #                                'target_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01']},
+    #                               {'input_profile_names': ['dens','temp','rotation'],
+    #                                'target_profile_names': ['dens','temp', 'rotation']},
+    #                               {'input_profile_names': ['dens','temp', 'q_EFIT01','rotation','press_EFIT01'],
+    #                                'target_profile_names': ['dens','temp', 'rotation']},
+    #                               {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
+    #                                'target_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02']},
+    #                               {'input_profile_names': ['dens','temp', 'q_EFIT02','rotation','press_EFIT02'],
+    #                                'target_profile_names': ['dens','temp', 'rotation']}]
+
     
-    scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weighting':None}]
+    #scenarios_dict['sample_weighting'] = [{'sample_weighting':'std'},{'sample_weighting':None}]
+    
     #     scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFITRT1','volume_EFITRT1','kappa_EFITRT1',
     #                                                           'triangularity_top_EFITRT1','triangularity_bot_EFITRT1']},
     #                                  {'scalar_input_names':[]}]
-    scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT02','volume_EFIT02','kappa_EFIT02',
-                                                          'triangularity_top_EFIT02','triangularity_bot_EFIT02',
-                                                          'a_EFIT02', 'zmagX_EFIT02', 'rmagx_EFIT02',
-                                                          'drsep_EFIT02']},
-                                 {'scalar_input_names':[]}]
-    scenarios_dict['activation'] = [{'std_activation' : 'relu'},{'std_activation' : 'elu'},{'std_activation' : 'selu'}]
+
+    # scenarios_dict['scalars'] = [{'scalar_input_names' : ['density_estimate','li_EFIT02','volume_EFIT02','kappa_EFIT02',
+    #                                                       'triangularity_top_EFIT02','triangularity_bot_EFIT02',
+    #                                                       'a_EFIT02', 'zmagX_EFIT02', 'rmagx_EFIT02',
+    #                                                       'drsep_EFIT02']},
+    #                              {'scalar_input_names':[]}]
+
+    # scenarios_dict['actuators'] = [{'actuator_names': ['target_density','pinj','tinj','curr_target', 'bt']},
+    #                                {'actuator_names': ['target_density','pinj','tinj','curr_target']}]
+
+
+    #scenarios_dict['activation'] = [{'std_activation' : 'relu'},{'std_activation' : 'elu'},{'std_activation' : 'selu'}]
+
+    '''
+    scenarios_dict['excluded_shots']=[]
+    for year in range(2010,2019):
+        scenarios_dict['excluded_shots'].append({'excluded_shots': ['topology_TOP', 
+                                                                    'topology_OUT',
+                                                                    'topology_MAR',
+                                                                    'topology_IN',
+                                                                    'topology_DN',
+                                                                    'topology_BOT',
+                                                                    'test_set',
+                                                                    'year_{}'.format(year)]})
+    '''
+    scenarios_dict['fits']=[{'input_profile_names': ['zipfit_rotation_EFIT01','q','press',
+                                                          'thomson_dens_mtanh_1d','thomson_temp_mtanh_1d','cer_temp_mtanh_1d'],
+                                  'target_profile_names': ['zipfit_rotation_EFIT01','q','press',
+                                                           'thomson_dens_mtanh_1d','thomson_temp_mtanh_1d','cer_temp_mtanh_1d']},
+                                 {'input_profile_names': ['zipfit_rotation_EFIT01','q','press',
+                                                          'zipfit_dens_EFIT01','zipfit_temp_EFIT01','zipfit_itemp_EFIT01'],
+                                  'target_profile_names': ['zipfit_rotation_EFIT01','q','press',
+                                                           'zipfit_dens_EFIT01','zipfit_temp_EFIT01','zipfit_itemp_EFIT01']}]
+        
     scenarios_dict['batch_size'] = [{'batch_size': 128}]
     scenarios_dict['process_data'] = [{'process_data':True}]
     scenarios_dict['epochs'] = [{'epochs': 100} for i in range(1)]
-    scenarios_dict['loss'] = [{'loss_function': 'mse'},
-                              {'loss_function':'mae'}]
+    scenarios_dict['loss'] = [{'loss_function': 'mse'}]
     #                               {'loss_function':'normed_mse'},
     #                               {'loss_function':'mean_diff_sum_2'},
     #                               {'loss_function':'max_diff_sum_2'},
@@ -384,7 +418,7 @@ def main(scenario_index=-2):
                                    verbose=1, mode='min'))
     callbacks.append(TimingCallback(time_limit=60*runtimes[scenario_index]))    
     if ngpu<=1:
-        callbacks.append(ModelCheckpoint(checkpt_dir+scenario['runname']+'.h5', monitor='val_loss',
+        callbacks.append(ModelCheckpoint(os.path.join(checkpt_dir,scenario['runname']+'.h5'), monitor='val_loss',
                                          verbose=0, save_best_only=True,
                                          save_weights_only=False, mode='auto', period=1))
   
@@ -397,7 +431,7 @@ def main(scenario_index=-2):
     ###############
     # Save scenario
     ############### 
-    with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
+    with open(os.path.join(checkpt_dir, scenario['runname']+'_params.pkl'), 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print(datetime.datetime.today().strftime('%c'), ' Saved Analysis params before run')
 
@@ -430,14 +464,14 @@ def main(scenario_index=-2):
     ###############
     # Save Results
     ############### 
-    scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['model_path'] = os.path.join(checkpt_dir, scenario['runname'] + '.h5')
     scenario['history'] = history.history
     scenario['history_params'] = history.params
     scenario['epochs'] = scenario['history_params']['epochs']
       
     if not any([isinstance(cb,ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
-    with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
+    with open(os.path.join(checkpt_dir, scenario['runname'] + '_params.pkl'), 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print(datetime.datetime.today().strftime('%c'), ' Saved Analysis params after completion')
 
