@@ -111,7 +111,6 @@ https://repo.anaconda.com/pkgs/main/linux-ppc64le/patsy-0.5.1-py36_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-ppc64le/pip-19.3.1-py36_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/noarch/prompt_toolkit-2.0.10-py_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-ppc64le/scikit-learn-0.21.3-py36h22eb022_0.tar.bz2
-https://repo.anaconda.com/pkgs/free/linux-ppc64le/tensorflow-gpu-1.2.1-py36cuda8.0cudnn6.0_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-ppc64le/ipython-7.9.0-py36h39e3cac_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-ppc64le/keras-gpu-2.1.6-py36_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-ppc64le/nbformat-4.4.0-py36_0.tar.bz2

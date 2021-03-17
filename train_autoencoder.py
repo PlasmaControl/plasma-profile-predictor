@@ -91,7 +91,7 @@ def main(scenario_index=-2):
                         'batch_size': 128,
                         'epochs': 3,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/mixed_data/final_data.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/small_data.pkl',
                         'process_data': True,
                         'optimizer': 'adagrad',
                         'optimizer_kwargs': {},
@@ -109,7 +109,7 @@ def main(scenario_index=-2):
                         'nshots': 12000,
                         'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
 
-    scenarios_dict = OrderedDict()
+    scenarios_dict = OrderedDict()++
     scenarios_dict['x_weight'] = [{'x_weight':0.1},
                                   {'x_weight':1}]
     scenarios_dict['u_weight'] = [{'u_weight':1},

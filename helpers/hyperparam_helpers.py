@@ -39,4 +39,7 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='trav
                 f.write('python $root_dir/train_traverse.py ' + str(i) + '\n')
             elif mode == 'autoencoder':
                 f.write('python $root_dir/train_autoencoder.py ' + str(i) + '\n')
+            elif mode == 'autoencoder_batch':
+                f.write('python $root_dir/autoencoder_batch.py ' + str(i) + '\n')
             f.write('exit')
+            

@@ -1183,3 +1183,8 @@ def print_topologies(data):
     print_var(topology_IN,'topology_IN')
     print_var(topology_DN,'topology_DN')
     print_var(topology_BOT,'topology_BOT')
+
+# print(len(topology_SNT))
+# print(len(topology_SNB))
+# print(len(topology_IN))
+# print(len(topology_DN))
