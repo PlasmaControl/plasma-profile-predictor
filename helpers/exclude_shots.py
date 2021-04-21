@@ -1186,5 +1186,10 @@ def print_topologies(data):
 
 # print(len(topology_SNT))
 # print(len(topology_SNB))
-# print(len(topology_IN))
-# print(len(topology_DN))
+# print(len(topology_TOP))
+# print(len(topology_OUT))
+# print(len(topology_MAR))
+print(len(topology_IN))
+print(len(topology_DN))
+# print(len(topology_BOT))
+print("Total: {}".format(len(topology_SNT)+len(topology_SNB)+len(topology_TOP)+len(topology_OUT)+len(topology_MAR)+len(topology_IN)+len(topology_DN)+len(topology_BOT)))

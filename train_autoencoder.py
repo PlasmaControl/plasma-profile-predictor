@@ -37,19 +37,22 @@ def main(scenario_index=-2):
     np.random.seed(seed_value)
     tf.set_random_seed(seed_value)
     
-    config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
-                            inter_op_parallelism_threads=4*num_cores,
-                            allow_soft_placement=True,
-                            device_count={'CPU': 1,
-                                          'GPU': ngpu})
-    session = tf.Session(config=config)
-    K.set_session(session)
+#     for device in tf.config.list_physical_devices('GPU'):
+#         tf.config.experimental.set_memory_growth(device, True)
+    
+#     config = tf.ConfigProto(intra_op_parallelism_threads=4*num_cores,
+#                             inter_op_parallelism_threads=4*num_cores,
+#                             allow_soft_placement=True,
+#                             device_count={'CPU': 1,
+#                                           'GPU': ngpu})
+#     session = tf.Session(config=config)
+#     K.set_session(session)
 
     ###############
     # global stuff
     ###############
 
-    checkpt_dir = os.path.expanduser("~/run_results_12_01/")
+    checkpt_dir = os.path.expanduser("~/run_results_04_19/")
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -57,97 +60,61 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type = 'EFIT02'
+    efit_type = 'EFIT01'
 
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA'],
-                        'profile_names': ['temp',
-                                          'dens',
-                                          'ffprime_{}'.format(efit_type),
-                                          'press_{}'.format(efit_type),
-                                          'q_{}'.format(efit_type)],
-                        'scalar_names': [],
+    default_scenario = {'actuator_names': ['target_density', 'pinj', 'tinj', 'curr_target'],
+                        'profile_names': ['dens',
+                                          'temp',
+                                          'q_{}'.format(efit_type),
+                                          'rotation',
+                                          'press_{}'.format(efit_type)],
+                        'scalar_names': ['density_estimate','li_{}'.format(efit_type),'volume_{}'.format(efit_type),'triangularity_top_{}'.format(efit_type),'triangularity_bot_{}'.format(efit_type)],
                         'profile_downsample': 2,
                         'state_encoder_type': 'dense',
                         'state_decoder_type': 'dense',
                         'control_encoder_type': 'dense',
                         'control_decoder_type': 'dense',
-                        'state_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'relu'},
-                        'state_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'relu'},
-                        'control_encoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2,
-                                                   'std_activation':'relu'},
-                        'control_decoder_kwargs': {'num_layers': 10,
-                                                   'layer_scale': 2,
-                                                   'std_activation':'relu'},
-                        'state_latent_dim':50,
-                        'control_latent_dim':5,
-                        'x_weight':1,
+                        'state_encoder_kwargs': {'num_layers': 5,
+                                                 'layer_scale': 1, # How steeply slope the hourglass is; try 1 and 2
+                                                 'std_activation':'elu'},
+                        'state_decoder_kwargs': {'num_layers': 5,
+                                                 'layer_scale': 1,
+                                                 'std_activation':'elu'},
+                        'control_encoder_kwargs': {'num_layers': 2,
+                                                   'layer_scale': 1,
+                                                   'std_activation':'linear'},
+                        'control_decoder_kwargs': {'num_layers': 2,
+                                                   'layer_scale': 1,
+                                                   'std_activation':'linear'},
+                        'state_latent_dim':70,
+                        'control_latent_dim':4,
+                        'x_weight':0,
                         'u_weight':1,
+                        'coord_weight' :1,
                         'discount_factor':1,
                         'batch_size': 128,
-                        'epochs': 3,
+                        'epochs': 200,
                         'flattop_only': True,
-                        'raw_data_path': '/scratch/gpfs/jabbate/small_data.pkl',
+                        'raw_data_path': '/scratch/gpfs/jabbate/full_data_with_error/train_data.pkl', #'/scratch/gpfs/jabbate/full_data_with_error/train_data.pkl', #'/scratch/gpfs/jabbate/small_data.pkl', 
                         'process_data': True,
-                        'optimizer': 'adagrad',
+                        'optimizer': 'adam',
                         'optimizer_kwargs': {},
                         'shuffle_generators': True,
-                        'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil'],
+                        'pruning_functions': ['remove_nan', 'remove_dudtrip', 'remove_I_coil','remove_outliers'],
                         'normalization_method': 'RobustScaler',
-                        'window_length': 3,
+                        'window_length': 1,
                         'window_overlap': 0,
                         'lookback': 0,
-                        'lookahead': 3,
+                        'lookahead': 4,
                         'sample_step': 1,
                         'uniform_normalization': True,
                         'train_frac': 0.8,
                         'val_frac': 0.2,
                         'nshots': 12000,
-                        'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT']}
+                        'excluded_shots': ['topology_TOP', 'topology_OUT', 'topology_MAR', 'topology_IN', 'topology_DN', 'topology_BOT','test_set'],
+                        'invert_q' : True}
 
-    scenarios_dict = OrderedDict()++
-    scenarios_dict['x_weight'] = [{'x_weight':0.1},
-                                  {'x_weight':1}]
-    scenarios_dict['u_weight'] = [{'u_weight':1},
-                                  {'u_weight':10}]
-    scenarios_dict['discount_factor'] = [{'discount_factor':1.0},
-                                         {'discount_factor':0.8}]
-    scenarios_dict['state_latent_dim'] = [{'state_latent_dim': 20},
-                                          {'state_latent_dim': 50},
-                                          {'state_latent_dim': 100}]
-    scenarios_dict['control_latent_dim'] = [{'control_latent_dim': 5},
-                                            {'control_latent_dim': 10},
-                                            {'control_latent_dim': 15}]
-    scenarios_dict['state_encoder_kwargs'] = [{'state_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'},
-                                              'state_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'}},
-                                             {'state_encoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'},
-                                              'state_decoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'}}]
-    scenarios_dict['control_encoder_kwargs'] = [{'control_encoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'},
-                                              'control_decoder_kwargs': {'num_layers': 6,
-                                                 'layer_scale': 2,
-                                                 'std_activation':'elu'}},
-                                             {'control_encoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'},
-                                              'control_decoder_kwargs': {'num_layers': 10,
-                                                 'layer_scale': 1,
-                                                 'std_activation':'elu'}}]
-
-    
+    scenarios_dict = OrderedDict()
     
     
     scenarios = []
@@ -214,7 +181,7 @@ def main(scenario_index=-2):
     scenario['profile_length'] = int(
         np.ceil(65/scenario['profile_downsample']))
 
-    scenario['runname'] = 'model-autoencoder' + \
+    scenario['runname'] = 'final_model-autoencoder' + \
                           '_SET-' + scenario['state_encoder_type'] + \
                           '_SDT-' + scenario['state_decoder_type'] + \
                           '_CET-' + scenario['control_encoder_type'] + \

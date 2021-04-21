@@ -59,7 +59,7 @@ def percentile75_squared_error(true,pred):
     return np.percentile((true-pred)**2,75)
 
 def huber_error(true,pred):
-    return np.mean(np.where(np.abs(pred-true) < 0.7, 5*(pred - true)**2, 0.7*(np.abs(pred-true)-0.5*0.7)))
+    return np.mean(np.where(np.abs(pred-true) < 0.7, 0.5*(pred - true)**2, 0.7*(np.abs(pred-true)-0.5*0.7)))
 
 metrics = {'mean_squared_error':mean_squared_error,
           'mean_absolute_error':mean_absolute_error,
