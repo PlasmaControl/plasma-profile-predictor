@@ -307,10 +307,10 @@ class AutoEncoderDataGenerator(Sequence):
                                 (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
         '''
          
-        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead, self.state_dim)),
+        targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
                 'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
-        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead)),
+        weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
                         'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookback+self.lookahead)),
                         'linear_system_residual': np.repeat(np.array(
                             [self.discount_factor**i for i in range(self.lookahead)]).reshape(

@@ -15,6 +15,7 @@ from helpers.custom_losses import denorm_loss, hinge_mse_loss, percent_baseline_
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
 from helpers.results_processing import write_autoencoder_results
 import models.LRAN_control
+import models.old_autoencoder
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
@@ -49,7 +50,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = '/scratch/gpfs/aaronwu/run_results_08_05/'
+    checkpt_dir = '/scratch/gpfs/aaronwu/run_results_06_20_21/'
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -59,24 +60,25 @@ def main(scenario_index=-2):
 
     efit_type = 'EFIT02'
    # 'ffprime_{}'.format(efit_type),
-    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA'],
+    default_scenario = {'actuator_names': ['pinj', 'curr', 'tinj','gasA', 'a_{}'.format(efit_type), 'drsep_{}'.format(efit_type),
+                                           'kappa_{}'.format(efit_type), 'rmagx_{}'.format(efit_type),
+                                           'triangularity_top_{}'.format(efit_type),'triangularity_bot_{}'.format(efit_type)],
                         'profile_names': ['temp',
                                           'dens',
                                           'rotation',
                                           'press_{}'.format(efit_type),
                                           'q_{}'.format(efit_type)],
-                        'scalar_names': ['density_estimate','li_{}'.format(efit_type),'volume_{}'.format(efit_type),
-                                         'triangularity_top_{}'.format(efit_type),'triangularity_bot_{}'.format(efit_type)],
+                        'scalar_names': [], #'density_estimate','li_{}'.format(efit_type),'volume_{}'.format(efit_type)
                         'profile_downsample': 2,
                         'state_encoder_type': 'dense',
                         'state_decoder_type': 'dense',
                         'control_encoder_type': 'dense',
                         'control_decoder_type': 'dense',
-                        'state_encoder_kwargs': {'num_layers': 20,
+                        'state_encoder_kwargs': {'num_layers': 10,
                                                  'max_channels':20,
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'},
-                        'state_decoder_kwargs': {'num_layers': 20,
+                        'state_decoder_kwargs': {'num_layers': 10,
                                                  'max_channels':20,
                                                  'layer_scale': 1,
                                                  'std_activation':'elu'},
@@ -86,8 +88,8 @@ def main(scenario_index=-2):
                         'control_decoder_kwargs': {'num_layers': 1,
                                                    'layer_scale': 1,
                                                    'std_activation':'linear'},
-                        'state_latent_dim': 50,
-                        'control_latent_dim':4,
+                        'state_latent_dim': 65,
+                        'control_latent_dim':10,
                         'x_weight':1,
                         'u_weight':1,
                         'decode_weight':1,
@@ -325,7 +327,7 @@ def main(scenario_index=-2):
                   'adamax': keras.optimizers.Adamax,
                   'nadam': keras.optimizers.Nadam}
    
-    model = models.LRAN_control.make_LRAN(scenario['state_encoder_type'],
+    model = models.old_autoencoder.make_autoencoder(scenario['state_encoder_type'],
                                                 scenario['state_decoder_type'],
                                                 scenario['control_encoder_type'],
                                                 scenario['control_decoder_type'],
@@ -387,7 +389,7 @@ def main(scenario_index=-2):
     callbacks.append(TimingCallback(time_limit=(runtimes[scenario_index]-30)*60))
     
     if ngpu <= 1:
-        callbacks.append(ModelCheckpoint(checkpt_dir+scenario['runname']+'.h5', monitor='val_loss',
+        callbacks.append(ModelCheckpoint(checkpt_dir+'test_old_added'+'.h5', monitor='val_loss',
                                          verbose=0, save_best_only=True,
                                          save_weights_only=False, mode='auto', period=1))
 
@@ -398,7 +400,7 @@ def main(scenario_index=-2):
     ###############
     # Save scenario
     ###############
-    with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
+    with open(checkpt_dir +'test_old_added'+ '_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print('Saved Analysis params before run')
 
@@ -430,7 +432,7 @@ def main(scenario_index=-2):
     ###############
     # Save Results
     ###############
-    scenario['model_path'] = checkpt_dir + scenario['runname'] + '.h5'
+    scenario['model_path'] = checkpt_dir + 'test_old_added' + '.h5'
     scenario['history'] = history.history
     scenario['history_params'] = history.params
     
@@ -439,7 +441,7 @@ def main(scenario_index=-2):
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario['model_path'])
         print('Saved model after training')
-    with open(checkpt_dir + scenario['runname'] + '_params.pkl', 'wb+') as f:
+    with open(checkpt_dir + 'test_old_added_params.pkl', 'wb+') as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print('Saved Analysis params after training')
 

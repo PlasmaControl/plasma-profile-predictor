@@ -152,7 +152,7 @@ def get_state_encoder(profile_names, scalar_names,
     joiner = get_state_joiner(
         profile_names, scalar_names, 1, profile_length, batch_size)
     x = joiner(joiner.inputs)
-    x = layers.GaussianNoise(1.5)(x)
+    #x = layers.GaussianNoise(1.5)(x)
     # initializer = downsample()
     for i in range(num_layers):
         units = int(state_dim + (state_latent_dim-state_dim)
@@ -168,7 +168,7 @@ def get_state_encoder(profile_names, scalar_names,
         '''
         x = layers.Dense(units = units, activation = std_activation, 
                          use_bias = True)(x)
-        x = layers.Dropout(rate = 0.2)(x)
+        #x = layers.Dropout(rate = 0.2)(x)
     x = layers.Reshape((state_latent_dim,))(x)
     state_encoder = Model(inputs=joiner.inputs, outputs=x,
                              name='dense_state_encoder')
@@ -296,7 +296,7 @@ def get_state_decoder(profile_names, scalar_names, profile_length,
         x = layers.Dense(units=units, activation=std_activation, 
                              use_bias=True)(x)
 
-        x = layers.Dropout(rate = 0.2)(x)
+        #x = layers.Dropout(rate = 0.2)(x)
     # y = layers.Dense(units=state_dim, activation=std_activation)(x)
     x = layers.Dense(units = state_dim, activation = 'linear', use_bias = True)(x)
     outputs = layers.Reshape((state_dim,))(x)
@@ -332,13 +332,13 @@ def get_control_encoder(actuator_names, control_latent_dim,
         for i in range(num_layers):
             units = int(num_actuators + (control_latent_dim-num_actuators)
                         * ((i+1)/(num_layers))**layer_scale)
-            u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
+            u = layers.Dense(units=units, activation=std_activation, use_bias=False)(u)
         u = layers.Reshape((control_latent_dim,))(u)
         encoder = Model(inputs=joiner.inputs, outputs=u,
                         name='dense_control_encoder')
     else:
         u = layers.Dense(units=control_latent_dim, activation=std_activation, 
-                         kernel_initializer='identity')(u)
+                         kernel_initializer='identity', use_bias = False)(u)
         u = layers.Reshape((control_latent_dim,))(u)
         encoder = Model(inputs=joiner.inputs, outputs=u,
                         name='dense_control_encoder')
@@ -372,13 +372,13 @@ def get_control_decoder(actuator_names, control_latent_dim,
         for i in range(num_layers-1):
             units = int(control_latent_dim + (num_actuators-control_latent_dim)
                         * ((i+1)/(num_layers))**layer_scale)
-            u = layers.Dense(units=units, activation=std_activation, use_bias=True)(u)
+            u = layers.Dense(units=units, activation=std_activation, use_bias=False)(u)
         u = layers.Dense(units=num_actuators, activation='linear')(u)
         outputs = layers.Reshape((num_actuators,))(u)
         decoder = Model(inputs=ui, outputs=outputs, name='dense_control_decoder')
     else:
         u = layers.Dense(units=num_actuators, activation=std_activation, 
-                         kernel_initializer='identity')(u)
+                         kernel_initializer='identity', use_bias=False)(u)
         outputs = layers.Reshape((num_actuators,))(u)
         decoder = Model(inputs=ui, outputs=outputs, name='dense_control_decoder')
     return decoder
