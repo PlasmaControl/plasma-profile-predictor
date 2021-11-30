@@ -4,7 +4,7 @@ import re
 import datetime
 
 
-def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='traverse'):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode="traverse"):
     """Creates slurm scripts for batch submit jobs.
 
     Args:
@@ -20,23 +20,23 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode='trav
     os.makedirs(output_dir, exist_ok=True)
 
     for i in range(number):
-        with open(os.path.join(output_dir, 'driver' + str(i) + '.sh'), 'w+') as f:
-            f.write('#!/bin/bash \n')
-            f.write('#SBATCH -N 1 \n')
-            f.write('#SBATCH -c ' + str(ncpu) + '\n')
-            f.write('#SBATCH --mem ' + str(req_mem) + 'G\n')
+        with open(os.path.join(output_dir, "driver" + str(i) + ".sh"), "w+") as f:
+            f.write("#!/bin/bash \n")
+            f.write("#SBATCH -N 1 \n")
+            f.write("#SBATCH -c " + str(ncpu) + "\n")
+            f.write("#SBATCH --mem " + str(req_mem) + "G\n")
             if ngpu > 0:
-                f.write('#SBATCH -G ' + str(ngpu) + '\n')
-            f.write('#SBATCH -o ' +
-                    os.path.join(output_dir, 'log' + str(i) + '.out \n'))
-            f.write('#SBATCH -t ' +
-                    str(datetime.timedelta(minutes=times[i])) + '\n')
+                f.write("#SBATCH -G " + str(ngpu) + "\n")
+            f.write(
+                "#SBATCH -o " + os.path.join(output_dir, "log" + str(i) + ".out \n")
+            )
+            f.write("#SBATCH -t " + str(datetime.timedelta(minutes=times[i])) + "\n")
 
-            f.write('root_dir=$HOME/plasma-profile-predictor \n')
-            f.write('module load anaconda \n')
-            f.write('conda activate tfgpu \n')
-            if mode == 'traverse':
-                f.write('python $root_dir/train_traverse.py ' + str(i) + '\n')
-            elif mode == 'autoencoder':
-                f.write('python $root_dir/train_autoencoder.py ' + str(i) + '\n')
-            f.write('exit')
+            f.write("root_dir=$HOME/plasma-profile-predictor \n")
+            f.write("module load anaconda \n")
+            f.write("conda activate tfgpu \n")
+            if mode == "traverse":
+                f.write("python $root_dir/train_traverse.py " + str(i) + "\n")
+            elif mode == "autoencoder":
+                f.write("python $root_dir/train_autoencoder.py " + str(i) + "\n")
+            f.write("exit")

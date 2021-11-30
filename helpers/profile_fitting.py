@@ -29,15 +29,15 @@ def mtanh(x, p):
     xsym = p[3]
     hwid = p[4]
 
-    z = (xsym-x)/hwid
+    z = (xsym - x) / hwid
 
-    y = a*((1 + alpha*z)*np.exp(z) - np.exp(-z)) / (np.exp(z) + np.exp(-z)) + b
+    y = a * ((1 + alpha * z) * np.exp(z) - np.exp(-z)) / (np.exp(z) + np.exp(-z)) + b
     return y
 
 
 def mtanh_res(params, x_data, y_data, y_err):
     y_model = mtanh(x_data, params)
-    res = (y_data - y_model)/y_err
+    res = (y_data - y_model) / y_err
     return res
 
 
@@ -51,28 +51,28 @@ def fit_mtanh(x_data, y_data, y_err=None):
     pmin = np.array([0.1, 0.001, 0.0001, 0.85, 0.01])
     pmax = np.array([np.inf, np.inf, np.inf, 1.15, np.inf])
 
-    kwargs = {'x_data': x_data,
-              'y_data': y_data,
-              'y_err': y_err}
-    fit_out = least_squares(mtanh_res,
-                            p0,
-                            jac='2-point',
-                            bounds=(pmin, pmax),
-                            method='trf',
-                            ftol=1e-08,
-                            xtol=1e-08,
-                            gtol=1e-08,
-                            x_scale=1.0,
-                            loss='linear',
-                            f_scale=1.0,
-                            diff_step=None,
-                            tr_solver=None,
-                            tr_options={},
-                            jac_sparsity=None,
-                            max_nfev=200,
-                            verbose=0,
-                            args=(),
-                            kwargs=kwargs)
+    kwargs = {"x_data": x_data, "y_data": y_data, "y_err": y_err}
+    fit_out = least_squares(
+        mtanh_res,
+        p0,
+        jac="2-point",
+        bounds=(pmin, pmax),
+        method="trf",
+        ftol=1e-08,
+        xtol=1e-08,
+        gtol=1e-08,
+        x_scale=1.0,
+        loss="linear",
+        f_scale=1.0,
+        diff_step=None,
+        tr_solver=None,
+        tr_options={},
+        jac_sparsity=None,
+        max_nfev=200,
+        verbose=0,
+        args=(),
+        kwargs=kwargs,
+    )
     return fit_out.x
 
 
@@ -85,6 +85,7 @@ def fit_profile(x_data, y_data, y_err=None):
     x121 = np.linspace(0, 1.2, 121)
     y121 = mtanh(x121, p)
     x65 = np.linspace(0, 1, 65)
-    y65 = interp1d(x121, y121, 'linear',
-                   fill_value='extrapolate', assume_sorted=True)(x65)
+    y65 = interp1d(x121, y121, "linear", fill_value="extrapolate", assume_sorted=True)(
+        x65
+    )
     return y65
