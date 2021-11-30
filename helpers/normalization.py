@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import optimize
 from tqdm import tqdm
-import keras.backend as K
+import tensorflow.keras.backend as K
 
 
 def normalize_arr(data, method, uniform_over_profile=True):

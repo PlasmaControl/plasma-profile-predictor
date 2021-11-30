@@ -1,8 +1,8 @@
 from time import time
-import keras
-from keras.callbacks import Callback
-from keras.callbacks import TensorBoard
-import keras.backend as K
+from tensorflow import keras
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.callbacks import TensorBoard
+import tensorflow.keras.backend as K
 import numpy as np
 
 

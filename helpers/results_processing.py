@@ -1,12 +1,12 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from keras.models import Model
+from tensorflow.keras.models import Model
 import seaborn as sns
 import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
 import pickle
-import keras
+from tensorflow import keras
 import sys
 import os
 sys.path.append(os.path.abspath('../'))
