@@ -7,8 +7,7 @@ import numba
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
-from keras.utils import Sequence
-from keras.callbacks import TensorBoard
+from tensorflow.keras.utils import Sequence
 from helpers.normalization import normalize
 from helpers.pruning_functions import remove_dudtrip, remove_I_coil, remove_ECH, remove_gas, remove_nan, remove_non_gas_feedback, remove_non_beta_feedback, remove_outliers
 from helpers import exclude_shots
@@ -223,7 +222,7 @@ class DataGenerator(Sequence):
 
 class AutoEncoderDataGenerator(Sequence):
     def __init__(self, data, batch_size, profile_names, actuator_names,
-                 scalar_names, lookback, lookahead, profile_downsample,
+                 scalar_names, lookahead, profile_downsample,
                  state_latent_dim, discount_factor=1, x_weight=1, u_weight=1, shuffle=True, **kwargs):
         """Make a data generator for training or validation data for autoencoder model
 
@@ -233,7 +232,6 @@ class AutoEncoderDataGenerator(Sequence):
             profile_names (str): List of names of profile inputs, as strings.
             actuator_names (str): List of names of actuator inputs, as strings.
             scalar_names (str): List of names of scalar inputs (shape parameters etc).
-            lookback (int): How many timesteps of previous actuators
             lookahead (int): How many steps ahead to predict (prediction window)
             profile_downsample (int): How much to downsample the profile data.
             state_latent_dim (int): dimension of the state latent space.
@@ -248,7 +246,6 @@ class AutoEncoderDataGenerator(Sequence):
         self.profile_inputs = profile_names
         self.actuator_inputs = actuator_names
         self.scalar_inputs = scalar_names
-        self.lookback = lookback
         self.lookahead = lookahead
         self.profile_downsample = profile_downsample
         self.profile_length = int(np.ceil(65/profile_downsample))
@@ -295,10 +292,10 @@ class AutoEncoderDataGenerator(Sequence):
             inp['input_' + sig] = self.data[sig][idx * self.batch_size:
                                                  (idx+1)*self.batch_size,:,np.newaxis]
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
-                'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
+                'u_residual': np.zeros((self.batch_size, self.lookahead, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
         weights_dict = {'x_residual': self.x_weight*np.ones((len(self.cur_shotnum), self.lookahead+1)),
-                        'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookback+self.lookahead)),
+                        'u_residual': self.u_weight*np.ones((len(self.cur_shotnum), self.lookahead)),
                         'linear_system_residual': np.repeat(np.array(
                             [self.discount_factor**i for i in range(self.lookahead)]).reshape(
                                 (1, self.lookahead)), len(self.cur_shotnum), axis=0)}
@@ -330,8 +327,8 @@ class AutoEncoderDataGenerator(Sequence):
         if not isinstance(times,np.ndarray) and times is not None:
             times = np.array(times)
         idx_arr = np.empty((self.nsamples,3))
-        idx_arr[:,0] = self.data['shotnum'][:,self.lookback]
-        idx_arr[:,1] = self.data['time'][:,self.lookback]
+        idx_arr[:,0] = self.data['shotnum'][:,0]
+        idx_arr[:,1] = self.data['time'][:,0]
         idx_arr[:,2] = np.arange(self.nsamples)
         if times is None:
             inds = idx_arr[np.where(np.any(np.array([idx_arr[:,0] == foo for foo in shots]),axis=0))][:,2].astype(int)
@@ -356,11 +353,11 @@ class AutoEncoderDataGenerator(Sequence):
         for sig in self.scalar_inputs:
             inp['input_' + sig] = self.data[sig][inds,:]
         targ = {'x_residual': np.zeros((self.batch_size, self.lookahead+1, self.state_dim)),
-                'u_residual': np.zeros((self.batch_size, self.lookahead+self.lookback, self.num_actuators)),
+                'u_residual': np.zeros((self.batch_size, self.lookahead, self.num_actuators)),
                 'linear_system_residual': np.zeros((self.batch_size, self.lookahead, self.state_latent_dim))}
 
-        actual_shots_times = {'shots': self.data['shotnum'][inds, self.lookback],
-                              'times': self.data['time'][inds, self.lookback]}
+        actual_shots_times = {'shots': self.data['shotnum'][inds, 0],
+                              'times': self.data['time'][inds, 0]}
 
         return inp, targ, actual_shots_times
 
@@ -441,11 +438,11 @@ def process_data(rawdata, sig_names, normalization_method, window_length=1,
     ##############################
     # get pruning functions
     ##############################
-    pruning_functions = kwargs.get('pruning_functions', [])
-    # if 'ech' not in sig_names:
-    #     pruning_functions.append('remove_ECH')
-    # if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
-    #     pruning_functions.append('remove_gas')
+    pruning_functions = copy.copy(kwargs.get('pruning_functions', []))
+    if 'ech' not in sig_names:
+        pruning_functions.append('remove_ECH')
+    if not {'gasB', 'gasC', 'gasD', 'gasE'}.issubset(set(sig_names)):
+        pruning_functions.append('remove_gas')
     prun_dict = {'remove_nan': remove_nan,
                  'remove_ECH': remove_ECH,
                  'remove_I_coil': remove_I_coil,
