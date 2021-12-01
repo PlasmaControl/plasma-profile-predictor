@@ -31,6 +31,10 @@ def normalize_arr(data, method, uniform_over_profile=True):
     else:
         data[np.isnan(data)] = nanmean
     # then normalize
+    if method is None:
+        param_dict = {}
+        return data, param_dict
+
     if method == "StandardScaler":
         if uniform_over_profile or data.ndim < 3:
             mean = np.mean(data)
@@ -192,6 +196,8 @@ def denormalize_arr(data, param_dict):
     # for key, val in param_dict.items():
     #    if K.is_tensor(val):
     #        val = np.array(K.eval(val))
+    if param_dict["method"] is None:
+        return data
     if param_dict["method"] == "StandardScaler":
         return data * np.maximum(param_dict["std"], eps) + param_dict["mean"]
     elif param_dict["method"] == "MinMax":
