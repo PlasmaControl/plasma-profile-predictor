@@ -44,20 +44,19 @@ def main(scenario_index=-2):
     # np.random.seed(seed_value)
     # tf.set_random_seed(seed_value)
 
-    config = tf.ConfigProto(
+    config = tf.compat.v1.ConfigProto(
         intra_op_parallelism_threads=4 * num_cores,
         inter_op_parallelism_threads=4 * num_cores,
         allow_soft_placement=True,
         device_count={"CPU": 1, "GPU": ngpu},
     )
-    session = tf.Session(config=config)
-    K.set_session(session)
+    session = tf.compat.v1.Session(config=config)
 
     ###############
     # global stuff
     ###############
 
-    checkpt_dir = "/scratch/gpfs/aaronwu/run_results_06_20_21/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_11_30_21/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
