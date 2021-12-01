@@ -22,12 +22,12 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode="trav
         with open(os.path.join(output_dir, "driver" + str(i) + ".sh"), "w+") as f:
             f.write("#!/bin/bash \n")
             if mode == "autoencoder":
-                f.write("#SBATCH -J LRAN " + str(i))
+                f.write("#SBATCH -J LRAN " + str(i) + " \n")
             else:
-                f.write("#SBATCH -J CONV " + str(i))
-            f.write("#SBATCH --mail-type=begin")
-            f.write("#SBATCH --mail-type=end")
-            f.write("#SBATCH --mail-user=wconlin@princeton.edu")
+                f.write("#SBATCH -J CONV " + str(i) + " \n")
+            f.write("#SBATCH --mail-type=begin \n")
+            f.write("#SBATCH --mail-type=end \n")
+            f.write("#SBATCH --mail-user=wconlin@princeton.edu \n")
             f.write("#SBATCH -N 1 \n")
             f.write("#SBATCH -c " + str(ncpu) + "\n")
             f.write("#SBATCH --mem " + str(req_mem) + "G\n")
