@@ -18,9 +18,7 @@ from helpers.custom_losses import (
     baseline_MAE,
 )
 from helpers.custom_losses import percent_correct_sign, baseline_MAE
-from helpers.results_processing import write_autoencoder_results
-import models.LRAN_control
-import models.old_autoencoder
+import models.autoencoder
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from tensorflow.keras.callbacks import (
     LearningRateScheduler,
