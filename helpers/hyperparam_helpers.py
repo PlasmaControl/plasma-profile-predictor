@@ -40,7 +40,7 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode="trav
 
             f.write("root_dir=$HOME/plasma-profile-predictor \n")
             f.write("module load anaconda \n")
-            f.write("conda activate tfgpu \n")
+            f.write("conda activate tf2-gpu \n")
             if mode == "traverse":
                 f.write("python $root_dir/train_traverse.py " + str(i) + "\n")
             elif mode == "autoencoder":
