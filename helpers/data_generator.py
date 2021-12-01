@@ -355,7 +355,7 @@ class AutoEncoderDataGenerator(Sequence):
             ]
         for sig in self.actuator_inputs:
             inp["input_" + sig] = self.data[sig][
-                idx * self.batch_size : (idx + 1) * self.batch_size, :-1, np.newaxis
+                idx * self.batch_size : (idx + 1) * self.batch_size, :, np.newaxis
             ]
         for sig in self.scalar_inputs:
             inp["input_" + sig] = self.data[sig][
@@ -366,7 +366,7 @@ class AutoEncoderDataGenerator(Sequence):
                 (self.batch_size, self.lookahead + 1, self.state_dim)
             ),
             "u_residual": np.zeros(
-                (self.batch_size, self.lookahead, self.num_actuators)
+                (self.batch_size, self.lookahead + 1, self.num_actuators)
             ),
             "linear_system_residual": np.zeros(
                 (self.batch_size, self.lookahead, self.state_latent_dim)
@@ -376,7 +376,7 @@ class AutoEncoderDataGenerator(Sequence):
             "x_residual": self.x_weight
             * np.ones((len(self.cur_shotnum), self.lookahead + 1)),
             "u_residual": self.u_weight
-            * np.ones((len(self.cur_shotnum), self.lookahead)),
+            * np.ones((len(self.cur_shotnum), self.lookahead + 1)),
             "linear_system_residual": np.repeat(
                 np.array(
                     [self.discount_factor ** i for i in range(self.lookahead)]
