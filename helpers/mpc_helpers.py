@@ -1,8 +1,12 @@
 import numpy as np
 import scipy
 import osqp
+from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
+import helpers.plot_settings
+import multiprocessing
+from helpers.data_generator import process_data
 
 
 class LRANMPC:
@@ -369,8 +373,8 @@ def get_submodels(model):
     """
     state_encoder = model.get_layer("state_encoder_time_dist").layer.layers[-1]
     control_encoder = model.get_layer("ctrl_encoder_time_dist").layer.layers[-1]
-    state_decoder = model.get_layer("state_decoder_time_dist").layer.layers[-1]
-    control_decoder = model.get_layer("ctrl_decoder_time_dist").layer.layers[-1]
+    state_decoder = model.get_layer("state_decoder_time_dist").layer
+    control_decoder = model.get_layer("ctrl_decoder_time_dist").layer
 
     return state_encoder, state_decoder, control_encoder, control_decoder
 
@@ -536,3 +540,308 @@ def compute_grammian(A, B, k=None):
             Wc += AiB @ AiB.T
             Ai = Ai @ A
     return Wc
+
+
+def _calc_delta_norm(i, data):
+    return np.linalg.norm(data - data[i], axis=1)
+
+
+def compute_lipschitz_constant(x, z, workers=1, verbose=True):
+    """Compute norms of differences between states and induced Lipschitz constant
+
+
+    Parameters
+    ----------
+    x : ndarray, shape(nsamples, nstates)
+        physical state
+    z : ndarray, shape(nsamples, nlatentstates)
+        latent state
+    workers : int, optional
+        how many parallel processes to work
+    verbose : bool
+        whether to display progress bar
+
+    Returns
+    -------
+    lipschitz_constant : ndarray
+        ratio of norm of differences ||z - z'||/||x - x'||
+    delta_x_norms : ndarray
+        norm of differences in physical state
+    delta_z_norms : ndarray
+        norm of differences in latent state
+    """
+    assert x.shape[0] == z.shape[0]
+
+    with multiprocessing.Pool(workers) as pool:
+        delta_x_norms = pool.starmap(
+            _calc_delta_norm,
+            tqdm(
+                [(i, x) for i in range(x.shape[0])],
+                desc="computing delta x norms",
+                ascii=True,
+                dynamic_ncols=True,
+                disable=not verbose,
+            ),
+        )
+        delta_z_norms = pool.starmap(
+            _calc_delta_norm,
+            tqdm(
+                [(i, z) for i in range(z.shape[0])],
+                desc="computing delta z norms",
+                ascii=True,
+                dynamic_ncols=True,
+                disable=not verbose,
+            ),
+        )
+
+    delta_x_norms = np.concatenate(delta_x_norms).flatten()
+    delta_z_norms = np.concatenate(delta_z_norms).flatten()
+    lipschitz_constant = delta_z_norms / delta_x_norms
+    return lipschitz_constant, delta_x_norms, delta_z_norms
+
+
+def compute_operator_norm(x, z):
+    """Compute norms of inputs, outputs, and induced operator
+
+    Parameters
+    ----------
+    x : ndarray, shape(nsamples, nstates)
+        physical state
+    z : ndarray, shape(nsamples, nlatentstates)
+        latent state
+
+    Returns
+    -------
+    operator_norm : ndarray
+        induced norm of the encoding operator
+    x_norm : ndarray
+        norm of physical state x
+    z_norm : ndarray
+        norm of latent state z
+    """
+
+    z_norm = np.linalg.norm(z, axis=1)
+    x_norm = np.linalg.norm(x, axis=1)
+    operator_norm = z_norm / x_norm
+    return operator_norm, x_norm, z_norm
+
+
+def compute_residuals(A, B, z0, z1, v0):
+    """Compute residual from latent linear model
+
+    Parameters
+    ----------
+    A, B : ndarray
+        System dynamics and input matrices
+    z0, z1 : ndarray, shape(nsamples, nlatentstates)
+        latent state at two timesteps
+    v0 : ndarray, shape(nsamples, ninputs)
+        latent control at initial timesteps
+
+    Returns
+    -------
+    dz : ndarray
+        error in linear system model
+
+    """
+
+    dz = z1 - z0 @ A.T - v0 @ B.T
+    return dz
+
+
+def compute_encoder_data(model, scenario, rawdata, verbose=2):
+    """Gets input and output data from encoder and residuals
+
+    Parameters
+    ----------
+    model : keras model
+        full LRAN autoencoder model
+    scenario : dict
+        training hyperparams and settings
+    rawdata : dict or str
+        raw unprocessed data or path to pkl
+    verbose : int
+        level of verbosity
+
+    Returns
+    -------
+    encoder_data : dict
+        valdata : dict of ndarray
+            validation data used
+        normalization_dict : dict
+            normalization parameters used
+        x0, x1 : ndarray
+            physical state at time 0, 1
+        z0, z1 : ndarray
+            latent state at time 0, 1
+        u0 : ndarray
+            physical input
+        v0 : ndarray
+            encoded input
+        dx : ndarray
+            residual in physical state
+        dz : ndarray
+            residual in latent state
+    """
+    traindata, valdata, normalization_dict = process_data(
+        rawdata,
+        scenario["sig_names"],
+        scenario["normalization_method"],
+        scenario["window_length"],
+        scenario["window_overlap"],
+        scenario["lookback"],
+        scenario["lookahead"],
+        scenario["sample_step"],
+        scenario["uniform_normalization"],
+        1,  # scenario['train_frac'],
+        0,  # scenario['val_frac'],
+        scenario["nshots"],
+        verbose,
+        scenario["flattop_only"],
+        randomize=False,
+        pruning_functions=scenario["pruning_functions"],
+        excluded_shots=scenario["excluded_shots"],
+        delta_sigs=[],
+        invert_q=scenario.setdefault("invert_q", False),
+        val_idx=scenario.setdefault("val_idx", 1),
+    )
+    del traindata
+
+    # parse data into timesteps / arrays
+    x0_dict = {
+        key: (
+            valdata[key][:, 0, ::2]
+            if valdata[key].ndim == 3
+            else valdata[key][:, 0].reshape((-1, 1))
+        )
+        for key in (scenario["profile_names"] + scenario["scalar_names"])
+    }
+
+    x1_dict = {
+        key: (
+            valdata[key][:, 1, ::2]
+            if valdata[key].ndim == 3
+            else valdata[key][:, 1].reshape((-1, 1))
+        )
+        for key in (scenario["profile_names"] + scenario["scalar_names"])
+    }
+
+    u0_dict = {
+        key: (
+            valdata[key][:, 1, ::2]
+            if valdata[key].ndim == 3
+            else valdata[key][:, 1].reshape((-1, 1))
+        )
+        for key in (scenario["actuator_names"])
+    }
+    x0 = np.hstack([val for val in x0_dict.values()])
+    x1 = np.hstack([val for val in x1_dict.values()])
+    u0 = np.hstack([val for val in u0_dict.values()])
+
+    # parse model
+    state_encoder, state_decoder, control_encoder, control_decoder = get_submodels(
+        model
+    )
+    A, B = get_AB(model)
+
+    if verbose:
+        print("Encoding")
+    # encode data
+    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_encoder.inputs])
+    if len(state_encoder.inputs[0].shape) == 2:
+        z0 = state_encoder.predict(
+            [x0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+        z1 = state_encoder.predict(
+            [x1[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+    if len(state_encoder.inputs[0].shape) == 3:
+        z0 = state_encoder.predict(
+            [x0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+        z1 = state_encoder.predict(
+            [x1[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+
+    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_encoder.inputs])
+    if len(control_encoder.inputs[0].shape) == 2:
+        v0 = control_encoder.predict(
+            [u0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+    if len(control_encoder.inputs[0].shape) == 3:
+        v0 = control_encoder.predict(
+            [u0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+
+    y0 = state_decoder.predict(z0)
+    if isinstance(y0, list):
+        y0 = np.hstack(y0)
+
+    # compute residuals
+    dz = compute_residuals(A, B, z0, z1, v0)
+    dx = x0[:, 0 : y0.shape[1]] - y0
+
+    encoder_data = {
+        "valdata": valdata,
+        "normalization_dict": normalization_dict,
+        "x0": x0,
+        "x1": x1,
+        "z0": z0,
+        "z1": z1,
+        "u0": u0,
+        "v0": v0,
+        "dx": dx,
+        "dz": dz,
+        "A": A,
+        "B": B,
+    }
+    return encoder_data
+
+
+def compute_norm_data(x, z, nsamples=None, workers=1, verbose=True):
+    """Computes data, operator, and lipschitz norms
+
+    Parameters
+    ----------
+    x : ndarray, shape(nsamples, nstates)
+        physical state
+    z : ndarray, shape(nsamples, nlatentstates)
+        latent state
+    workers : int, optional
+        how many parallel processes to work
+    verbose : bool
+        whether to display progress bar
+
+    Returns
+    -------
+    norm_data : dict of ndarray
+        operator_norm : ndarray
+            induced norm of the encoding operator
+        x_norm : ndarray
+            norm of physical state x
+        z_norm : ndarray
+            norm of latent state z
+        lipschitz_constant : ndarray
+            ratio of norm of differences ||z - z'||/||x - x'||
+        delta_x_norms : ndarray
+            norm of differences in physical state
+        delta_z_norms : ndarray
+            norm of differences in latent state
+    """
+    if nsamples is None:
+        nsamples = len(x)
+
+    operator_norm, x0_norm, z0_norm = compute_operator_norm(x[:nsamples], z[:nsamples])
+    lipschitz_constant, delta_x0_norms, delta_z0_norms = compute_lipschitz_constant(
+        x[:nsamples], z[:nsamples], workers, verbose
+    )
+
+    norm_data = {
+        "lipschitz_constant": lipschitz_constant,
+        "delta_x0_norms": delta_x0_norms,
+        "delta_z0_norms": delta_z0_norms,
+        "operator_norm": operator_norm,
+        "x0_norm": x0_norm,
+        "z0_norm": z0_norm,
+    }
+    return norm_data
