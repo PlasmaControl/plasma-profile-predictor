@@ -1,4 +1,5 @@
 import pickle
+import os
 import gc
 import sys
 import time
@@ -537,7 +538,7 @@ def process_data(
     if type(rawdata) is not dict:
         if verbose:
             print("Loading")
-        abs_path = Path(rawdata).resolve()
+        abs_path = Path(os.path.expanduser(rawdata)).resolve()
         if abs_path.exists():
             with open(abs_path, "rb") as f:
                 rawdata = pickle.load(f, encoding="latin1")
