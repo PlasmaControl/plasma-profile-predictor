@@ -833,7 +833,7 @@ def compute_norm_data(x, z, nsamples=None, workers=1, verbose=True):
 
     operator_norm, x0_norm, z0_norm = compute_operator_norm(x[:nsamples], z[:nsamples])
     lipschitz_constant, delta_x0_norms, delta_z0_norms = compute_lipschitz_constant(
-        x[:nsamples], z[:nsamples], workers, verbose
+        x[: int(np.sqrt(nsamples))], z[: int(np.sqrt(nsamples))], workers, verbose
     )
 
     norm_data = {
