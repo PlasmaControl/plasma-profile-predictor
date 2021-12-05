@@ -22,7 +22,7 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, req_mem, times, mode="trav
         with open(os.path.join(output_dir, "driver" + str(i) + ".sh"), "w+") as f:
             f.write("#!/bin/bash \n")
             if mode == "autoencoder":
-                f.write("#SBATCH -J LRAN " + str(i) + " \n")
+                f.write("#SBATCH -J LRAN_" + str(i) + " \n")
             else:
                 f.write("#SBATCH -J CONV " + str(i) + " \n")
             f.write("#SBATCH --mail-type=begin \n")
