@@ -1,7 +1,7 @@
 import sys
 import os
 import pickle
-import keras
+from tensorflow import keras
 import datetime
 import matplotlib
 import copy
@@ -15,15 +15,20 @@ from matplotlib import pyplot as plt
 
 sys.path.append(os.path.abspath("../"))
 sys.path.append(os.path.abspath("./"))
-import helpers
+import helpers.mpc_helpers
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.normalization import normalize, denormalize, renormalize
 from helpers.custom_layers import MultiTimeDistributed
 
+
+base_path = "/projects/EKOLEMEN/profile_predictor/"
+folders = ["LRAN_11_30_21/"]
+
+
 ##########
 # set tf session
 ##########
-config = tf.compat.v1ConfigProto(
+config = tf.compat.v1.ConfigProto(
     intra_op_parallelism_threads=16,
     inter_op_parallelism_threads=16,
     allow_soft_placement=True,
@@ -93,9 +98,6 @@ metrics = {
 ##########
 # load model and scenario
 ##########
-base_path = "/projects/EKOLEMEN/profile_predictor/"
-folders = ["run_results_rt"]  # ['run_results_bt_scan/','run_results_time_scan/']
-
 
 for folder in folders:
     files = [
@@ -106,18 +108,19 @@ for folder in folders:
 
     for file_path in files:
         try:
+            print("loading scenario: " + file_path)
             with open(file_path, "rb") as f:
                 scenario = pickle.load(f, encoding="latin1")
 
             model_path = file_path[:-11] + "_model.h5"
             prev_time = time.time()
             if os.path.exists(model_path):
+                print("loading model: " + model_path.split("/")[-1])
                 model = keras.models.load_model(
                     model_path,
                     compile=False,
                     custom_objects={"MultiTimeDistributed": MultiTimeDistributed},
                 )
-                print("loaded model: " + model_path.split("/")[-1])
                 print("took {}s".format(time.time() - prev_time))
             else:
                 print("no model for path:", model_path)
@@ -163,12 +166,12 @@ for folder in folders:
                 sample_weights=None,
             )
 
-            ures, xres, lres = model.predict_generator(
+            ures, xres, lres = model.predict(
                 val_generator, verbose=0, workers=4, use_multiprocessing=True
             )
             x_residuals = {
                 sig: xres[..., i * 33 : (i + 1) * 33]
-                for i, sig in enumerate(scenario["target_profile_names"])
+                for i, sig in enumerate(scenario["profile_names"])
             }
 
             evaluation_metrics = {}
@@ -179,10 +182,10 @@ for folder in folders:
                 print(key)
                 print(val)
                 evaluation_metrics[key] = val
-                for sig in scenario["target_profile_names"]:
+                for sig in scenario["profile_names"]:
                     key = sig + "_" + metric_name
                     val = metric(x_residuals[sig])
-                    s += val / len(scenario["target_profile_names"])
+                    s += val / len(scenario["profile_names"])
                     evaluation_metrics[key] = val
                     print(key)
                     print(val)
