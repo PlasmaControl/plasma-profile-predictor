@@ -371,8 +371,8 @@ def get_submodels(model):
     state_encoder, state_decoder, control_encoder, control_decoder : keras models
         encoder/decoder submodels for state and control
     """
-    state_encoder = model.get_layer("state_encoder_time_dist").layer.layers[-1]
-    control_encoder = model.get_layer("ctrl_encoder_time_dist").layer.layers[-1]
+    state_encoder = model.get_layer("state_encoder_time_dist").layer
+    control_encoder = model.get_layer("ctrl_encoder_time_dist").layer
     state_decoder = model.get_layer("state_decoder_time_dist").layer
     control_decoder = model.get_layer("ctrl_decoder_time_dist").layer
 
@@ -689,7 +689,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         scenario["normalization_method"],
         scenario["window_length"],
         scenario["window_overlap"],
-        scenario["lookback"],
+        0,  # scenario["lookback"],
         scenario["lookahead"],
         scenario["sample_step"],
         scenario["uniform_normalization"],
@@ -707,30 +707,32 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     )
     del traindata
 
+    nsamples = len(valdata["time"])
+    nsamples -= nsamples % scenario["batch_size"]
     # parse data into timesteps / arrays
     x0_dict = {
         key: (
-            valdata[key][:, 0, ::2]
+            valdata[key][:nsamples, 0, ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:, 0].reshape((-1, 1))
+            else valdata[key][:nsamples, 0].reshape((-1, 1))
         )
         for key in (scenario["profile_names"] + scenario["scalar_names"])
     }
 
     x1_dict = {
         key: (
-            valdata[key][:, 1, ::2]
+            valdata[key][:nsamples, 1, ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:, 1].reshape((-1, 1))
+            else valdata[key][:nsamples, 1].reshape((-1, 1))
         )
         for key in (scenario["profile_names"] + scenario["scalar_names"])
     }
 
     u0_dict = {
         key: (
-            valdata[key][:, 1, ::2]
+            valdata[key][:nsamples, 1, ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:, 1].reshape((-1, 1))
+            else valdata[key][:nsamples, 1].reshape((-1, 1))
         )
         for key in (scenario["actuator_names"])
     }

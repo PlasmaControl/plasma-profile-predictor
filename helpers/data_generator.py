@@ -327,6 +327,7 @@ class AutoEncoderDataGenerator(Sequence):
         self.shuffle = shuffle
         self.kwargs = kwargs
         self.times_called = 0
+        self.sample_weights = kwargs.get("sample_weights", True)
         self.nsamples = self.data["time"].shape[0]
         if self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
@@ -340,8 +341,6 @@ class AutoEncoderDataGenerator(Sequence):
         self.times_called += 1
         idx = self.inds[idx]
         inp = {}
-        sample_weights = np.ones(self.batch_size)
-        weights_dict = {}
         self.cur_shotnum = self.data["shotnum"][
             idx * self.batch_size : (idx + 1) * self.batch_size
         ]
@@ -390,7 +389,10 @@ class AutoEncoderDataGenerator(Sequence):
         if self.times_called % len(self) == 0 and self.shuffle:
             self.inds = np.random.permutation(range(len(self)))
 
-        return inp, targ, weights_dict
+        if self.sample_weights:
+            return inp, targ, weights_dict
+        else:
+            return inp, targ
 
     def get_data_by_shot_time(self, shots, times=None):
         """Gets inputs for specific times within specified shots
