@@ -355,9 +355,10 @@ def get_state_encoder_dense(
         state_encoder (model): Keras model that takes each profile and scalar as individual inputs
             and returns a single tensor of the encoded values.
     """
-    layer_scale = kwargs.get("layer_scale", 1)
-    num_layers = kwargs.get("num_layers", 6)
-    std_activation = kwargs.get("std_activation", "elu")
+    layer_scale = kwargs.pop("layer_scale", 1)
+    num_layers = kwargs.pop("num_layers", 6)
+    kwargs.setdefault("activation", "elu")
+    norm = kwargs.pop("norm", False)
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
@@ -371,9 +372,13 @@ def get_state_encoder_dense(
             + (state_dim - state_latent_dim)
             * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
         )
-        x = Dense(units=units, activation=std_activation, use_bias=True)(x)
+        x = Dense(
+            units=units,
+            **kwargs,
+        )(x)
     x = Reshape((state_latent_dim,))(x)
-    x = BatchNormalization(center=False, scale=False, name="latent_state_norm")(x)
+    if norm:
+        x = BatchNormalization(center=False, scale=False, name="latent_state_norm")(x)
 
     encoder = Model(inputs=joiner.inputs, outputs=x, name="dense_state_encoder")
     return encoder
@@ -400,9 +405,9 @@ def get_state_decoder_dense(
         state_decoder (model): Keras model that takes a single tensor of the
             encoded values and returns each profile/scalar as individual outputs.
     """
-    layer_scale = kwargs.get("layer_scale", 1)
-    num_layers = kwargs.get("num_layers", 6)
-    std_activation = kwargs.get("std_activation", "elu")
+    layer_scale = kwargs.pop("layer_scale", 1)
+    num_layers = kwargs.pop("num_layers", 6)
+    kwargs.setdefault("activation", "elu")
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
@@ -416,7 +421,10 @@ def get_state_decoder_dense(
             + (state_dim - state_latent_dim)
             * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
         )
-        x = Dense(units=units, activation=std_activation, use_bias=True)(x)
+        x = Dense(
+            units=units,
+            **kwargs,
+        )(x)
     y = Dense(units=state_dim, activation="linear")(x)
     y = Reshape((state_dim,))(y)
     splitter = get_state_splitter(
@@ -536,13 +544,28 @@ def make_autoencoder(
         "none": get_control_decoder_none,
     }
 
+    profile_inputs = [
+        Input(
+            batch_shape=(batch_size, lookahead + 1, profile_length), name="input_" + nm
+        )
+        for nm in profile_names
+    ]
+    scalar_inputs = [
+        Input(batch_shape=(batch_size, lookahead + 1, 1), name="input_" + nm)
+        for nm in scalar_names
+    ]
+    actuator_inputs = [
+        Input(batch_shape=(batch_size, lookahead + 1, 1), name="input_" + nm)
+        for nm in actuator_names
+    ]
+
     state_encoder = state_encoders[state_encoder_type](
         profile_names,
         scalar_names,
         profile_length,
         state_latent_dim,
         batch_size=batch_size,
-        **state_encoder_kwargs
+        **state_encoder_kwargs,
     )
     state_decoder = state_decoders[state_decoder_type](
         profile_names,
@@ -550,35 +573,38 @@ def make_autoencoder(
         profile_length,
         state_latent_dim,
         batch_size=batch_size,
-        **state_decoder_kwargs
+        **state_decoder_kwargs,
     )
     control_encoder = control_encoders[control_encoder_type](
         actuator_names,
         control_latent_dim,
         batch_size=batch_size,
-        **control_encoder_kwargs
+        **control_encoder_kwargs,
     )
     control_decoder = control_decoders[control_decoder_type](
         actuator_names,
         control_latent_dim,
         batch_size=batch_size,
-        **control_decoder_kwargs
+        **control_decoder_kwargs,
     )
-    xi = get_state_input_model(
+    state_input = get_state_input_model(
         profile_names,
         scalar_names,
         lookahead + 1,
         profile_length,
         batch_size=batch_size,
     )
-    ui = get_control_input_model(actuator_names, lookahead + 1, batch_size=batch_size)
+    control_input = get_control_input_model(
+        actuator_names, lookahead + 1, batch_size=batch_size
+    )
 
-    zi = MultiTimeDistributed(state_encoder, name="state_encoder_time_dist")(xi.outputs)
+    xi = state_input(profile_inputs + scalar_inputs)
+    ui = control_input(actuator_inputs)
+
+    zi = MultiTimeDistributed(state_encoder, name="state_encoder_time_dist")(xi)
     xo = MultiTimeDistributed(state_decoder, name="state_decoder_time_dist")(zi)
 
-    vi = MultiTimeDistributed(control_encoder, name="ctrl_encoder_time_dist")(
-        ui.outputs
-    )
+    vi = MultiTimeDistributed(control_encoder, name="ctrl_encoder_time_dist")(ui)
     uo = MultiTimeDistributed(control_decoder, name="ctrl_decoder_time_dist")(vi)
 
     regularization = kwargs.get(
@@ -606,11 +632,14 @@ def make_autoencoder(
         AB(vi, initial_state=z0)
     )
     x1_residual = subtract([z1, z1est], name="linear_system_residual")
-    xicat = Concatenate()(xi.outputs)
+    xicat = Concatenate()(xi)
     xocat = Concatenate()(xo)
-    uicat = Concatenate()(ui.outputs)
+    uicat = Concatenate()(ui)
     uocat = Concatenate()(uo)
     x_res = subtract([xicat, xocat], name="x_residual")
     u_res = subtract([uicat, uocat], name="u_residual")
-    model = Model(inputs=xi.inputs + ui.inputs, outputs=[u_res, x_res, x1_residual])
+    model = Model(
+        inputs=profile_inputs + scalar_inputs + actuator_inputs,
+        outputs=[u_res, x_res, x1_residual],
+    )
     return model
