@@ -12,9 +12,20 @@ from tensorflow.keras.layers import (
     Reshape,
     Permute,
     BatchNormalization,
+    ELU,
+    ReLU,
+    LeakyReLU,
 )
 from tensorflow.keras.models import Model
 from helpers.custom_layers import MultiTimeDistributed
+from helpers.custom_activations import InverseLeakyReLU
+
+activations = {
+    "relu": ReLU(),
+    "elu": ELU(),
+    "leaky_relu": LeakyReLU(),
+    "inv_leaky_relu": InverseLeakyReLU(),
+}
 
 
 def get_state_input_model(
@@ -346,7 +357,7 @@ def get_state_encoder_dense(
         state_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        std_activation (str or fn): activation function to apply to hidden layers
+        activation (str or fn): activation function to apply to hidden layers
         num_layers (int): number of hidden layers
         layer_scale (float): power law scaling for size of hidden layers
             size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
@@ -357,8 +368,10 @@ def get_state_encoder_dense(
     """
     layer_scale = kwargs.pop("layer_scale", 1)
     num_layers = kwargs.pop("num_layers", 6)
-    kwargs.setdefault("activation", "elu")
     norm = kwargs.pop("norm", False)
+    activation = kwargs.pop("activation", ELU())
+    if activation in activations:
+        activation = activations[activation]
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
@@ -374,8 +387,10 @@ def get_state_encoder_dense(
         )
         x = Dense(
             units=units,
+            activation=None,
             **kwargs,
         )(x)
+        x = activation(x)
     x = Reshape((state_latent_dim,))(x)
     if norm:
         x = BatchNormalization(center=False, scale=False, name="latent_state_norm")(x)
@@ -396,7 +411,7 @@ def get_state_decoder_dense(
         state_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        std_activation (str or fn): activation function to apply to hidden layers
+        activation (str or fn): activation function to apply to hidden layers
         num_layers (int): number of hidden layers
         layer_scale (float): power law scaling for size of hidden layers
             size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
@@ -407,7 +422,9 @@ def get_state_decoder_dense(
     """
     layer_scale = kwargs.pop("layer_scale", 1)
     num_layers = kwargs.pop("num_layers", 6)
-    kwargs.setdefault("activation", "elu")
+    activation = kwargs.pop("activation", ELU())
+    if activation in activations:
+        activation = activations[activation]
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
@@ -421,11 +438,15 @@ def get_state_decoder_dense(
             + (state_dim - state_latent_dim)
             * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
         )
+        x = activation(x)
         x = Dense(
             units=units,
+            activation=None,
             **kwargs,
         )(x)
-    y = Dense(units=state_dim, activation="linear")(x)
+
+    x = activation(x)
+    y = Dense(units=state_dim, activation=None)(x)
     y = Reshape((state_dim,))(y)
     splitter = get_state_splitter(
         profile_names, scalar_names, profile_length, batch_size
