@@ -15,9 +15,10 @@ from helpers.custom_losses import (
     denorm_loss,
     hinge_mse_loss,
     percent_baseline_error,
+    percent_correct_sign,
     baseline_MAE,
 )
-from helpers.custom_losses import percent_correct_sign, baseline_MAE
+from helpers.custom_losses import Orthonormal
 import models.autoencoder
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from tensorflow.keras.callbacks import (
@@ -56,7 +57,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_11_30_21/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_12_10_21/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -64,7 +65,7 @@ def main(scenario_index=-2):
     # scenarios
     ###############
 
-    efit_type = "EFIT02"
+    efit_type = "EFIT01"
     default_scenario = {
         "actuator_names": ["pinj", "tinj", "curr_target", "target_density", "bt"],
         "profile_names": [
@@ -74,7 +75,7 @@ def main(scenario_index=-2):
             "press_{}".format(efit_type),
             "q_{}".format(efit_type),
         ],
-        "scalar_names": [],  #'density_estimate','li_{}'.format(efit_type),'volume_{}'.format(efit_type)
+        "scalar_names": [],
         "profile_downsample": 2,
         "state_encoder_type": "dense",
         "state_decoder_type": "dense",
@@ -83,12 +84,13 @@ def main(scenario_index=-2):
         "state_encoder_kwargs": {
             "num_layers": 6,
             "layer_scale": 2,
-            "std_activation": "elu",
+            "activation": "elu",
+            "norm": True,
         },
         "state_decoder_kwargs": {
             "num_layers": 6,
             "layer_scale": 2,
-            "std_activation": "elu",
+            "activation": "elu",
         },
         "control_encoder_kwargs": {},
         "control_decoder_kwargs": {},
@@ -166,22 +168,18 @@ def main(scenario_index=-2):
         {"x_weight": 1.0},
         {"x_weight": 2},
     ]
-    # scenarios_dict['optimizer_kwargs']=[{'optimizer_kwargs': {'lr':0.0005}},
-    #                                     {'optimizer_kwargs':{'lr':0.0001}},
-    #                                     {'optimizer_kwargs':{'lr':0.00005}}]
     scenarios_dict["discount_factor"] = [
         {"discount_factor": 1.0},
         {"discount_factor": 0.8},
     ]
 
     scenarios_dict["state_latent_dim"] = [
-        {"state_latent_dim": 50},
         {"state_latent_dim": 100},
+        {"state_latent_dim": 165},
         {"state_latent_dim": 200},
     ]
     scenarios_dict["lookahead"] = [
         {"lookahead": 6},
-        {"lookahead": 8},
         {"lookahead": 10},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
@@ -189,24 +187,55 @@ def main(scenario_index=-2):
             "state_encoder_kwargs": {
                 "num_layers": 6,
                 "layer_scale": 1,
-                "std_activation": "elu",
+                "activation": "elu",
+                "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 6,
                 "layer_scale": 1,
-                "std_activation": "elu",
+                "activation": "elu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 10,
                 "layer_scale": 1,
-                "std_activation": "elu",
+                "activation": "elu",
+                "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 10,
                 "layer_scale": 1,
-                "std_activation": "elu",
+                "activation": "elu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 10,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "kernel_constraint": Orthonormal(),
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 10,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "kernel_constraint": Orthonormal(),
+            },
+        },
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 10,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "kernel_constraint": Orthonormal(),
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 10,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "kernel_constraint": Orthonormal(),
             },
         },
     ]
@@ -369,7 +398,7 @@ def main(scenario_index=-2):
         scenario["control_latent_dim"],
         scenario["profile_length"],
         scenario["lookahead"],
-        scenario["batch_size"],
+        None,  # scenario["batch_size"],
     )
 
     model.summary()
