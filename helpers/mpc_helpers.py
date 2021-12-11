@@ -108,6 +108,8 @@ class LRANMPC:
         self._A, self._B = get_AB(self._model)
 
         (
+            self._state_input,
+            self._control_input,
             self._state_encoder,
             self._control_encoder,
             self._state_decoder,
@@ -371,12 +373,21 @@ def get_submodels(model):
     state_encoder, state_decoder, control_encoder, control_decoder : keras models
         encoder/decoder submodels for state and control
     """
+    state_input = model.get_layer("state_input")
+    control_input = model.get_layer("control_input")
     state_encoder = model.get_layer("state_encoder_time_dist").layer
     control_encoder = model.get_layer("ctrl_encoder_time_dist").layer
     state_decoder = model.get_layer("state_decoder_time_dist").layer
     control_decoder = model.get_layer("ctrl_decoder_time_dist").layer
 
-    return state_encoder, state_decoder, control_encoder, control_decoder
+    return (
+        state_input,
+        control_input,
+        state_encoder,
+        state_decoder,
+        control_encoder,
+        control_decoder,
+    )
 
 
 def plot_autoencoder_AB(A, B, filename=None, **kwargs):
@@ -683,29 +694,31 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         dz : ndarray
             residual in latent state
     """
-    traindata, valdata, normalization_dict = process_data(
-        rawdata,
-        scenario["sig_names"],
-        scenario["normalization_method"],
-        scenario["window_length"],
-        scenario["window_overlap"],
-        0,  # scenario["lookback"],
-        scenario["lookahead"],
-        scenario["sample_step"],
-        scenario["uniform_normalization"],
-        1,  # scenario['train_frac'],
-        0,  # scenario['val_frac'],
-        scenario["nshots"],
-        verbose,
-        scenario["flattop_only"],
-        randomize=False,
-        pruning_functions=scenario["pruning_functions"],
-        excluded_shots=scenario["excluded_shots"],
-        delta_sigs=[],
-        invert_q=scenario.setdefault("invert_q", False),
-        val_idx=scenario.setdefault("val_idx", 1),
-    )
-    del traindata
+    if isinstance(rawdata, str):
+        traindata, valdata, normalization_dict = process_data(
+            rawdata,
+            scenario["sig_names"],
+            scenario["normalization_method"],
+            scenario["window_length"],
+            scenario["window_overlap"],
+            0,  # scenario["lookback"],
+            scenario["lookahead"],
+            scenario["sample_step"],
+            scenario["uniform_normalization"],
+            1,  # scenario['train_frac'],
+            0,  # scenario['val_frac'],
+            scenario["nshots"],
+            verbose,
+            scenario["flattop_only"],
+            randomize=False,
+            pruning_functions=scenario["pruning_functions"],
+            invert_q=scenario["invert_q"],
+            excluded_shots=scenario["excluded_shots"],
+            val_idx=0,
+        )
+        del traindata
+    else:
+        valdata = rawdata
 
     nsamples = len(valdata["time"])
     nsamples -= nsamples % scenario["batch_size"]
@@ -741,9 +754,14 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     u0 = np.hstack([val for val in u0_dict.values()])
 
     # parse model
-    state_encoder, state_decoder, control_encoder, control_decoder = get_submodels(
-        model
-    )
+    (
+        state_input,
+        control_input,
+        state_encoder,
+        state_decoder,
+        control_encoder,
+        control_decoder,
+    ) = get_submodels(model)
     A, B = get_AB(model)
 
     if verbose:
@@ -751,29 +769,36 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     # encode data
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_encoder.inputs])
     if len(state_encoder.inputs[0].shape) == 2:
-        z0 = state_encoder.predict(
+        x0 = state_input.predict(
             [x0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
-        z1 = state_encoder.predict(
+        x1 = state_input.predict(
             [x1[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
     if len(state_encoder.inputs[0].shape) == 3:
-        z0 = state_encoder.predict(
+        x0 = state_input.predict(
             [x0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
-        z1 = state_encoder.predict(
+        x1 = state_input.predict(
             [x1[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
+    z0 = state_encoder.predict(x0)
+    z1 = state_encoder.predict(x1)
+    x0 = np.concatenate(x0, axis=-1).squeeze()
+    x1 = np.concatenate(x1, axis=-1).squeeze()
 
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_encoder.inputs])
     if len(control_encoder.inputs[0].shape) == 2:
-        v0 = control_encoder.predict(
+        u0 = control_input.predict(
             [u0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
     if len(control_encoder.inputs[0].shape) == 3:
-        v0 = control_encoder.predict(
+        u0 = control_input.predict(
             [u0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
+    v0 = control_encoder.predict(u0)
+
+    u0 = np.concatenate(u0, axis=-1).squeeze()
 
     y0 = state_decoder.predict(z0)
     if isinstance(y0, list):
