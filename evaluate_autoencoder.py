@@ -15,6 +15,7 @@ from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.normalization import normalize, denormalize, renormalize
 from helpers.custom_layers import MultiTimeDistributed
 from helpers.hyperparam_helpers import slurm_script
+from helpers.custom_constraints import Orthonormal
 
 ##########
 # set tf session
@@ -110,7 +111,8 @@ def evaluate(file_path):
         model = tf.keras.models.load_model(
             model_path,
             compile=False,
-            custom_objects={"MultiTimeDistributed": MultiTimeDistributed},
+            custom_objects={"MultiTimeDistributed": MultiTimeDistributed,
+                            "Orthonormal": Orthonormal},
         )
         print("took {}s".format(time.time() - T1))
     else:
