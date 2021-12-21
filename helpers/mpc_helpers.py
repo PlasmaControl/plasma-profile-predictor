@@ -768,19 +768,33 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         print("Encoding")
     # encode data
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_encoder.inputs])
-    if len(state_encoder.inputs[0].shape) == 2:
+    if len(state_input.inputs[0].shape) == 2 and len(x0.shape) == 2:
         x0 = state_input.predict(
             [x0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
         x1 = state_input.predict(
             [x1[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
-    if len(state_encoder.inputs[0].shape) == 3:
+    if len(state_input.inputs[0].shape) == 2 and len(x0.shape) == 3:
+        x0 = state_input.predict(
+            [x0[:, 0, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+        x1 = state_input.predict(
+            [x1[:, 0, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+    if len(state_input.inputs[0].shape) == 3 and len(x0.shape) == 2:
         x0 = state_input.predict(
             [x0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
         x1 = state_input.predict(
             [x1[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+    if len(state_input.inputs[0].shape) == 3 and len(x0.shape) == 3:
+        x0 = state_input.predict(
+            [x0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+        )
+        x1 = state_input.predict(
+            [x1[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
         )
     z0 = state_encoder.predict(x0)
     z1 = state_encoder.predict(x1)
