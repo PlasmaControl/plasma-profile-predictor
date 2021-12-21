@@ -77,6 +77,8 @@ def slurm_script(
     user : str
         username for mailto, assumes princeton netID. Defaults to $USER
     """
+    file_path = str(file_path)
+
     with open(file_path, "w+") as f:
         f.write("#!/bin/bash \n")
         f.write(
