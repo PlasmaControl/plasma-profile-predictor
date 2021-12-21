@@ -97,7 +97,7 @@ def slurm_script(
         f.write("#SBATCH --mem " + str(mem) + "G\n")
         if ngpu > 0:
             f.write("#SBATCH -G " + str(ngpu) + "\n")
-        f.write("#SBATCH -o " + file_path, +".log  \n")
+        f.write("#SBATCH -o " + file_path + ".log  \n")
         f.write("#SBATCH -t " + str(datetime.timedelta(minutes=time)) + "\n")
         if isinstance(command, (list, tuple)):
             for c in command:
