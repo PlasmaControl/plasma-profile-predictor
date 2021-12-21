@@ -735,13 +735,13 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     u0_dict = {
         key: (
-            valdata[key][:nsamples, : scenario["lookahead"], ::2]
+            valdata[key][:nsamples, :scenario["lookahead"], ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, : scenario["lookahead"]])
+            else valdata[key][:nsamples, :scenario["lookahead"]])
         for key in (scenario["actuator_names"])
     }
     x0 = np.concatenate([val for val in x0_dict.values()], axis=-1)
-    u0 = np.concatenate([val for val in u0_dict.values()], axis=-1)
+    u0 = np.stack([val for val in u0_dict.values()], axis=2)
 
     # parse model
     (
@@ -757,7 +757,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     if verbose:
         print("Encoding")
     # encode data
-    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_encoder.inputs])
+    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_input.inputs])
     x0 = state_input.predict(
         [x0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
     )
@@ -768,7 +768,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     x1 = x0[:,1,:]
     x0 = x0[:,0,:]
 
-    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_encoder.inputs])
+    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_input.inputs])
     u0 = control_input.predict(
         [u0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
     )
