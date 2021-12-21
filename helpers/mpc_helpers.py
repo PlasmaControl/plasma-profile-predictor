@@ -735,9 +735,10 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     u0_dict = {
         key: (
-            valdata[key][:nsamples, :scenario["lookahead"], ::2]
+            valdata[key][:nsamples, : scenario["lookahead"] + 1, ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, :scenario["lookahead"]])
+            else valdata[key][:nsamples, : scenario["lookahead"] + 1]
+        )
         for key in (scenario["actuator_names"])
     }
     x0 = np.concatenate([val for val in x0_dict.values()], axis=-1)
@@ -765,8 +766,8 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     z0 = state_encoder.predict([foo[:, 0, :] for foo in x0])
     z1 = state_encoder.predict([foo[:, 1, :] for foo in x0])
     x0 = np.concatenate([foo[:, 0:2, :] for foo in x0], axis=-1).squeeze()
-    x1 = x0[:,1,:]
-    x0 = x0[:,0,:]
+    x1 = x0[:, 1, :]
+    x0 = x0[:, 0, :]
 
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_input.inputs])
     u0 = control_input.predict(
