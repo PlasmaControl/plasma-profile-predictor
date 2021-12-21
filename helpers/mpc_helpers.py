@@ -765,8 +765,8 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     z0 = state_encoder.predict([foo[:, 0, :] for foo in x0])
     z1 = state_encoder.predict([foo[:, 1, :] for foo in x0])
-    x0 = np.concatenate(x0[:, 0, :], axis=-1).squeeze()
-    x1 = np.concatenate(x0[:, 1, :], axis=-1).squeeze()
+    x0 = np.concatenate([foo[:, 0, :] for foo in x0], axis=-1).squeeze()
+    x1 = np.concatenate([foo[:, 1, :] for foo in x0], axis=-1).squeeze()
 
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_encoder.inputs])
     u0 = control_input.predict(
@@ -774,7 +774,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     )
     v0 = control_encoder.predict([foo[:, 0, :] for foo in u0])
 
-    u0 = np.concatenate(u0, axis=-1).squeeze()
+    u0 = np.concatenate([foo[:, 0, :] for foo in u0], axis=-1).squeeze()
 
     y0 = state_decoder.predict(z0)
     if isinstance(y0, list):
