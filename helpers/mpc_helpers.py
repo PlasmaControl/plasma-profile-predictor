@@ -1,6 +1,5 @@
 import numpy as np
 import scipy
-import osqp
 from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
@@ -144,6 +143,8 @@ class LRANMPC:
             number of steps in the mpc lookahead
 
         """
+
+        import osqp
 
         A = self.A
         B = self.B
@@ -725,33 +726,23 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     # parse data into timesteps / arrays
     x0_dict = {
         key: (
-            valdata[key][:nsamples, 0, ::2]
+            valdata[key][:nsamples, : scenario["lookahead"] + 1, ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, 0].reshape((-1, 1))
-        )
-        for key in (scenario["profile_names"] + scenario["scalar_names"])
-    }
-
-    x1_dict = {
-        key: (
-            valdata[key][:nsamples, 1, ::2]
-            if valdata[key].ndim == 3
-            else valdata[key][:nsamples, 1].reshape((-1, 1))
+            else valdata[key][:nsamples, : scenario["lookahead"] + 1].reshape((-1, 1))
         )
         for key in (scenario["profile_names"] + scenario["scalar_names"])
     }
 
     u0_dict = {
         key: (
-            valdata[key][:nsamples, 1, ::2]
+            valdata[key][:nsamples, : scenario["lookahead"], ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, 1].reshape((-1, 1))
+            else valdata[key][:nsamples, : scenario["lookahead"]].reshape((-1, 1))
         )
         for key in (scenario["actuator_names"])
     }
-    x0 = np.hstack([val for val in x0_dict.values()])
-    x1 = np.hstack([val for val in x1_dict.values()])
-    u0 = np.hstack([val for val in u0_dict.values()])
+    x0 = np.concatenate([val for val in x0_dict.values()], axis=-1)
+    u0 = np.concatenate([val for val in u0_dict.values()], axis=-1)
 
     # parse model
     (
@@ -768,49 +759,20 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         print("Encoding")
     # encode data
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_encoder.inputs])
-    if len(state_input.inputs[0].shape) == 2 and len(x0.shape) == 2:
-        x0 = state_input.predict(
-            [x0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-        x1 = state_input.predict(
-            [x1[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    if len(state_input.inputs[0].shape) == 2 and len(x0.shape) == 3:
-        x0 = state_input.predict(
-            [x0[:, 0, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-        x1 = state_input.predict(
-            [x1[:, 0, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    if len(state_input.inputs[0].shape) == 3 and len(x0.shape) == 2:
-        x0 = state_input.predict(
-            [x0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-        x1 = state_input.predict(
-            [x1[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    if len(state_input.inputs[0].shape) == 3 and len(x0.shape) == 3:
-        x0 = state_input.predict(
-            [x0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-        x1 = state_input.predict(
-            [x1[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    z0 = state_encoder.predict(x0)
-    z1 = state_encoder.predict(x1)
-    x0 = np.concatenate(x0, axis=-1).squeeze()
-    x1 = np.concatenate(x1, axis=-1).squeeze()
+    x0 = state_input.predict(
+        [x0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+    )
+
+    z0 = state_encoder.predict([foo[:, 0, :] for foo in x0])
+    z1 = state_encoder.predict([foo[:, 1, :] for foo in x0])
+    x0 = np.concatenate(x0[:, 0, :], axis=-1).squeeze()
+    x1 = np.concatenate(x0[:, 1, :], axis=-1).squeeze()
 
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_encoder.inputs])
-    if len(control_encoder.inputs[0].shape) == 2:
-        u0 = control_input.predict(
-            [u0[:, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    if len(control_encoder.inputs[0].shape) == 3:
-        u0 = control_input.predict(
-            [u0[:, None, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-        )
-    v0 = control_encoder.predict(u0)
+    u0 = control_input.predict(
+        [u0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+    )
+    v0 = control_encoder.predict([foo[:, 0, :] for foo in u0])
 
     u0 = np.concatenate(u0, axis=-1).squeeze()
 
