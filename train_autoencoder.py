@@ -18,7 +18,7 @@ from helpers.custom_losses import (
     percent_correct_sign,
     baseline_MAE,
 )
-from helpers.custom_losses import Orthonormal
+from helpers.custom_constraints import Orthonormal
 import models.autoencoder
 from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
 from tensorflow.keras.callbacks import (
