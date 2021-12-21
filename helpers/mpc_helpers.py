@@ -720,6 +720,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         del traindata
     else:
         valdata = rawdata
+        normalization_dict = {}
 
     nsamples = len(valdata["time"])
     nsamples -= nsamples % scenario["batch_size"]
