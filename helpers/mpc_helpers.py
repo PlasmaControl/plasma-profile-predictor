@@ -737,8 +737,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         key: (
             valdata[key][:nsamples, : scenario["lookahead"], ::2]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, : scenario["lookahead"]].reshape((-1, 1))
-        )
+            else valdata[key][:nsamples, : scenario["lookahead"]])
         for key in (scenario["actuator_names"])
     }
     x0 = np.concatenate([val for val in x0_dict.values()], axis=-1)
