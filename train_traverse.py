@@ -250,13 +250,13 @@ def main(scenario_index=-2):
         scenario["lookbacks"] = {}
         for sig in scenario["input_profile_names"] + scenario["target_profile_names"]:
             scenario["lookbacks"][sig] = scenario["profile_lookback"]
-        for sig in scenario["actuator_names"] + scenario["scalar_input_names"]:
+        for sig in scenario["actuator_names"] + scenario["scalar_names"]:
             scenario["lookbacks"][sig] = scenario["actuator_lookback"]
         scenario["sig_names"] = (
             scenario["input_profile_names"]
             + scenario["target_profile_names"]
             + scenario["actuator_names"]
-            + scenario["scalar_input_names"]
+            + scenario["scalar_names"]
         )
 
         if "raw_data_path" not in scenario.keys():
@@ -334,7 +334,7 @@ def main(scenario_index=-2):
         scenario["input_profile_names"],
         scenario["actuator_names"],
         scenario["target_profile_names"],
-        scenario["scalar_input_names"],
+        scenario["scalar_names"],
         scenario["lookbacks"],
         scenario["lookahead"],
         scenario["predict_deltas"],
@@ -348,7 +348,7 @@ def main(scenario_index=-2):
         scenario["input_profile_names"],
         scenario["actuator_names"],
         scenario["target_profile_names"],
-        scenario["scalar_input_names"],
+        scenario["scalar_names"],
         scenario["lookbacks"],
         scenario["lookahead"],
         scenario["predict_deltas"],
@@ -383,7 +383,7 @@ def main(scenario_index=-2):
     model = models_dict[scenario["model_type"]](
         scenario["input_profile_names"],
         scenario["target_profile_names"],
-        scenario["scalar_input_names"],
+        scenario["scalar_names"],
         scenario["actuator_names"],
         scenario["lookbacks"],
         scenario["lookahead"],
