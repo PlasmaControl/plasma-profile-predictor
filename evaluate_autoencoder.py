@@ -266,8 +266,11 @@ if __name__ == "__main__":
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
-            command += (
-                "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + paths
+            command += "\n".join(
+                [
+                    "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
+                    for path in paths
+                ]
             )
             slurm_script(
                 file_path=file_path,
