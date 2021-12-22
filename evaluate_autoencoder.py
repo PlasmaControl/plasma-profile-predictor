@@ -262,7 +262,7 @@ if __name__ == "__main__":
             job = "eval_" + args[i].split("/")[-1]
             base_path = "/".join(os.path.abspath(args[i]).split("/")[:-1]) + "/"
             file_path = base_path + job + ".slurm"
-            paths = " ".join([os.path.abspath(arg) for arg in args[i : i + 10]])
+            paths = [os.path.abspath(arg) for arg in args[i : i + 10]]
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
