@@ -2,7 +2,7 @@ import os
 import datetime
 
 
-def make_bash_scripts(number, output_dir, ncpu, ngpu, mem, times, mode="traverse"):
+def make_bash_scripts(number, output_dir, ncpu, ngpu, mem, times, mode="conv"):
     """Creates slurm scripts for batch submit jobs.
 
     Parameters
@@ -30,10 +30,10 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, mem, times, mode="traverse
             "module load anaconda",
             "conda activate tf2-gpu",
         ]
-        if mode == "traverse":
+        if (mode == "conv") or (mode == "traverse"):
             command.append("python $root_dir/train_traverse.py " + str(i))
             job = "#SBATCH -J CONV " + str(i)
-        elif mode == "autoencoder":
+        elif (mode == "lran") or (mode == "autoencoder"):
             command.append("python $root_dir/train_autoencoder.py " + str(i))
             job = "#SBATCH -J LRAN_" + str(i)
 
