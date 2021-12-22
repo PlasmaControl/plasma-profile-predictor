@@ -245,12 +245,15 @@ def evaluate(file_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        evaluate(os.path.abspath(sys.argv[1]))
-    else:
+    if len(sys.argv) < 11:
         for arg in sys.argv[1:]:
-            job = "eval_" + arg.split("/")[-1]
-            path = os.path.abspath(arg)
+            evaluate(os.path.abspath(arg))
+    else:
+        args = sys.argv[1:]
+        nargs = len(args)
+        for i in range(0, nargs, 10):
+            job = "eval_" + args[i].split("/")[-1]
+            path = " ".join([os.path.abspath(arg) for arg in args[i : i + 10]])
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
@@ -258,14 +261,14 @@ if __name__ == "__main__":
                 "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
             )
             slurm_script(
-                file_path=path + ".slurm",
+                file_path=job + ".slurm",
                 command=command,
                 job_name=job,
                 ncpu=1,
                 ngpu=0,
-                mem=96,
-                time=30,
+                mem=60,
+                time=200,
                 user="wconlin",
             )
-            os.system("sbatch {}".format(arg + ".slurm"))
+            os.system("sbatch {}".format(job + ".slurm"))
         print("Jobs submitted, exiting")
