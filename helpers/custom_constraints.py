@@ -1,8 +1,33 @@
 import tensorflow as tf
 
 
+class SoftOrthonormal(tf.keras.constraints.Constraint):
+    """Soft constrains weight tensors to be orthonormal matrices.
+
+    Should be about 4x faster than regular Orthonormal constraint, at the expense
+    of not being exactly orthonormal, but gets closer during training.
+    """
+
+    def __init__(self, step_size=None):
+        self.step_size = step_size
+
+    def __call__(self, w):
+        if self.step_size is None:
+            h = 1 / w.shape[0]
+        else:
+            h = self.step_size
+        w = w - h * w @ (tf.matmul(w, w, transpose_a=True) - tf.eye(w.shape[1]))
+        return w
+
+    def get_config(self):
+        return {"step_size": self.step_size}
+
+
 class Orthonormal(tf.keras.constraints.Constraint):
-    """Constrains weight tensors to be orthonormal matrices."""
+    """Constrains weight tensors to be orthonormal matrices.
+
+    Can be somewhat slow, as it uses the full SVD of the weight matrix.
+    """
 
     def __call__(self, w):
         s, u, v = tf.linalg.svd(w, full_matrices=False, compute_uv=True)
