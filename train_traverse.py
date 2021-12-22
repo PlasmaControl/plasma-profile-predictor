@@ -40,12 +40,6 @@ def main(scenario_index=-2):
     req_mem = 48  # gb
     ngpu = 1
 
-    seed_value = 0
-    os.environ["PYTHONHASHSEED"] = str(seed_value)
-    random.seed(seed_value)
-    np.random.seed(seed_value)
-    tf.set_random_seed(seed_value)
-
     config = tf.compat.v1.ConfigProto(
         intra_op_parallelism_threads=4 * num_cores,
         inter_op_parallelism_threads=4 * num_cores,
