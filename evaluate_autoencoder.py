@@ -111,8 +111,10 @@ def evaluate(file_path):
         model = tf.keras.models.load_model(
             model_path,
             compile=False,
-            custom_objects={"MultiTimeDistributed": MultiTimeDistributed,
-                            "Orthonormal": Orthonormal},
+            custom_objects={
+                "MultiTimeDistributed": MultiTimeDistributed,
+                "Orthonormal": Orthonormal,
+            },
         )
         print("took {}s".format(time.time() - T1))
     else:
@@ -186,7 +188,7 @@ def evaluate(file_path):
             evaluation_metrics[key] = val
             print(key)
             print(val)
-        evaluation_metrics[metric_name] = s
+        evaluation_metrics["coder_" + metric_name] = s
 
     print("Computing metrics took {}s".format(time.time() - T1))
     T1 = time.time()
@@ -213,6 +215,13 @@ def evaluate(file_path):
     evaluation_metrics["std_lipschitz_const"] = np.nanstd(
         norm_data["lipschitz_constant"]
     )
+    for metric_name, metric in metrics.items():
+        evaluation_metrics["dz_" + metric_name] = np.array(
+            [
+                metric(encoder_data["dz"][:, i, :])
+                for i in range(encoder_data["dz"].shape[1])
+            ]
+        )
 
     scenario["norm_data"] = norm_data
     scenario["evaluation_metrics"] = evaluation_metrics
