@@ -229,6 +229,10 @@ def main(scenario_index=-2):
             " Loading Scenario " + str(scenario_index) + ":",
         )
         scenario = scenarios[scenario_index]
+        scenario.update(
+            {k: v for k, v in default_scenario.items() if k not in scenario.keys()}
+        )
+
     else:
         verbose = 1
         print(datetime.datetime.today().strftime("%c"), " Loading Default Scenario:")
@@ -236,9 +240,6 @@ def main(scenario_index=-2):
     print(scenario)
 
     if scenario["process_data"]:
-        scenario.update(
-            {k: v for k, v in default_scenario.items() if k not in scenario.keys()}
-        )
         scenario["lookbacks"] = {}
         for sig in scenario["input_profile_names"] + scenario["target_profile_names"]:
             scenario["lookbacks"][sig] = scenario["profile_lookback"]
