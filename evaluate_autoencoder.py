@@ -1,5 +1,6 @@
 import sys
 import os
+import gc
 import pickle
 import datetime
 import copy
@@ -143,6 +144,8 @@ def evaluate(file_path):
         excluded_shots=scenario["excluded_shots"],
         val_idx=0,
     )
+    del traindata
+    gc.collect()
     print("Data processing took {}s".format(time.time() - T1))
     T1 = time.time()
 
@@ -196,6 +199,8 @@ def evaluate(file_path):
     encoder_data = helpers.mpc_helpers.compute_encoder_data(
         model, scenario, valdata, verbose=0
     )
+    del valdata
+    gc.collect()
     print("Computing encoder data took {}s".format(time.time() - T1))
     T1 = time.time()
 
@@ -242,6 +247,7 @@ def evaluate(file_path):
         pickle.dump(copy.deepcopy(scenario), f)
     print("Repickling took {}s".format(time.time() - T1))
     print("TOTAL took {}s".format(time.time() - T0))
+    gc.collect()
 
 
 if __name__ == "__main__":
@@ -250,18 +256,21 @@ if __name__ == "__main__":
     if nargs < 11:
         for arg in args:
             evaluate(os.path.abspath(arg))
+            gc.collect()
     else:
         for i in range(0, nargs, 10):
             job = "eval_" + args[i].split("/")[-1]
-            path = " ".join([os.path.abspath(arg) for arg in args[i : i + 10]])
+            base_path = "/".join(os.path.abspath(args[i]).split("/")[:-1]) + "/"
+            file_path = base_path + job + ".slurm"
+            paths = " ".join([os.path.abspath(arg) for arg in args[i : i + 10]])
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
             command += (
-                "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
+                "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + paths
             )
             slurm_script(
-                file_path=job + ".slurm",
+                file_path=file_path,
                 command=command,
                 job_name=job,
                 ncpu=1,
@@ -270,5 +279,5 @@ if __name__ == "__main__":
                 time=200,
                 user="wconlin",
             )
-            os.system("sbatch {}".format(job + ".slurm"))
+            os.system("sbatch {}".format(file_path))
         print("Jobs submitted, exiting")
