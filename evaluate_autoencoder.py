@@ -218,7 +218,7 @@ def evaluate(file_path):
     for metric_name, metric in metrics.items():
         evaluation_metrics["dz_" + metric_name] = np.array(
             [
-                metric(encoder_data["dz"][:, i, :])
+                metric(encoder_data["dz"][:, i, :]) / metric(encoder_data["z0"])
                 for i in range(encoder_data["dz"].shape[1])
             ]
         )
@@ -244,7 +244,9 @@ if __name__ == "__main__":
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
-            command += "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
+            command += (
+                "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
+            )
             slurm_script(
                 file_path=path + ".slurm",
                 command=command,
