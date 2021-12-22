@@ -32,7 +32,7 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, mem, times, mode="conv"):
         ]
         if (mode == "conv") or (mode == "traverse"):
             command.append("python $root_dir/train_traverse.py " + str(i))
-            job = "#SBATCH -J CONV " + str(i)
+            job = "#SBATCH -J CONV_" + str(i)
         elif (mode == "lran") or (mode == "autoencoder"):
             command.append("python $root_dir/train_autoencoder.py " + str(i))
             job = "#SBATCH -J LRAN_" + str(i)
