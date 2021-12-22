@@ -638,27 +638,36 @@ def compute_operator_norm(x, z):
     return operator_norm, x_norm, z_norm
 
 
-def compute_residuals(A, B, z0, z1, v0):
+def compute_residuals(A, B, z, v):
     """Compute residual from latent linear model
 
     Parameters
     ----------
     A, B : ndarray
         System dynamics and input matrices
-    z0, z1 : ndarray, shape(nsamples, nlatentstates)
+    z0, z1 : ndarray, shape(samples, time, latentstates)
         latent state at two timesteps
-    v0 : ndarray, shape(nsamples, ninputs)
+    v0 : ndarray, shape(samples, times, inputs)
         latent control at initial timesteps
 
     Returns
     -------
-    dz : ndarray
+    dz : ndarray, shape(samples, times, latentstates)
         error in linear system model
 
     """
-
-    dz = z1 - z0 @ A.T - v0 @ B.T
-    return dz
+    assert z.shape[0] == v.shape[0]
+    v = np.concatenate(
+        [v, np.zeros((v.shape[0], z.shape[1] - v.shape[1], v.shape[2]))], axis=1
+    )
+    ts = np.arange(z.shape[1])
+    dzs = []
+    zk = z[:, 0, :]
+    for t in ts[:-1]:
+        zk = zk @ A.T + v[:, t, :] @ B.T
+        dz = z[:, t + 1, :] - zk
+        dzs.append(dz)
+    return np.moveaxis(np.array(dz), 0, 1)
 
 
 def compute_encoder_data(model, scenario, rawdata, verbose=2):
@@ -725,7 +734,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     nsamples = len(valdata["time"])
     nsamples -= nsamples % scenario["batch_size"]
     # parse data into timesteps / arrays
-    x0_dict = {
+    xk_dict = {
         key: (
             valdata[key][:nsamples, : scenario["lookahead"] + 1, ::2]
             if valdata[key].ndim == 3
@@ -734,7 +743,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         for key in (scenario["profile_names"] + scenario["scalar_names"])
     }
 
-    u0_dict = {
+    uk_dict = {
         key: (
             valdata[key][:nsamples, : scenario["lookahead"] + 1, ::2]
             if valdata[key].ndim == 3
@@ -742,8 +751,8 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         )
         for key in (scenario["actuator_names"])
     }
-    x0 = np.concatenate([val for val in x0_dict.values()], axis=-1)
-    u0 = np.stack([val for val in u0_dict.values()], axis=2)
+    xk = np.concatenate([val for val in xk_dict.values()], axis=-1)
+    uk = np.stack([val for val in uk_dict.values()], axis=2)
 
     # parse model
     (
@@ -760,31 +769,39 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         print("Encoding")
     # encode data
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_input.inputs])
-    x0 = state_input.predict(
-        [x0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+    xk = state_input.predict(
+        [xk[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
     )
 
-    z0 = state_encoder.predict([foo[:, 0, :] for foo in x0])
-    z1 = state_encoder.predict([foo[:, 1, :] for foo in x0])
-    x0 = np.concatenate([foo[:, 0:2, :] for foo in x0], axis=-1).squeeze()
-    x1 = x0[:, 1, :]
-    x0 = x0[:, 0, :]
+    zk = [
+        state_encoder.predict([foo[:, k, :] for foo in xk])
+        for k in range(scenario["lookahead"] + 1)
+    ]
+    z0 = zk[0]
+    z1 = zk[1]
+    xk = np.concatenate([foo[:, 0:2, :] for foo in xk], axis=-1).squeeze()
+    x1 = xk[:, 1, :]
+    x0 = xk[:, 0, :]
 
     idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_input.inputs])
-    u0 = control_input.predict(
-        [u0[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
+    uk = control_input.predict(
+        [uk[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
     )
-    v0 = control_encoder.predict([foo[:, 0, :] for foo in u0])
-
-    u0 = np.concatenate([foo[:, 0, :] for foo in u0], axis=-1).squeeze()
+    vk = [
+        control_encoder.predict([foo[:, k, :] for foo in uk])
+        for k in range(scenario["lookahead"] + 1)
+    ]
+    v0 = vk[:, 0, :]
+    uk = np.concatenate([foo[:, 0, :] for foo in uk], axis=-1).squeeze()
+    u0 = uk[:, 0, :]
 
     y0 = state_decoder.predict(z0)
     if isinstance(y0, list):
         y0 = np.hstack(y0)
 
     # compute residuals
-    dz = compute_residuals(A, B, z0, z1, v0)
-    dx = x0[:, 0 : y0.shape[1]] - y0
+    dz = compute_residuals(A, B, z0, z1, vk)
+    dx = x0[:, : y0.shape[1]] - y0
 
     encoder_data = {
         "valdata": valdata,
