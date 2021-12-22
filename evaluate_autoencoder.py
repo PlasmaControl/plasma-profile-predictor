@@ -244,7 +244,7 @@ if __name__ == "__main__":
             command = ""
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
-            command += "python plasma-profile-predictor/evaluate_autoencoder.py " + path
+            command += "python ~/plasma-profile-predictor/evaluate_autoencoder.py " + path
             slurm_script(
                 file_path=path + ".slurm",
                 command=command,
