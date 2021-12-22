@@ -65,7 +65,14 @@ def main(scenario_index=-2):
     efit_type = "EFIT01"
     default_scenario = {
         "actuator_names": ["pinj", "tinj", "curr_target", "target_density", "bt"],
-        "profile_names": [
+        "input_profile_names": [
+            "temp",
+            "dens",
+            "rotation",
+            "press_{}".format(efit_type),
+            "q_{}".format(efit_type),
+        ],
+        "target_profile_names": [
             "temp",
             "dens",
             "rotation",
