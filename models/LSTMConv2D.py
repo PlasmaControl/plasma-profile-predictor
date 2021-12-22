@@ -1,11 +1,36 @@
-from keras.layers import Input, Dense, LSTM, Conv1D, Conv2D, ConvLSTM2D, Dot, Add, Multiply, Concatenate, Reshape, Permute, ZeroPadding1D, Cropping1D, GlobalAveragePooling2D
-from keras.models import Model
-from keras import regularizers
+from tensorflow.keras.layers import (
+    Input,
+    Dense,
+    LSTM,
+    Conv1D,
+    Conv2D,
+    ConvLSTM2D,
+    Dot,
+    Add,
+    Multiply,
+    Concatenate,
+    Reshape,
+    Permute,
+    ZeroPadding1D,
+    Cropping1D,
+    GlobalAveragePooling2D,
+)
+from tensorflow.keras.models import Model
+from tensorflow.keras import regularizers
 import numpy as np
 
 
-def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_names,
-                     actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+def get_model_conv2d(
+    input_profile_names,
+    target_profile_names,
+    scalar_input_names,
+    actuator_names,
+    lookbacks,
+    lookahead,
+    profile_length,
+    std_activation,
+    **kwargs
+):
 
     max_profile_lookback = 0
     for sig in input_profile_names:
@@ -25,48 +50,94 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     num_actuators = len(actuator_names)
     num_scalars = len(scalar_input_names)
 
-    max_channels = kwargs.get('max_channels',32)
-    l2 = kwargs.get('l2',0)
-    kernel_init = kwargs.get('kernel_initializer','glorot_uniform')
-    bias_init = kwargs.get('bias_initializer','zeros')
-    
+    max_channels = kwargs.get("max_channels", 32)
+    l2 = kwargs.get("l2", 0)
+    kernel_init = kwargs.get("kernel_initializer", "glorot_uniform")
+    bias_init = kwargs.get("bias_initializer", "zeros")
+
     profile_inputs = []
     profiles = []
     for i in range(num_profiles):
         profile_inputs.append(
-            Input((lookbacks[input_profile_names[i]]+1, profile_length), name='input_' + input_profile_names[i]))
-        profiles.append(Reshape((max_profile_lookback+1, profile_length, 1))
-                        (ZeroPadding1D(padding=(max_profile_lookback - lookbacks[input_profile_names[i]], 0))(profile_inputs[i])))
+            Input(
+                (lookbacks[input_profile_names[i]] + 1, profile_length),
+                name="input_" + input_profile_names[i],
+            )
+        )
+        profiles.append(
+            Reshape((max_profile_lookback + 1, profile_length, 1))(
+                ZeroPadding1D(
+                    padding=(
+                        max_profile_lookback - lookbacks[input_profile_names[i]],
+                        0,
+                    )
+                )(profile_inputs[i])
+            )
+        )
 
-    if num_profiles>1:
+    if num_profiles > 1:
         profiles = Concatenate(axis=-1)(profiles)
-    else: 
+    else:
         profiles = profiles[0]
     # shape = (lookback, length, channels=num_profiles)
-    profiles = Conv2D(filters=int(num_profiles*max_channels/8), kernel_size=(1, int(profile_length/12)),
-                      strides=(1, 1), padding='same', activation=std_activation,
-                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                      kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
-    profiles = Conv2D(filters=int(num_profiles*max_channels/4), kernel_size=(1, int(profile_length/8)),
-                      strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
-    profiles = Conv2D(filters=int(num_profiles*max_channels/2), kernel_size=(1, int(profile_length/6)),
-                      strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
-    profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(1, int(profile_length/4)),
-                      strides=(1, 1), padding='same', activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
+    profiles = Conv2D(
+        filters=int(num_profiles * max_channels / 8),
+        kernel_size=(1, int(profile_length / 12)),
+        strides=(1, 1),
+        padding="same",
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(profiles)
+    profiles = Conv2D(
+        filters=int(num_profiles * max_channels / 4),
+        kernel_size=(1, int(profile_length / 8)),
+        strides=(1, 1),
+        padding="same",
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(profiles)
+    profiles = Conv2D(
+        filters=int(num_profiles * max_channels / 2),
+        kernel_size=(1, int(profile_length / 6)),
+        strides=(1, 1),
+        padding="same",
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(profiles)
+    profiles = Conv2D(
+        filters=int(num_profiles * max_channels),
+        kernel_size=(1, int(profile_length / 4)),
+        strides=(1, 1),
+        padding="same",
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(profiles)
     # shape = (lookback, length, channels)
     if max_profile_lookback > 0:
-        profiles = Conv2D(filters=int(num_profiles*max_channels), kernel_size=(max_profile_lookback+1, 1),
-                          strides=(1, 1), padding='valid', activation=std_activation,
-                         kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                         kernel_initializer=kernel_init, bias_initializer=bias_init)(profiles)
-    profiles = Reshape((profile_length, int(
-        num_profiles*max_channels)))(profiles)
+        profiles = Conv2D(
+            filters=int(num_profiles * max_channels),
+            kernel_size=(max_profile_lookback + 1, 1),
+            strides=(1, 1),
+            padding="valid",
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(profiles)
+    profiles = Reshape((profile_length, int(num_profiles * max_channels)))(profiles)
     # shape = (length, channels)
 
     if num_scalars > 0:
@@ -74,42 +145,86 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         scalars = []
         for i in range(num_scalars):
             scalar_inputs.append(
-                Input((lookbacks[scalar_input_names[i]]+1,), name='input_' + scalar_input_names[i]))
-            scalars.append(Reshape((lookbacks[scalar_input_names[i]]+1,1))(scalar_inputs[i]))
-            scalars[i] = ZeroPadding1D(padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], 0))(scalars[i])
-        if num_scalars>1:
+                Input(
+                    (lookbacks[scalar_input_names[i]] + 1,),
+                    name="input_" + scalar_input_names[i],
+                )
+            )
+            scalars.append(
+                Reshape((lookbacks[scalar_input_names[i]] + 1, 1))(scalar_inputs[i])
+            )
+            scalars[i] = ZeroPadding1D(
+                padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], 0)
+            )(scalars[i])
+        if num_scalars > 1:
             scalars = Concatenate(axis=-1)(scalars)
         else:
             scalars = scalars[0]
             # shaoe = (time, num_actuators)
-        scalars = Dense(units=int(num_profiles*max_channels/8),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
+        scalars = Dense(
+            units=int(num_profiles * max_channels / 8),
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
         # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
         #                    padding='causal', activation=std_activation)(actuators)
-        scalars = Dense(units=int(num_profiles*max_channels/4),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
+        scalars = Dense(
+            units=int(num_profiles * max_channels / 4),
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
         # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
         #                    padding='causal', activation=std_activation)(actuators)
-        scalars = Dense(units=int(num_profiles*max_channels/2),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
-        scalars = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
-                       recurrent_activation='hard_sigmoid',recurrent_regularizer=regularizers.l2(l2),
-                      kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                      kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
-        scalars = Reshape((int(num_profiles*max_channels), 1))(scalars)
+        scalars = Dense(
+            units=int(num_profiles * max_channels / 2),
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
+        scalars = LSTM(
+            units=int(num_profiles * max_channels),
+            activation=std_activation,
+            recurrent_activation="hard_sigmoid",
+            recurrent_regularizer=regularizers.l2(l2),
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
+        scalars = Reshape((int(num_profiles * max_channels), 1))(scalars)
         # shape = (channels, 1)
-        scalars = Dense(units=int(profile_length/4),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
-        scalars = Dense(units=int(profile_length/2),activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
-        scalars = Dense(units=profile_length, activation=std_activation,
-                       kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                       kernel_initializer=kernel_init, bias_initializer=bias_init)(scalars)
+        scalars = Dense(
+            units=int(profile_length / 4),
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
+        scalars = Dense(
+            units=int(profile_length / 2),
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
+        scalars = Dense(
+            units=profile_length,
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(scalars)
         # shape = (channels, profile_length)
         scalars = Permute(dims=(2, 1))(scalars)
         # shape = (profile_length, channels)
@@ -119,47 +234,92 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
     actuators = []
     for i in range(num_actuators):
         actuator_future_inputs.append(
-            Input((lookahead, ), name='input_future_' + actuator_names[i]))
+            Input((lookahead,), name="input_future_" + actuator_names[i])
+        )
         actuator_past_inputs.append(
-            Input((lookbacks[actuator_names[i]]+1, ), name='input_past_' + actuator_names[i]))
-        actuators.append(Concatenate(
-            axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]]))
-        actuators[i] = Reshape(
-            (lookbacks[actuator_names[i]]+lookahead+1, 1))(actuators[i])
-        actuators[i] = ZeroPadding1D(padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0))(actuators[i])
-    if num_actuators>1:
+            Input(
+                (lookbacks[actuator_names[i]] + 1,),
+                name="input_past_" + actuator_names[i],
+            )
+        )
+        actuators.append(
+            Concatenate(axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]])
+        )
+        actuators[i] = Reshape((lookbacks[actuator_names[i]] + lookahead + 1, 1))(
+            actuators[i]
+        )
+        actuators[i] = ZeroPadding1D(
+            padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0)
+        )(actuators[i])
+    if num_actuators > 1:
         actuators = Concatenate(axis=-1)(actuators)
     else:
         actuators = actuators[0]
     # shaoe = (time, num_actuators)
-    actuators = Dense(units=int(num_profiles*max_channels/8),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
+    actuators = Dense(
+        units=int(num_profiles * max_channels / 8),
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
     # actuators = Conv1D(filters=int(num_profiles*max_channels/8), kernel_size=3, strides=1,
     #                    padding='causal', activation=std_activation)(actuators)
-    actuators = Dense(units=int(num_profiles*max_channels/4),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
+    actuators = Dense(
+        units=int(num_profiles * max_channels / 4),
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
     # actuators = Conv1D(filters=int(num_profiles*max_channels/4), kernel_size=3, strides=1,
     #                    padding='causal', activation=std_activation)(actuators)
-    actuators = Dense(units=int(num_profiles*max_channels/2),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
-    actuators = LSTM(units=int(num_profiles*max_channels), activation=std_activation,
-                     recurrent_activation='hard_sigmoid',recurrent_regularizer=regularizers.l2(l2),
-                    kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                    kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
-    actuators = Reshape((int(num_profiles*max_channels), 1))(actuators)
+    actuators = Dense(
+        units=int(num_profiles * max_channels / 2),
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
+    actuators = LSTM(
+        units=int(num_profiles * max_channels),
+        activation=std_activation,
+        recurrent_activation="hard_sigmoid",
+        recurrent_regularizer=regularizers.l2(l2),
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
+    actuators = Reshape((int(num_profiles * max_channels), 1))(actuators)
     # shape = (channels, 1)
-    actuators = Dense(units=int(profile_length/4),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
-    actuators = Dense(units=int(profile_length/2),activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
-    actuators = Dense(units=profile_length, activation=std_activation,
-                     kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                     kernel_initializer=kernel_init, bias_initializer=bias_init)(actuators)
+    actuators = Dense(
+        units=int(profile_length / 4),
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
+    actuators = Dense(
+        units=int(profile_length / 2),
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
+    actuators = Dense(
+        units=profile_length,
+        activation=std_activation,
+        kernel_regularizer=regularizers.l2(l2),
+        bias_regularizer=regularizers.l2(l2),
+        kernel_initializer=kernel_init,
+        bias_initializer=bias_init,
+    )(actuators)
     # shape = (channels, profile_length)
     actuators = Permute(dims=(2, 1))(actuators)
     # shape = (profile_length, channels)
@@ -168,53 +328,110 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
         merged = Add()([profiles, actuators, scalars])
     else:
         merged = Add()([profiles, actuators])
-    merged = Reshape((1, profile_length, int(
-        num_profiles*max_channels)))(merged)
+    merged = Reshape((1, profile_length, int(num_profiles * max_channels)))(merged)
     # shape = (1, length, channels)
 
     prof_act = []
     for i in range(num_targets):
-        prof_act.append(Conv2D(filters=max_channels, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
-                               padding='same', activation=std_activation,
-                              kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                              kernel_initializer=kernel_init, bias_initializer=bias_init)(merged))
+        prof_act.append(
+            Conv2D(
+                filters=max_channels,
+                kernel_size=(1, int(profile_length / 4)),
+                strides=(1, 1),
+                padding="same",
+                activation=std_activation,
+                kernel_regularizer=regularizers.l2(l2),
+                bias_regularizer=regularizers.l2(l2),
+                kernel_initializer=kernel_init,
+                bias_initializer=bias_init,
+            )(merged)
+        )
         # shape = (1,length,max_channels)
-        prof_act[i] = Conv2D(filters=int(max_channels/2), kernel_size=(1, int(profile_length/8)),
-                             strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
-        prof_act[i] = Conv2D(filters=int(max_channels/4), kernel_size=(1, int(profile_length/6)),
-                             strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
-        prof_act[i] = Conv2D(filters=int(max_channels/8), kernel_size=(1, int(profile_length/4)),
-                             strides=(1, 1), padding='same', activation=std_activation,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
-        prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
-                             padding='same', activation=None,
-                            kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                            kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
-        if kwargs.get('last_dense'):
-            prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
-                                 padding='same', activation=std_activation,
-                                 kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                                 kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
-            prof_act[i] = Dense(units=profile_length, activation=None,
-                                kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                                kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
+        prof_act[i] = Conv2D(
+            filters=int(max_channels / 2),
+            kernel_size=(1, int(profile_length / 8)),
+            strides=(1, 1),
+            padding="same",
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(prof_act[i])
+        prof_act[i] = Conv2D(
+            filters=int(max_channels / 4),
+            kernel_size=(1, int(profile_length / 6)),
+            strides=(1, 1),
+            padding="same",
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(prof_act[i])
+        prof_act[i] = Conv2D(
+            filters=int(max_channels / 8),
+            kernel_size=(1, int(profile_length / 4)),
+            strides=(1, 1),
+            padding="same",
+            activation=std_activation,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(prof_act[i])
+        prof_act[i] = Conv2D(
+            filters=1,
+            kernel_size=(1, int(profile_length / 4)),
+            strides=(1, 1),
+            padding="same",
+            activation=None,
+            kernel_regularizer=regularizers.l2(l2),
+            bias_regularizer=regularizers.l2(l2),
+            kernel_initializer=kernel_init,
+            bias_initializer=bias_init,
+        )(prof_act[i])
+        if kwargs.get("last_dense"):
+            prof_act[i] = Conv2D(
+                filters=1,
+                kernel_size=(1, int(profile_length / 4)),
+                strides=(1, 1),
+                padding="same",
+                activation=std_activation,
+                kernel_regularizer=regularizers.l2(l2),
+                bias_regularizer=regularizers.l2(l2),
+                kernel_initializer=kernel_init,
+                bias_initializer=bias_init,
+            )(prof_act[i])
+            prof_act[i] = Dense(
+                units=profile_length,
+                activation=None,
+                kernel_regularizer=regularizers.l2(l2),
+                bias_regularizer=regularizers.l2(l2),
+                kernel_initializer=kernel_init,
+                bias_initializer=bias_init,
+            )(prof_act[i])
         else:
-            prof_act[i] = Conv2D(filters=1, kernel_size=(1, int(profile_length/4)), strides=(1, 1),
-                                 padding='same', activation=None,
-                                 kernel_regularizer=regularizers.l2(l2),bias_regularizer=regularizers.l2(l2),
-                                 kernel_initializer=kernel_init, bias_initializer=bias_init)(prof_act[i])
+            prof_act[i] = Conv2D(
+                filters=1,
+                kernel_size=(1, int(profile_length / 4)),
+                strides=(1, 1),
+                padding="same",
+                activation=None,
+                kernel_regularizer=regularizers.l2(l2),
+                bias_regularizer=regularizers.l2(l2),
+                kernel_initializer=kernel_init,
+                bias_initializer=bias_init,
+            )(prof_act[i])
         # shape = (1,length,1)
-        if kwargs.get('predict_mean'):
-            prof_act[i] = GlobalAveragePooling2D(name='target_' +
-                                  target_profile_names[i])(prof_act[i])
+        if kwargs.get("predict_mean"):
+            prof_act[i] = GlobalAveragePooling2D(
+                name="target_" + target_profile_names[i]
+            )(prof_act[i])
         else:
-            prof_act[i] = Reshape((profile_length,), name='target_' +
-                                  target_profile_names[i])(prof_act[i])
+            prof_act[i] = Reshape(
+                (profile_length,), name="target_" + target_profile_names[i]
+            )(prof_act[i])
 
     model_inputs = profile_inputs + actuator_past_inputs + actuator_future_inputs
     if num_scalars > 0:
@@ -315,8 +532,17 @@ def get_model_conv2d(input_profile_names, target_profile_names, scalar_input_nam
 #     return model
 
 
-def get_model_simple_lstm(input_profile_names, target_profile_names, scalar_input_names,
-                          actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+def get_model_simple_lstm(
+    input_profile_names,
+    target_profile_names,
+    scalar_input_names,
+    actuator_names,
+    lookbacks,
+    lookahead,
+    profile_length,
+    std_activation,
+    **kwargs
+):
 
     max_profile_lookback = 0
     for sig in input_profile_names:
@@ -339,68 +565,103 @@ def get_model_simple_lstm(input_profile_names, target_profile_names, scalar_inpu
     profile_inputs = []
     for i in range(num_profiles):
         profile_inputs.append(
-            Input((lookbacks[input_profile_names[i]]+1, profile_length), name='input_' + input_profile_names[i]))
+            Input(
+                (lookbacks[input_profile_names[i]] + 1, profile_length),
+                name="input_" + input_profile_names[i],
+            )
+        )
     if num_profiles > 1:
         profiles = Concatenate(axis=-1)(profile_inputs)
     else:
         profiles = profile_inputs[0]
     profiles = ZeroPadding1D(
-        padding=(max_actuator_lookback-max_profile_lookback, lookahead))(profiles)
+        padding=(max_actuator_lookback - max_profile_lookback, lookahead)
+    )(profiles)
 
     actuator_future_inputs = []
     actuator_past_inputs = []
     actuators = []
     for i in range(num_actuators):
         actuator_future_inputs.append(
-            Input((lookahead, ), name='input_future_' + actuator_names[i]))
+            Input((lookahead,), name="input_future_" + actuator_names[i])
+        )
         actuator_past_inputs.append(
-            Input((lookbacks[actuator_names[i]]+1, ), name='input_past_' + actuator_names[i]))
-        actuators.append(Concatenate(
-            axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]]))
-        actuators[i] = Reshape(
-            (lookbacks[actuator_names[i]]+lookahead+1, 1))(actuators[i])
-        actuators[i] = ZeroPadding1D(padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0))(actuators[i])
-    if num_actuators>1:
+            Input(
+                (lookbacks[actuator_names[i]] + 1,),
+                name="input_past_" + actuator_names[i],
+            )
+        )
+        actuators.append(
+            Concatenate(axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]])
+        )
+        actuators[i] = Reshape((lookbacks[actuator_names[i]] + lookahead + 1, 1))(
+            actuators[i]
+        )
+        actuators[i] = ZeroPadding1D(
+            padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0)
+        )(actuators[i])
+    if num_actuators > 1:
         actuators = Concatenate(axis=-1)(actuators)
     else:
         actuators = actuators[0]
-    
 
     if num_scalars > 0:
         scalar_inputs = []
         scalars = []
         for i in range(num_scalars):
             scalar_inputs.append(
-                Input((lookbacks[scalar_input_names[i]]+1,), name='input_' + scalar_input_names[i]))
-            scalars.append(Reshape((lookbacks[scalar_input_names[i]]+1,1))(scalar_inputs[i]))
-            scalars[i] = ZeroPadding1D(padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], lookahead))(scalars[i])
-        if num_scalars>1:
+                Input(
+                    (lookbacks[scalar_input_names[i]] + 1,),
+                    name="input_" + scalar_input_names[i],
+                )
+            )
+            scalars.append(
+                Reshape((lookbacks[scalar_input_names[i]] + 1, 1))(scalar_inputs[i])
+            )
+            scalars[i] = ZeroPadding1D(
+                padding=(
+                    max_scalar_lookback - lookbacks[scalar_input_names[i]],
+                    lookahead,
+                )
+            )(scalars[i])
+        if num_scalars > 1:
             scalars = Concatenate(axis=-1)(scalars)
         else:
             scalars = scalars[0]
         full = Concatenate(axis=-1)([actuators, profiles, scalars])
     else:
         full = Concatenate(axis=-1)([actuators, profiles])
-        
-    full = Dense(units=int(num_targets*profile_length*.8),
-                 activation=std_activation)(full)
-    full = Dense(units=int(num_targets*profile_length*.6),
-                 activation=std_activation)(full)
-    full = Dense(units=int(num_targets*profile_length*.4),
-                 activation=std_activation)(full)
-    full = LSTM(units=int(num_targets*profile_length*.6), activation=std_activation,
-                recurrent_activation='hard_sigmoid')(full)
-    full = Dense(units=int(num_targets*profile_length*.8),
-                 activation=std_activation)(full)
-    outputs = Dense(units=num_targets*profile_length, activation=None)(full)
-    outputs = Reshape((num_targets*profile_length, 1))(outputs)
+
+    full = Dense(
+        units=int(num_targets * profile_length * 0.8), activation=std_activation
+    )(full)
+    full = Dense(
+        units=int(num_targets * profile_length * 0.6), activation=std_activation
+    )(full)
+    full = Dense(
+        units=int(num_targets * profile_length * 0.4), activation=std_activation
+    )(full)
+    full = LSTM(
+        units=int(num_targets * profile_length * 0.6),
+        activation=std_activation,
+        recurrent_activation="hard_sigmoid",
+    )(full)
+    full = Dense(
+        units=int(num_targets * profile_length * 0.8), activation=std_activation
+    )(full)
+    outputs = Dense(units=num_targets * profile_length, activation=None)(full)
+    outputs = Reshape((num_targets * profile_length, 1))(outputs)
     targets = []
     for i in range(num_targets):
-        targets.append(Cropping1D(cropping=(i*profile_length,
-                                            (num_targets-i-1)*profile_length))(outputs))
-        targets[i] = Reshape((profile_length,),
-                             name='target_' + target_profile_names[i])(targets[i])
-        
+        targets.append(
+            Cropping1D(
+                cropping=(i * profile_length, (num_targets - i - 1) * profile_length)
+            )(outputs)
+        )
+        targets[i] = Reshape(
+            (profile_length,), name="target_" + target_profile_names[i]
+        )(targets[i])
+
     model_inputs = profile_inputs + actuator_past_inputs + actuator_future_inputs
     if num_scalars > 0:
         model_inputs += scalar_inputs
@@ -409,10 +670,18 @@ def get_model_simple_lstm(input_profile_names, target_profile_names, scalar_inpu
     return model
 
 
-def get_model_linear_systems(input_profile_names, target_profile_names, scalar_input_names,
-                             actuator_names, lookbacks, lookahead, profile_length, std_activation, **kwargs):
+def get_model_linear_systems(
+    input_profile_names,
+    target_profile_names,
+    scalar_input_names,
+    actuator_names,
+    lookbacks,
+    lookahead,
+    profile_length,
+    std_activation,
+    **kwargs
+):
 
-    
     max_profile_lookback = 0
     for sig in input_profile_names:
         if lookbacks[sig] > max_profile_lookback:
@@ -430,85 +699,127 @@ def get_model_linear_systems(input_profile_names, target_profile_names, scalar_i
     num_targets = len(target_profile_names)
     num_actuators = len(actuator_names)
     num_scalars = len(scalar_input_names)
-    
-    
+
     profile_inputs = []
     for i in range(num_profiles):
         profile_inputs.append(
-            Input((lookbacks[input_profile_names[i]]+1, profile_length), name='input_' + input_profile_names[i]))
+            Input(
+                (lookbacks[input_profile_names[i]] + 1, profile_length),
+                name="input_" + input_profile_names[i],
+            )
+        )
     if num_profiles > 1:
         profiles = Concatenate(axis=-1)(profile_inputs)
     else:
         profiles = profile_inputs[0]
     profile_response = Dense(
-        int(profile_length/2*num_profiles), activation=std_activation)(profiles)
+        int(profile_length / 2 * num_profiles), activation=std_activation
+    )(profiles)
     profile_response = Dense(
-        int(profile_length/2*num_profiles), activation=std_activation)(profile_response)
+        int(profile_length / 2 * num_profiles), activation=std_activation
+    )(profile_response)
     if max_profile_lookback > 0:
-        profile_response = LSTM(int(profile_length/2*num_profiles), activation=std_activation,
-                                recurrent_activation='hard_sigmoid',
-                                return_sequences=True)(profile_response)
+        profile_response = LSTM(
+            int(profile_length / 2 * num_profiles),
+            activation=std_activation,
+            recurrent_activation="hard_sigmoid",
+            return_sequences=True,
+        )(profile_response)
     else:
-        profile_response = Dense(int(profile_length/2*num_profiles),
-                                 activation=std_activation)(profile_response)
-    profile_response = Dense(int(profile_length/2*num_profiles),
-                             activation=std_activation)(profile_response)
+        profile_response = Dense(
+            int(profile_length / 2 * num_profiles), activation=std_activation
+        )(profile_response)
+    profile_response = Dense(
+        int(profile_length / 2 * num_profiles), activation=std_activation
+    )(profile_response)
 
     actuator_future_inputs = []
     actuator_past_inputs = []
     actuators = []
     for i in range(num_actuators):
         actuator_future_inputs.append(
-            Input((lookahead, ), name='input_future_' + actuator_names[i]))
+            Input((lookahead,), name="input_future_" + actuator_names[i])
+        )
         actuator_past_inputs.append(
-            Input((lookbacks[actuator_names[i]]+1, ), name='input_past_' + actuator_names[i]))
-        actuators.append(Concatenate(
-            axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]]))
-        actuators[i] = Reshape(
-            (lookbacks[actuator_names[i]]+lookahead+1, 1))(actuators[i])
-        actuators[i] = ZeroPadding1D(padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0))(actuators[i])
-    if num_actuators>1:
+            Input(
+                (lookbacks[actuator_names[i]] + 1,),
+                name="input_past_" + actuator_names[i],
+            )
+        )
+        actuators.append(
+            Concatenate(axis=1)([actuator_past_inputs[i], actuator_future_inputs[i]])
+        )
+        actuators[i] = Reshape((lookbacks[actuator_names[i]] + lookahead + 1, 1))(
+            actuators[i]
+        )
+        actuators[i] = ZeroPadding1D(
+            padding=(max_actuator_lookback - lookbacks[actuator_names[i]], 0)
+        )(actuators[i])
+    if num_actuators > 1:
         actuators = Concatenate(axis=-1)(actuators)
     else:
         actuators = actuators[0]
-    
+
     if num_scalars > 0:
         scalar_inputs = []
         scalars = []
         for i in range(num_scalars):
             scalar_inputs.append(
-                Input((lookbacks[scalar_input_names[i]]+1,), name='input_' + scalar_input_names[i]))
-            scalars.append(Reshape((lookbacks[scalar_input_names[i]]+1,1))(scalar_inputs[i]))
-            scalars[i] = ZeroPadding1D(padding=(max_scalar_lookback - lookbacks[scalar_input_names[i]], lookahead))(scalars[i])
-        if num_scalars>1:
+                Input(
+                    (lookbacks[scalar_input_names[i]] + 1,),
+                    name="input_" + scalar_input_names[i],
+                )
+            )
+            scalars.append(
+                Reshape((lookbacks[scalar_input_names[i]] + 1, 1))(scalar_inputs[i])
+            )
+            scalars[i] = ZeroPadding1D(
+                padding=(
+                    max_scalar_lookback - lookbacks[scalar_input_names[i]],
+                    lookahead,
+                )
+            )(scalars[i])
+        if num_scalars > 1:
             scalars = Concatenate(axis=-1)(scalars)
         else:
             scalars = scalars[0]
         actuators = Concatenate(axis=-1)([actuators, scalars])
-        
-        
-    actuator_response = Dense(
-        max_profile_lookback+1, activation=std_activation)(actuators)
-    actuator_response = Dense(
-        max_profile_lookback+1, activation=std_activation)(actuator_response)
-    actuator_response = LSTM(max_profile_lookback+1, activation=std_activation,
-                             recurrent_activation='hard_sigmoid',
-                             return_sequences=True)(actuator_response)
-    
+
+    actuator_response = Dense(max_profile_lookback + 1, activation=std_activation)(
+        actuators
+    )
+    actuator_response = Dense(max_profile_lookback + 1, activation=std_activation)(
+        actuator_response
+    )
+    actuator_response = LSTM(
+        max_profile_lookback + 1,
+        activation=std_activation,
+        recurrent_activation="hard_sigmoid",
+        return_sequences=True,
+    )(actuator_response)
+
     total_response = Dot(axes=(2, 1))([actuator_response, profile_response])
-    total_response = LSTM(int(profile_length/2*num_targets), activation=std_activation,
-                          recurrent_activation='hard_sigmoid')(total_response)
-    total_response = Dense(int(profile_length*.75*num_targets),
-                           activation=std_activation)(total_response)
-    total_response = Dense(profile_length*num_targets)(total_response)
-    total_response = Reshape((num_targets*profile_length, 1))(total_response)
+    total_response = LSTM(
+        int(profile_length / 2 * num_targets),
+        activation=std_activation,
+        recurrent_activation="hard_sigmoid",
+    )(total_response)
+    total_response = Dense(
+        int(profile_length * 0.75 * num_targets), activation=std_activation
+    )(total_response)
+    total_response = Dense(profile_length * num_targets)(total_response)
+    total_response = Reshape((num_targets * profile_length, 1))(total_response)
 
     targets = []
     for i in range(num_targets):
-        targets.append(Cropping1D(cropping=(i*profile_length,
-                                            (num_targets-i-1)*profile_length))(total_response))
-        targets[i] = Reshape((profile_length,),
-                             name='target_' + target_profile_names[i])(targets[i])
+        targets.append(
+            Cropping1D(
+                cropping=(i * profile_length, (num_targets - i - 1) * profile_length)
+            )(total_response)
+        )
+        targets[i] = Reshape(
+            (profile_length,), name="target_" + target_profile_names[i]
+        )(targets[i])
 
     model_inputs = profile_inputs + actuator_past_inputs + actuator_future_inputs
     if num_scalars > 0:
