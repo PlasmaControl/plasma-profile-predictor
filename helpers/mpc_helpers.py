@@ -794,7 +794,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     ]
     vk = np.moveaxis(np.array(vk), 0, 1)
     v0 = vk[:, 0, :]
-    uk = np.concatenate([foo[:, 0, :] for foo in uk], axis=-1).squeeze()
+    uk = np.concatenate(uk, axis=-1)
     u0 = uk[:, 0, :]
 
     y0 = state_decoder.predict(z0)
