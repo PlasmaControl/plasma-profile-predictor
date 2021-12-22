@@ -382,9 +382,11 @@ def main(scenario_index=-2):
 
     print("Made Generators")
 
+
     ###############
     # Get model and optimizer
     ###############
+
     optimizers = {
         "sgd": keras.optimizers.SGD,
         "rmsprop": keras.optimizers.RMSprop,
