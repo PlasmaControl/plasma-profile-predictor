@@ -216,12 +216,22 @@ def evaluate(file_path):
         norm_data["lipschitz_constant"]
     )
     for metric_name, metric in metrics.items():
-        evaluation_metrics["dz_" + metric_name] = np.array(
+        evaluation_metrics["dzrel_" + metric_name] = np.array(
             [
                 metric(encoder_data["dz"][:, i, :]) / metric(encoder_data["z0"])
                 for i in range(encoder_data["dz"].shape[1])
             ]
         )
+        evaluation_metrics["dz_" + metric_name] = np.array(
+            [
+                metric(encoder_data["dz"][:, i, :])
+                for i in range(encoder_data["dz"].shape[1])
+            ]
+        )
+        evaluation_metrics["dxrel_" + metric_name] = metric(
+            encoder_data["dx"]
+        ) / metric(encoder_data["x0"])
+        evaluation_metrics["dx_" + metric_name] = metric(encoder_data["dx"])
 
     scenario["norm_data"] = norm_data
     scenario["evaluation_metrics"] = evaluation_metrics

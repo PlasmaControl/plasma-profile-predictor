@@ -777,8 +777,9 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         state_encoder.predict([foo[:, k, :] for foo in xk])
         for k in range(scenario["lookahead"] + 1)
     ]
-    z0 = zk[0]
-    z1 = zk[1]
+    zk = np.moveaxis(np.array(zk), 0, 1)
+    z0 = zk[:, 0, :]
+    z1 = zk[:, 1, :]
     xk = np.concatenate([foo[:, 0:2, :] for foo in xk], axis=-1).squeeze()
     x1 = xk[:, 1, :]
     x0 = xk[:, 0, :]
@@ -791,6 +792,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         control_encoder.predict([foo[:, k, :] for foo in uk])
         for k in range(scenario["lookahead"] + 1)
     ]
+    vk = np.moveaxis(np.array(vk), 0, 1)
     v0 = vk[:, 0, :]
     uk = np.concatenate([foo[:, 0, :] for foo in uk], axis=-1).squeeze()
     u0 = uk[:, 0, :]
@@ -800,7 +802,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         y0 = np.hstack(y0)
 
     # compute residuals
-    dz = compute_residuals(A, B, z0, z1, vk)
+    dz = compute_residuals(A, B, zk, vk)
     dx = x0[:, : y0.shape[1]] - y0
 
     encoder_data = {
