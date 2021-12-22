@@ -503,7 +503,7 @@ def main(scenario_index=-2):
     if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
         model.save(scenario["model_path"])
         print("Saved model after training")
-    with open(checkpt_dir + "test_old_added_params.pkl", "wb+") as f:
+    with open(checkpt_dir + scenario["runname"] + "_params.pkl", "wb+") as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print("Saved Analysis params after training")
 
