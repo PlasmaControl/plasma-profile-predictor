@@ -667,7 +667,7 @@ def compute_residuals(A, B, z, v):
         zk = zk @ A.T + v[:, t, :] @ B.T
         dz = z[:, t + 1, :] - zk
         dzs.append(dz)
-    return np.moveaxis(np.array(dz), 0, 1)
+    return np.moveaxis(np.array(dzs), 0, 1)
 
 
 def compute_encoder_data(model, scenario, rawdata, verbose=2):
