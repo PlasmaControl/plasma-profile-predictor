@@ -245,12 +245,12 @@ def evaluate(file_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 11:
-        for arg in sys.argv[1:]:
+    args = sys.argv[1:]
+    nargs = len(args)
+    if nargs < 11:
+        for arg in args:
             evaluate(os.path.abspath(arg))
     else:
-        args = sys.argv[1:]
-        nargs = len(args)
         for i in range(0, nargs, 10):
             job = "eval_" + args[i].split("/")[-1]
             path = " ".join([os.path.abspath(arg) for arg in args[i : i + 10]])
