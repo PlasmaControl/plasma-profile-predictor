@@ -78,16 +78,16 @@ def main(scenario_index=-2):
         "scalar_names": [
             "density_estimate",
             "curr",
-            "a_".format(efit_type),
-            "betan_".format(efit_type),
-            "drsep_".format(efit_type),
-            "kappa_".format(efit_type),
-            "li_".format(efit_type),
-            "rmagx_".format(efit_type),
-            "zmagx_".format(efit_type),
-            "volume_".format(efit_type),
-            "triangularity_top_".format(efit_type),
-            "triangularity_bot_".format(efit_type),
+            "a_{}".format(efit_type),
+            "betan_{}".format(efit_type),
+            "drsep_{}".format(efit_type),
+            "kappa_{}".format(efit_type),
+            "li_{}".format(efit_type),
+            "rmagx_{}".format(efit_type),
+            "zmagx_{}".format(efit_type),
+            "volume_{}".format(efit_type),
+            "triangularity_top_{}".format(efit_type),
+            "triangularity_bot_{}".format(efit_type),
         ],
         "profile_downsample": 2,
         "state_encoder_type": "dense",
@@ -124,7 +124,6 @@ def main(scenario_index=-2):
         "pruning_functions": [
             "remove_nan",
             "remove_dudtrip",
-            "remove_I_coil",
             "remove_outliers",
         ],
         "normalization_method": None,
@@ -148,6 +147,47 @@ def main(scenario_index=-2):
         ],
     }
 
+    IC_coils = [
+        "C_coil_139",
+        "C_coil_19",
+        "C_coil_199",
+        "C_coil_259",
+        "C_coil_319",
+        "C_coil_79",
+        "I_coil_150L",
+        "I_coil_150U",
+        "I_coil_210L",
+        "I_coil_210U",
+        "I_coil_270L",
+        "I_coil_270U",
+        "I_coil_30L",
+        "I_coil_30U",
+        "I_coil_330L",
+        "I_coil_330U",
+        "I_coil_90L",
+        "I_coil_90U",
+    ]
+    F_coils = [
+        "F_coil_1a",
+        "F_coil_1b",
+        "F_coil_2a",
+        "F_coil_2b",
+        "F_coil_3a",
+        "F_coil_3b",
+        "F_coil_4a",
+        "F_coil_4b",
+        "F_coil_5a",
+        "F_coil_5b",
+        "F_coil_6a",
+        "F_coil_6b",
+        "F_coil_7a",
+        "F_coil_7b",
+        "F_coil_8a",
+        "F_coil_8b",
+        "F_coil_9a",
+        "F_coil_9b",
+    ]
+
     scenarios_dict = OrderedDict()
     scenarios_dict["actuator_names"] = [
         {
@@ -163,6 +203,7 @@ def main(scenario_index=-2):
                 "curr_target",
                 "target_density",
                 "bt",
+                "ech",
             ]
         },
         {
@@ -172,32 +213,103 @@ def main(scenario_index=-2):
                 "curr_target",
                 "target_density",
                 "bt",
+                "ech",
             ]
+        },
+        {
+            "actuator_names": [
+                "pinj_30L",
+                "pinj_30R",
+                "pinj_15L",
+                "pinj_15R",
+                "pinj_21L",
+                "pinj_21R",
+                "pinj_33L",
+                "pinj_33R",
+                "curr_target",
+                "target_density",
+                "bt",
+            ]
+            + IC_coils
+        },
+        {
+            "actuator_names": [
+                "pinj",
+                "tinj",
+                "curr_target",
+                "target_density",
+                "bt",
+            ]
+            + IC_coils
+        },
+        {
+            "actuator_names": [
+                "pinj_30L",
+                "pinj_30R",
+                "pinj_15L",
+                "pinj_15R",
+                "pinj_21L",
+                "pinj_21R",
+                "pinj_33L",
+                "pinj_33R",
+                "curr_target",
+                "target_density",
+                "bt",
+                "ech",
+            ]
+            + IC_coils
+        },
+        {
+            "actuator_names": [
+                "pinj",
+                "tinj",
+                "curr_target",
+                "target_density",
+                "bt",
+                "ech",
+            ]
+            + IC_coils
         },
     ]
     scenarios_dict["flattop_only"] = [{"flattop_only": True}, {"flattop_only": False}]
-    scenarios_dict["x_weight"] = [
-        {"x_weight": 0.5},
-        {"x_weight": 1.0},
-        {"x_weight": 2},
-    ]
-    scenarios_dict["discount_factor"] = [
-        {"discount_factor": 1.0},
-        {"discount_factor": 0.8},
-    ]
-
     scenarios_dict["state_latent_dim"] = [
-        {"state_latent_dim": 100},
         {"state_latent_dim": 165},
+        {"state_latent_dim": 177},
         {"state_latent_dim": 200},
     ]
     scenarios_dict["lookahead"] = [
-        {"lookahead": 6},
         {"lookahead": 10},
+        {"lookahead": 20},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
         {
             "state_encoder_kwargs": {
+                "num_layers": 4,
+                "layer_scale": 1,
+                "activation": "elu",
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 4,
+                "layer_scale": 1,
+                "activation": "elu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 4,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 4,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
                 "num_layers": 6,
                 "layer_scale": 1,
                 "activation": "elu",
@@ -211,6 +323,45 @@ def main(scenario_index=-2):
         },
         {
             "state_encoder_kwargs": {
+                "num_layers": 6,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 6,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 8,
+                "layer_scale": 1,
+                "activation": "elu",
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 8,
+                "layer_scale": 1,
+                "activation": "elu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 8,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+                "norm": True,
+            },
+            "state_decoder_kwargs": {
+                "num_layers": 8,
+                "layer_scale": 1,
+                "activation": "leaky_relu",
+            },
+        },
+        {
+            "state_encoder_kwargs": {
                 "num_layers": 10,
                 "layer_scale": 1,
                 "activation": "elu",
@@ -227,28 +378,12 @@ def main(scenario_index=-2):
                 "num_layers": 10,
                 "layer_scale": 1,
                 "activation": "leaky_relu",
-                "kernel_constraint": Orthonormal(),
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 10,
-                "layer_scale": 1,
-                "activation": "leaky_relu",
-                "kernel_constraint": Orthonormal(),
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 10,
-                "layer_scale": 1,
-                "activation": "leaky_relu",
-                "kernel_constraint": Orthonormal(),
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 10,
                 "layer_scale": 1,
                 "activation": "leaky_relu",
-                "kernel_constraint": Orthonormal(),
             },
         },
     ]
@@ -342,7 +477,7 @@ def main(scenario_index=-2):
 
     scenario["runname"] = "LRAN" + strftime("_%d%b%y-%H-%M", localtime())
     if scenario_index >= 0:
-        scenario["runname"] += "_Scenario-" + str(scenario_index)
+        scenario["runname"] += "_Scenario-{:04d}".format(scenario_index)
     scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.h5"
 
     print(scenario["runname"])
@@ -381,7 +516,6 @@ def main(scenario_index=-2):
     )
 
     print("Made Generators")
-
 
     ###############
     # Get model and optimizer
