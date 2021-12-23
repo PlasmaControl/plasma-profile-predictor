@@ -35,16 +35,17 @@ def make_bash_scripts(number, output_dir, ncpu, ngpu, mem, times, mode="conv"):
             job = "CONV_" + str(i)
         elif (mode == "lran") or (mode == "autoencoder"):
             command.append("python $root_dir/train_autoencoder.py " + str(i))
-            job = "LRAN_" + str(i)
+            job = "LRAN_{:04d}".format(i)
 
         slurm_script(
-            os.path.join(output_dir, "driver" + str(i) + ".sh"),
+            os.path.join(output_dir, job + "driver.slurm"),
             command=command,
             job_name=job,
             ncpu=ncpu,
             ngpu=ngpu,
             mem=mem,
             time=times[i],
+            submit=True,
         )
 
 
@@ -57,6 +58,7 @@ def slurm_script(
     mem=32,
     time=60,
     user="",
+    submit=True,
 ):
     """Create a SLURM scripts
 
@@ -76,6 +78,8 @@ def slurm_script(
         time, in minutes
     user : str
         username for mailto, assumes princeton netID. Defaults to $USER
+    submit : bool
+        whether to submit job automatically
     """
     file_path = str(file_path)
 
@@ -105,3 +109,6 @@ def slurm_script(
         else:
             f.write(command + "\n")
         f.write("exit")
+
+        if submit:
+            os.system("sbatch " + file_path)

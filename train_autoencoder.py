@@ -57,7 +57,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_12_10_21/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_12_22_21/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -410,10 +410,6 @@ def main(scenario_index=-2):
             mode="autoencoder",
         )
         print("Created Driver Scripts in " + checkpt_dir)
-        for i in range(num_scenarios):
-            os.system(
-                "sbatch {}".format(os.path.join(checkpt_dir, "driver" + str(i) + ".sh"))
-            )
         print("Jobs submitted, exiting")
         return
 
