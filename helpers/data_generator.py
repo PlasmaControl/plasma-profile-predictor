@@ -577,7 +577,7 @@ def process_data(
         pruning_functions.append("remove_ECH")
     if not {"gasB", "gasC", "gasD", "gasE"}.issubset(set(sig_names)):
         pruning_functions.append("remove_gas")
-    if not set(IC_coils).isubset(set(sig_names)):
+    if not set(IC_coils).issubset(set(sig_names)):
         pruning_functions.append("remove_I_coil")
 
     prun_dict = {

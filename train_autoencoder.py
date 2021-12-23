@@ -84,7 +84,7 @@ def main(scenario_index=-2):
             "kappa_{}".format(efit_type),
             "li_{}".format(efit_type),
             "rmagx_{}".format(efit_type),
-            "zmagx_{}".format(efit_type),
+            "zmagX_{}".format(efit_type),
             "volume_{}".format(efit_type),
             "triangularity_top_{}".format(efit_type),
             "triangularity_bot_{}".format(efit_type),
