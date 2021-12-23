@@ -551,11 +551,35 @@ def process_data(
     ##############################
     # get pruning functions
     ##############################
+    IC_coils = [
+        "C_coil_139",
+        "C_coil_19",
+        "C_coil_199",
+        "C_coil_259",
+        "C_coil_319",
+        "C_coil_79",
+        "I_coil_150L",
+        "I_coil_150U",
+        "I_coil_210L",
+        "I_coil_210U",
+        "I_coil_270L",
+        "I_coil_270U",
+        "I_coil_30L",
+        "I_coil_30U",
+        "I_coil_330L",
+        "I_coil_330U",
+        "I_coil_90L",
+        "I_coil_90U",
+    ]
+
     pruning_functions = copy.copy(kwargs.get("pruning_functions", []))
     if "ech" not in sig_names:
         pruning_functions.append("remove_ECH")
     if not {"gasB", "gasC", "gasD", "gasE"}.issubset(set(sig_names)):
         pruning_functions.append("remove_gas")
+    if not set(IC_coils).isubset(set(sig_names)):
+        pruning_functions.append("remove_I_coil")
+
     prun_dict = {
         "remove_nan": remove_nan,
         "remove_ECH": remove_ECH,
