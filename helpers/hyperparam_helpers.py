@@ -110,5 +110,5 @@ def slurm_script(
             f.write(command + "\n")
         f.write("exit")
 
-        if submit:
-            os.system("sbatch " + file_path)
+    if submit:
+        os.system("sbatch " + file_path)
