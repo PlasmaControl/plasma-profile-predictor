@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-
+import tensorflow as tf
 from tensorflow.python.eager import context
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras import backend
@@ -13,6 +13,98 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops.ragged import ragged_tensor
 from tensorflow.python.util import nest
 from tensorflow.python.keras.layers.wrappers import Wrapper
+from tensorflow.python.keras import constraints
+from tensorflow.python.keras import initializers
+from tensorflow.python.keras import regularizers
+from tensorflow.python.keras import activations
+
+
+class ParaMatrix(tf.keras.layers.Layer):
+    """Layer that returns a matrix parameterized by inputs.
+
+    Parameters
+    ----------
+    matrix_shape : tuple
+        shape of desired output
+    num_layers : int
+        number of transformations to apply
+    norm : bool
+        whether to apply batchnorm to inputs
+    activation : str or callable
+        activation function to apply after each transformation
+    use_bias : bool
+        whether to use bias
+    """
+
+    def __init__(
+        self,
+        matrix_shape,
+        num_layers=1,
+        norm=True,
+        activation=None,
+        use_bias=True,
+        **kwargs
+    ):
+
+        assert len(matrix_shape) == 2
+        self.matrix_shape = matrix_shape
+        self.matrix_size = np.prod(matrix_shape)
+
+        super(ParaMatrix, self).__init__(**kwargs)
+
+        self.num_layers = num_layers
+        self.norm = norm
+        self.activation = activation
+        self.use_bias = use_bias
+
+        self.layers = []
+        if self.norm:
+            self.norm_layer = tf.keras.layers.BatchNormalization(
+                center=False, scale=False, name="norm_" + self.name
+            )
+        self.cat = tf.keras.layers.Concatenate(axis=-1)
+        self.flatten = tf.keras.layers.Flatten()
+        for i in range(num_layers):
+            a = self.activation
+            if i == num_layers - 1:
+                a = None
+            if i == 0:
+                units = self.matrix_size
+            else:
+                units = self.matrix_shape[1]
+            self.layers.append(
+                tf.keras.layers.Dense(units, activation=a, use_bias=self.use_bias)
+            )
+            if i == 0:
+                self.layers.append(tf.keras.layers.Reshape(matrix_shape))
+
+    def get_config(self):
+        config = super(ParaMatrix, self).get_config()
+        config.update(
+            {
+                "matrix_shape": self.matrix_shape,
+                "num_layers": self.num_layers,
+                "norm": self.norm,
+                "activation": self.activation,
+                "use_bias": self.use_bias,
+            }
+        )
+        return config
+
+    def call(self, inputs):
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        inputs = [self.flatten(inp) for inp in inputs]
+        if len(inputs) > 1:
+            inputs = self.cat(inputs)
+        else:
+            inputs = inputs[0]
+        if self.norm:
+            inputs = self.norm_layer(inputs)
+        for layer in self.layers:
+            inputs = layer(inputs)
+
+        return inputs
 
 
 # copied from tf v2.6.0 to get support for multiple inputs/outputs of time distributed layer
