@@ -435,6 +435,20 @@ def main(scenario_index=-2):
         assert scenario["control_decoder_type"] == "none"
         scenario["control_latent_dim"] = len(scenario["actuator_names"])
 
+    if scenario["control_latent_dim"] < 0:
+        scenario["control_latent_dim"] = int(
+            abs(scenario["control_latent_dim"]) * len(scenario["actuator_names"])
+        )
+    if scenario["state_latent_dim"] < 0:
+        scenario["state_latent_dim"] = int(
+            abs(scenario["state_latent_dim"])
+            * (
+                np.ceil(65 / scenario["profile_downsample"])
+                * len(scenario["profile_names"])
+                + len(scenario["scalar_names"])
+            )
+        )
+
     for k, v in scenario.items():
         print("{}:{}".format(k, v))
 
