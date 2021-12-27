@@ -313,5 +313,4 @@ if __name__ == "__main__":
                 time=200,
                 user="wconlin",
             )
-            os.system("sbatch {}".format(file_path))
         print("Jobs submitted, exiting")
