@@ -860,10 +860,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     xkp = lran.decode(zkp)
     xkp = np.concatenate(
-        [
-            xkp[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
-            for sig in lran.state_names
-        ],
+        [xkp[sig].reshape((zkp.shape[:2],) + (-1,)) for sig in lran.state_names],
         axis=-1,
     )
     dx = xkp[:, :-1, :] - xk
