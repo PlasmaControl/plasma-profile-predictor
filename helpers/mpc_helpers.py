@@ -1,5 +1,7 @@
 import numpy as np
 import scipy
+import copy
+from helpers.normalization import normalize, denormalize, renormalize
 from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
@@ -50,6 +52,8 @@ class LRANMPC:
         self._nz = self.A.shape[0]
         self._terminal = terminal
 
+        self.state_names = self._params["profile_names"] + self._params["scalar_names"]
+        self.actuator_names = self._params["actuator_names"]
         self.R = R
         self.Q = Q
         if Nlook is None:
@@ -110,26 +114,157 @@ class LRANMPC:
             self._state_input,
             self._control_input,
             self._state_encoder,
-            self._control_encoder,
             self._state_decoder,
+            self._control_encoder,
             self._control_decoder,
         ) = get_submodels(self._model)
+        norm_layers = [
+            layer
+            for layer in self._state_input.layers + self._control_input.layers
+            if "norm" in layer.name
+        ]
+        self._norm_layers = {layer.name[5:]: layer for layer in norm_layers}
 
-    def _normalize(self, data):
-        out = {}
-        for key, val in data.items():
-            out[key] = (
-                val - self._params["normalization_dict"][key]["mean"]
-            ) / self._params["normalization_dict"][key]["std"]
+    def predict_latent(self, z0, u):
+        """Predict future values of latent state
+
+        Parameters
+        ----------
+        z0 : ndarray, shape([sample], nz,)
+            initial value for latent state
+        u : ndarray, shape(time, [sample], nu)
+            actuator values vs time, in normalized units
+
+        Returns
+        -------
+        zt : ndarray, shape(time+1, [sample], nz)
+            predicted future values of latent state,
+            starting at z0
+        """
+        zt = [z0]
+        for i, ut in enumerate(u):
+            zt.append(zt[i] @ self.A.T + ut @ self.B.T)
+        return np.array(zt)
+
+    def predict(self, x0, u):
+        """Predict future values of physical state
+
+        Parameters
+        ----------
+        x0 : dict of ndarray, shape([sample], feature)
+            initial value for state in physical units
+            keys should be strings from lran.state_names
+        u : dict of ndarray, shape([sample], time,)
+            actuator values vs time, in physical units
+            keys should be strings from lran.actuator_names
+            values should be 2d arrays with time as the first axis
+            or 3d arrays with sample as the first axis, time as the 2nd
+
+        Returns
+        -------
+        xt : dict of ndarray
+            predicted future values of physical state
+        """
+        x0 = self.normalize(x0)
+        u = self.normalize(u)
+        z0 = self.encode(x0).squeeze()
+        v = np.stack([u[key] for key in self.actuator_names], axis=-1)
+        if v.ndim > 2:
+            batch = True
+            v = np.moveaxis(v, 0, 1)
+        zt = self.predict_latent(z0, v)
+        if batch:
+            zt = np.moveaxis(zt, 0, 1)
+        xt = self.decode(zt)
+        xt = self.denormalize(xt)
+        return xt
+
+    def normalize(self, data):
+        out = renormalize(
+            copy.copy(data), self._params["normalization_dict"], verbose=0
+        )
+        for key in out:
+            if key in self._norm_layers:
+                norm = self._norm_layers[key]
+                out[key] = (out[key] - norm.moving_mean) / np.sqrt(
+                    norm.moving_variance + norm.epsilon
+                )
         return out
 
-    def _denormalize(self, data):
+    def denormalize(self, data):
         out = {}
-        for key, val in data.items():
-            out[key] = (
-                val * self._params["normalization_dict"][key]["std"]
-                + self._params["normalization_dict"][key]["mean"]
-            )
+        out = denormalize(
+            copy.copy(data), self._params["normalization_dict"], verbose=0
+        )
+        for key in out:
+            if key in self._norm_layers:
+                norm = self._norm_layers[key]
+                out[key] = (
+                    out[key] * np.sqrt(norm.moving_variance + norm.epsilon)
+                    + norm.moving_mean
+                )
+        return out
+
+    def encode(self, state):
+        """Encodes physical state to latent linear state
+
+        Parameters
+        ----------
+        state: dict of ndarray
+            dictionary of arrays, keys should be names of states
+
+        Returns
+        -------
+        latent_state : ndarray
+            latent linear state
+
+        """
+        inp = {"input_" + key: np.atleast_2d(val) for key, val in state.items()}
+        if inp["input_" + self._params["profile_names"][0]].ndim > 2:
+            batch = True
+            batch_size = inp["input_" + self._params["profile_names"][0]].shape[0]
+            timesteps = inp["input_" + self._params["profile_names"][0]].shape[1]
+            inp = {
+                key: val.reshape((batch_size * timesteps, -1))
+                for key, val in inp.items()
+            }
+        else:
+            batch = False
+        outp = self._state_encoder.predict(inp)
+        if batch:
+            outp = outp.reshape((batch_size, timesteps, -1))
+        return outp
+
+    def decode(self, latent_state):
+        """Decodes physical state to latent linear state
+
+        Parameters
+        ----------
+        latent_state : ndarray
+            latent linear state
+
+        Returns
+        -------
+        state: dict of ndarray
+            dictionary of arrays, keys are names of states
+
+        """
+        inp = np.atleast_2d(latent_state)
+        if inp.ndim > 2:
+            batch = True
+            batch_size = inp.shape[0]
+            timesteps = inp.shape[1]
+            inp = inp.reshape((batch_size * timesteps, -1))
+        else:
+            batch = False
+        out = self._state_decoder.predict(inp)
+        if batch:
+            out = {
+                key: val.reshape((batch_size, timesteps, -1)).squeeze()
+                for key, val in zip(self.state_names, out)
+            }
+        else:
+            out = {key: val for key, val in zip(self.state_names, out)}
         return out
 
     def mpc_setup(self, Q=None, R=None, Nlook=None):
@@ -143,8 +278,6 @@ class LRANMPC:
             number of steps in the mpc lookahead
 
         """
-
-        import osqp
 
         A = self.A
         B = self.B
@@ -197,56 +330,27 @@ class LRANMPC:
         H = F.T @ Qhat @ F + Rhat
         # symmetrize for accuracy
         H = (H + H.T) / 2
-        qp = osqp.OSQP()
         lu = np.ones(Aineq.shape[0])
-        qp.setup(
-            P=scipy.sparse.csc_matrix(H),
-            q=np.ones(H.shape[1]),
-            A=scipy.sparse.csc_matrix(Aineq),
-            l=-lu,
-            u=lu,
-            verbose=False,
-        )
+        try:
+            import osqp
+
+            qp = osqp.OSQP()
+            qp.setup(
+                P=scipy.sparse.csc_matrix(H),
+                q=np.ones(H.shape[1]),
+                A=scipy.sparse.csc_matrix(Aineq),
+                l=-lu,
+                u=lu,
+                verbose=False,
+            )
+        except:
+            qp = None
 
         self._qp = qp
         self._Qhat = Qhat
         self._E = E
         self._F = F
         self._H = H
-
-    def encode(self, state):
-        """Encodes physical state to latent linear state
-
-        Parameters
-        ----------
-        state: dict of ndarray
-            dictionary of arrays, keys should be names of profiles
-
-        Returns
-        -------
-        latent_state : ndarray
-            latent linear state
-
-        """
-        return self._state_encoder.predict(
-            {"input_" + key: val for key, val in state.items()}
-        )
-
-    def decode(self, latent_state):
-        """Decodes physical state to latent linear state
-
-        Parameters
-        ----------
-        latent_state : ndarray
-            latent linear state
-
-        Returns
-        -------
-        state: dict of ndarray
-            dictionary of arrays, keys should be names of profiles
-
-        """
-        return self._state_decoder.predict(latent_state)
 
     def mpc_action(
         self, t, xk, xtarget=None, umin=None, umax=None, zmin=None, zmax=None
@@ -272,6 +376,8 @@ class LRANMPC:
             actions to take over prediction horizon
         """
 
+        if self._qp is None:
+            raise ValueError("osqp must be installed")
         # TODO: allow bounds and target to be time varying
 
         # set values
@@ -638,38 +744,6 @@ def compute_operator_norm(x, z):
     return operator_norm, x_norm, z_norm
 
 
-def compute_residuals(A, B, z, v):
-    """Compute residual from latent linear model
-
-    Parameters
-    ----------
-    A, B : ndarray
-        System dynamics and input matrices
-    z0, z1 : ndarray, shape(samples, time, latentstates)
-        latent state at two timesteps
-    v0 : ndarray, shape(samples, times, inputs)
-        latent control at initial timesteps
-
-    Returns
-    -------
-    dz : ndarray, shape(samples, times, latentstates)
-        error in linear system model
-
-    """
-    assert z.shape[0] == v.shape[0]
-    v = np.concatenate(
-        [v, np.zeros((v.shape[0], z.shape[1] - v.shape[1], v.shape[2]))], axis=1
-    )
-    ts = np.arange(z.shape[1])
-    dzs = []
-    zk = z[:, 0, :]
-    for t in ts[:-1]:
-        zk = zk @ A.T + v[:, t, :] @ B.T
-        dz = z[:, t + 1, :] - zk
-        dzs.append(dz)
-    return np.moveaxis(np.array(dzs), 0, 1)
-
-
 def compute_encoder_data(model, scenario, rawdata, verbose=2):
     """Gets input and output data from encoder and residuals
 
@@ -751,73 +825,60 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         )
         for key in (scenario["actuator_names"])
     }
-    xk = np.concatenate([val for val in xk_dict.values()], axis=-1)
-    uk = np.stack([val for val in uk_dict.values()], axis=2)
 
-    # parse model
-    (
-        state_input,
-        control_input,
-        state_encoder,
-        state_decoder,
-        control_encoder,
-        control_decoder,
-    ) = get_submodels(model)
-    A, B = get_AB(model)
+    lran = LRANMPC(model, scenario)
+
+    xk = np.concatenate(
+        [
+            xk_dict[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
+            for sig in lran.state_names
+        ],
+        axis=-1,
+    )
+    uk = np.concatenate(
+        [
+            uk_dict[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
+            for sig in lran.actuator_names
+        ],
+        axis=-1,
+    )
 
     if verbose:
         print("Encoding")
+
     # encode data
-    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in state_input.inputs])
-    xk = state_input.predict(
-        [xk[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-    )
-
-    zk = [
-        state_encoder.predict([foo[:, k, :] for foo in xk])
-        for k in range(scenario["lookahead"] + 1)
-    ]
-    zk = np.moveaxis(np.array(zk), 0, 1)
-    z0 = zk[:, 0, :]
-    z1 = zk[:, 1, :]
-    xk = np.concatenate([foo[:, 0:2, :] for foo in xk], axis=-1).squeeze()
-    x1 = xk[:, 1, :]
-    x0 = xk[:, 0, :]
-
-    idx = np.cumsum([0] + [int(foo.shape[-1]) for foo in control_input.inputs])
-    uk = control_input.predict(
-        [uk[:, :, idx1:idx2] for idx1, idx2 in zip(idx[:-1], idx[1:])]
-    )
-    vk = [
-        control_encoder.predict([foo[:, k, :] for foo in uk])
-        for k in range(scenario["lookahead"] + 1)
-    ]
-    vk = np.moveaxis(np.array(vk), 0, 1)
-    v0 = vk[:, 0, :]
-    uk = np.concatenate(uk, axis=-1)
-    u0 = uk[:, 0, :]
-
-    y0 = state_decoder.predict(z0)
-    if isinstance(y0, list):
-        y0 = np.hstack(y0)
+    xk_dict = lran.normalize(xk_dict)
+    uk_dict = lran.normalize(uk_dict)
+    zk = lran.encode(xk_dict)
+    vk = np.stack([uk_dict[sig] for sig in scenario["actuator_names"]], axis=-1)
 
     # compute residuals
-    dz = compute_residuals(A, B, zk, vk)
-    dx = x0[:, : y0.shape[1]] - y0
+    zkp = lran.predict_latent(zk[:, 0, :], vk)
+    zkp = np.moveaxis(zkp, 0, 1)
+    dz = zkp - zk
+
+    xkp = lran.decode(zkp)
+    xkp = lran.denormalize(xkp)
+    xkp = np.concatenate(
+        [
+            xkp[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
+            for sig in lran.state_names
+        ],
+        axis=-1,
+    )
+    dx = xkp - xk
 
     encoder_data = {
         "valdata": valdata,
         "normalization_dict": normalization_dict,
-        "x0": x0,
-        "x1": x1,
-        "z0": z0,
-        "z1": z1,
-        "u0": u0,
-        "v0": v0,
+        "x0": xk[:, 0, :],
+        "x1": xk[:, 1, :],
+        "z0": zk[:, 0, :],
+        "z1": zk[:, 1, :],
+        "u0": uk[:, 0, :],
+        "v0": vk[:, 0, :],
         "dx": dx,
         "dz": dz,
-        "A": A,
-        "B": B,
     }
     return encoder_data
 
