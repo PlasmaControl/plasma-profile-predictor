@@ -32,7 +32,7 @@ def normalize_arr(data, method, uniform_over_profile=True):
         data[np.isnan(data)] = nanmean
     # then normalize
     if method is None:
-        param_dict = {}
+        param_dict = {"method": None}
         return data, param_dict
 
     if method == "StandardScaler":
@@ -193,21 +193,18 @@ def denormalize_arr(data, param_dict):
         data: Numpy array of denormalized data.
     """
     eps = np.finfo("float32").eps
-    # for key, val in param_dict.items():
-    #    if K.is_tensor(val):
-    #        val = np.array(K.eval(val))
-    if param_dict["method"] is None:
+    if param_dict.get("method") is None:
         return data
-    if param_dict["method"] == "StandardScaler":
+    if param_dict.get("method") == "StandardScaler":
         return data * np.maximum(param_dict["std"], eps) + param_dict["mean"]
-    elif param_dict["method"] == "MinMax":
+    elif param_dict.get("method") == "MinMax":
         return data * np.maximum((param_dict["armax"] - param_dict["armin"]), eps)
         +param_dict["armin"]
-    elif param_dict["method"] == "MaxAbs":
+    elif param_dict.get("method") == "MaxAbs":
         return data * np.maximum(param_dict["maxabs"], eps)
-    elif param_dict["method"] == "RobustScaler":
+    elif param_dict.get("method") == "RobustScaler":
         return data * np.maximum(param_dict["iqr"], eps) + param_dict["median"]
-    elif param_dict["method"] == "PowerTransform":
+    elif param_dict.get("method") == "PowerTransform":
         y = data * np.maximum(param_dict["std"], eps) + param_dict["mean"]
 
         def np_yeo_johnson_inverse_transform(x, lmbda):
@@ -236,7 +233,7 @@ def denormalize_arr(data, param_dict):
                 y.flatten(), param_dict["lambda"]
             ).reshape(y.shape)
         return y
-    elif param_dict["method"] is None or param_dict["method"] == "None":
+    elif param_dict.get("method") is None or param_dict.get("method") == "None":
         return data
     else:
         raise ValueError("Unknown normalization method")
@@ -314,27 +311,28 @@ def renormalize(data, param_dict, verbose=1):
     else:
         # first remove all inf/nan
         data[np.isinf(data)] = np.nan
-        if data.ndim > 2:
-            for i in range(data.shape[2]):
-                data[np.isnan(data[:, :, i]), i] = param_dict["nanmean"][i]
-        else:
-            data[np.isnan(data)] = param_dict["nanmean"]
+        if "nammean" in param_dict:
+            if data.ndim > 2:
+                for i in range(data.shape[2]):
+                    data[np.isnan(data[:, :, i]), i] = param_dict["nanmean"][i]
+            else:
+                data[np.isnan(data)] = param_dict["nanmean"]
         # then normalize
-        if param_dict["method"] == "StandardScaler":
+        if param_dict.get("method") == "StandardScaler":
             return (data - param_dict["mean"]) / np.maximum(
                 param_dict["std"], np.finfo(np.float32).eps
             )
-        elif param_dict["method"] == "MinMax":
+        elif param_dict.get("method") == "MinMax":
             return (data - param_dict["armin"]) / np.maximum(
                 (param_dict["armax"] - param_dict["armin"]), np.finfo(np.float32).eps
             )
-        elif param_dict["method"] == "MaxAbs":
+        elif param_dict.get("method") == "MaxAbs":
             return data / np.maximum(param_dict["maxabs"], np.finfo(np.float32).eps)
-        elif param_dict["method"] == "RobustScaler":
+        elif param_dict.get("method") == "RobustScaler":
             return (data - param_dict["median"]) / np.maximum(
                 param_dict["iqr"], np.finfo(np.float32).eps
             )
-        elif param_dict["method"] == "PowerTransform":
+        elif param_dict.get("method") == "PowerTransform":
 
             def yeo_johnson_transform(x, lmbda):
                 """Return transformed input x following Yeo-Johnson transform with
@@ -366,7 +364,7 @@ def renormalize(data, param_dict, verbose=1):
                 param_dict["std"], np.finfo(np.float32).eps
             )
             return y
-        elif param_dict["method"] is None or param_dict["method"] == "None":
+        elif param_dict.get("method") is None or param_dict.get("method") == "None":
             return data
         else:
             raise ValueError("Unknown normalization method")
