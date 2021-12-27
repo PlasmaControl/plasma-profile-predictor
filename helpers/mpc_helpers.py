@@ -851,9 +851,10 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     zk = lran.encode(xk_dict)
     vk = np.stack([uk_dict[sig] for sig in scenario["actuator_names"]], axis=-1)
-
+    vk = np.moveaxis(vk, 0, 1)
     # compute residuals
     zkp = lran.predict_latent(zk[:, 0, :], vk)
+    vk = np.moveaxis(vk, 0, 1)
     zkp = np.moveaxis(zkp, 0, 1)
     dz = zkp - zk
 
