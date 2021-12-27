@@ -44,10 +44,6 @@ def sigma(inp, true, prediction):
     return num[included_inds] / denom[included_inds]
 
 
-def mean_squared_error(residual):
-    return np.mean((residual) ** 2)
-
-
 def mean_absolute_error(residual):
     return np.mean(np.abs(residual))
 
@@ -64,27 +60,51 @@ def percentile75_absolute_error(residual):
     return np.percentile(np.abs(residual), 75)
 
 
-def median_squared_error(residual):
-    return np.median((residual) ** 2)
+def percentile99_absolute_error(residual):
+    return np.percentile(np.abs(residual), 99)
 
 
-def percentile25_squared_error(residual):
-    return np.percentile((residual) ** 2, 25)
+def max_absolute_error(residual):
+    return np.max(np.abs(residual))
 
 
-def percentile75_squared_error(residual):
-    return np.percentile((residual) ** 2, 75)
+def root_mean_squared_error(residual):
+    return np.sqrt(np.mean((residual) ** 2))
+
+
+def root_median_squared_error(residual):
+    return np.sqrt(np.median((residual) ** 2))
+
+
+def root_percentile25_squared_error(residual):
+    return np.sqrt(np.percentile((residual) ** 2, 25))
+
+
+def root_percentile75_squared_error(residual):
+    return np.sqrt(np.percentile((residual) ** 2, 75))
+
+
+def root_percentile99_squared_error(residual):
+    return np.sqrt(np.percentile((residual) ** 2, 99))
+
+
+def root_max_squared_error(residual):
+    return np.sqrt(np.max((residual) ** 2))
 
 
 metrics = {
-    "mean_squared_error": mean_squared_error,
     "mean_absolute_error": mean_absolute_error,
     "median_absolute_error": median_absolute_error,
     "percentile25_absolute_error": percentile25_absolute_error,
     "percentile75_absolute_error": percentile75_absolute_error,
-    "median_squared_error": median_squared_error,
-    "percentile25_squared_error": percentile25_squared_error,
-    "percentile75_squared_error": percentile75_squared_error,
+    "percentile99_absolute_error": percentile99_absolute_error,
+    "max_absolute_error": max_absolute_error,
+    "root_mean_squared_error": root_mean_squared_error,
+    "root_median_squared_error": root_median_squared_error,
+    "root_percentile25_squared_error": root_percentile25_squared_error,
+    "root_percentile75_squared_error": root_percentile75_squared_error,
+    "root_percentile99_squared_error": root_percentile99_squared_error,
+    "root_max_squared_error": root_max_squared_error,
     # "sigma": sigma,
 }
 
