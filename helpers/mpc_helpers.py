@@ -856,7 +856,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     zkp = lran.predict_latent(zk[:, 0, :], vk)
     vk = np.moveaxis(vk, 0, 1)
     zkp = np.moveaxis(zkp, 0, 1)
-    dz = zkp - zk
+    dz = zkp[:, :-1, :] - zk
 
     xkp = lran.decode(zkp)
     xkp = np.concatenate(
@@ -866,7 +866,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         ],
         axis=-1,
     )
-    dx = xkp - xk
+    dx = xkp[:, :-1, :] - xk
 
     encoder_data = {
         "valdata": valdata,
