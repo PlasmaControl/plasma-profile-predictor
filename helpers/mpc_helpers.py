@@ -186,8 +186,8 @@ class LRANMPC:
         for key in out:
             if key in self._norm_layers:
                 norm = self._norm_layers[key]
-                out[key] = (out[key] - norm.moving_mean) / np.sqrt(
-                    norm.moving_variance + norm.epsilon
+                out[key] = (out[key] - norm.moving_mean.numpy()) / np.sqrt(
+                    norm.moving_variance.numpy() + norm.epsilon
                 )
         return out
 
@@ -200,8 +200,8 @@ class LRANMPC:
             if key in self._norm_layers:
                 norm = self._norm_layers[key]
                 out[key] = (
-                    out[key] * np.sqrt(norm.moving_variance + norm.epsilon)
-                    + norm.moving_mean
+                    out[key] * np.sqrt(norm.moving_variance.numpy() + norm.epsilon)
+                    + norm.moving_mean.numpy()
                 )
         return out
 
