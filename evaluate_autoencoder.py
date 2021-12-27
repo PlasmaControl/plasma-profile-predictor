@@ -210,6 +210,7 @@ def evaluate(file_path):
     print("Computing norm data took {}s".format(time.time() - T1))
     T1 = time.time()
 
+    # store operator norm data
     evaluation_metrics["median_operator_norm"] = np.nanmedian(
         norm_data["operator_norm"]
     )
@@ -220,6 +221,8 @@ def evaluate(file_path):
     evaluation_metrics["std_lipschitz_const"] = np.nanstd(
         norm_data["lipschitz_constant"]
     )
+
+    # time dependent residuals in z, x
     for metric_name, metric in metrics.items():
         evaluation_metrics["dzrel_" + metric_name] = np.array(
             [
@@ -233,10 +236,18 @@ def evaluate(file_path):
                 for i in range(encoder_data["dz"].shape[1])
             ]
         )
-        evaluation_metrics["dxrel_" + metric_name] = metric(
-            encoder_data["dx"]
-        ) / metric(encoder_data["x0"])
-        evaluation_metrics["dx_" + metric_name] = metric(encoder_data["dx"])
+        evaluation_metrics["dxrel_" + metric_name] = np.array(
+            [
+                metric(encoder_data["dx"][:, i, :]) / metric(encoder_data["x0"])
+                for i in range(encoder_data["dx"].shape[1])
+            ]
+        )
+        evaluation_metrics["dx_" + metric_name] = np.array(
+            [
+                metric(encoder_data["dx"][:, i, :])
+                for i in range(encoder_data["dx"].shape[1])
+            ]
+        )
 
     scenario["norm_data"] = norm_data
     scenario["evaluation_metrics"] = evaluation_metrics
