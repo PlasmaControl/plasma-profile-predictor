@@ -13,10 +13,421 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops.ragged import ragged_tensor
 from tensorflow.python.util import nest
 from tensorflow.python.keras.layers.wrappers import Wrapper
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.keras import activations
+from tensorflow.python.keras.utils import generic_utils
+from tensorflow.python.keras import backend
+
+
+class ParametricLinearSystem(tf.keras.layers.Layer):
+    """Layer representing a discrete time linear system
+
+    Denoting state x, input u and output y, computes the following:
+        x(t+1) = A x(t) + B u(t)
+        y(t+1) = C x(t+1) + D u(t)
+    with learnable matrices A,B,C,D
+    Alternatively, matrices A,B,C,D can be provided at call,
+    allowing them to be the output of another layer
+
+    Parameters
+    ----------
+    state_size : int
+        latent state dimension, len(x)
+    output_size : int
+        output dimension, len(y). If None, defaults to state_size
+    learn_A, etc : bool
+        whether to learn matrix within this layer, or assume
+        it will be supplied elsewhere. Defaults to True for A,B
+        False for C,D (in which case C is fixed to the identity and D to zero)
+    A_initializer, etc : str or callable
+        method to use to initialize matrix, if matrix is learned
+    A_regularizer, etc : str or callable
+        regularization applied to matrix, if matrix is learned
+    A_constraint, etc : str or callable
+        constraint applied to matrix, if matrix is learned
+    return_sequences: bool (default `False`)
+        whether to return the last output in the output sequence, or the full sequence.
+    return_state: bool (default `False`)
+        whether to return the last state in addition to the output.
+    go_backwards: bool (default `False`)
+        if True, process the input sequence backwards and return the
+        reversed sequence.
+    stateful: bool (default `False`)
+        if True, the last state for each sample at index i in a batch
+        will be used as initial state for the sample of index i in the
+        following batch.
+    """
+
+    def __init__(
+        self,
+        state_size=1,
+        output_size=None,
+        learn_A=True,
+        learn_B=True,
+        learn_C=False,
+        learn_D=False,
+        A_initializer="orthogonal",
+        B_initializer="glorot_uniform",
+        C_initializer="glorot_uniform",
+        D_initializer="zeros",
+        A_regularizer=None,
+        B_regularizer=None,
+        C_regularizer=None,
+        D_regularizer=None,
+        A_constraint=None,
+        B_constraint=None,
+        C_constraint=None,
+        D_constraint=None,
+        return_sequences=False,
+        return_state=False,
+        go_backwards=False,
+        stateful=False,
+        **kwargs,
+    ):
+        super(ParametricLinearSystem, self).__init__(**kwargs)
+
+        self.state_size = state_size
+        self.output_size = self.state_size if output_size is None else output_size
+        self.learn_A = learn_A
+        self.learn_B = learn_B
+        self.learn_C = learn_C
+        self.learn_D = learn_D
+        self.A_initializer = A_initializer
+        self.B_initializer = B_initializer
+        self.C_initializer = C_initializer
+        self.D_initializer = D_initializer
+        self.A_regularizer = A_regularizer
+        self.B_regularizer = B_regularizer
+        self.C_regularizer = C_regularizer
+        self.D_regularizer = D_regularizer
+        self.A_constraint = A_constraint
+        self.B_constraint = B_constraint
+        self.C_constraint = C_constraint
+        self.D_constraint = D_constraint
+        self.stateful = stateful
+        self.return_state = return_state
+        self.return_sequences = return_sequences
+        self.go_backwards = go_backwards
+
+        self._states = None
+        self._batch_size = None
+
+    def get_config(self):
+        config = super(ParametricLinearSystem, self).get_config()
+        config.update(
+            {
+                "state_size": self.state_size,
+                "output_size": self.output_size,
+                "learn_A": self.learn_A,
+                "learn_B": self.learn_B,
+                "learn_C": self.learn_C,
+                "learn_D": self.learn_D,
+                "A_initializer": self.A_initializer,
+                "B_initializer": self.B_initializer,
+                "C_initializer": self.C_initializer,
+                "D_initializer": self.D_initializer,
+                "A_regularizer": self.A_regularizer,
+                "B_regularizer": self.B_regularizer,
+                "C_regularizer": self.C_regularizer,
+                "D_regularizer": self.D_regularizer,
+                "A_constraint": self.A_constraint,
+                "B_constraint": self.B_constraint,
+                "C_constraint": self.C_constraint,
+                "D_constraint": self.D_constraint,
+                "return_sequences": self.return_sequences,
+                "return_state": self.return_state,
+                "go_backwards": self.go_backwards,
+                "stateful": self.stateful,
+            }
+        )
+
+    def build(self, input_shape):
+        assert len(input_shape) == 3
+        assert all([np.isscalar(i) or (i is None) for i in input_shape])
+        batch, time_step, input_size = input_shape
+        self._batch_size = batch
+        if self.learn_A:
+            self.A = self.add_weight(
+                name="A",
+                shape=(self.state_size, self.state_size),
+                dtype=tf.float32,
+                initializer=self.A_initializer,
+                regularizer=self.A_regularizer,
+                constraint=self.A_constraint,
+            )
+        else:
+            self.A = tf.zeros(
+                (self.state_size, self.state_size),
+                dtype=tf.float32,
+                name="A",
+            )
+        if self.learn_B:
+            self.B = self.add_weight(
+                name="B",
+                shape=(self.state_size, input_size),
+                dtype=tf.float32,
+                initializer=self.A_initializer,
+                regularizer=self.B_regularizer,
+                constraint=self.B_constraint,
+            )
+
+        else:
+            self.B = tf.zeros(
+                (self.state_size, input_size),
+                dtype=tf.float32,
+                name="B",
+            )
+        if self.learn_C:
+            self.C = self.add_weight(
+                name="C",
+                shape=(self.output_size, self.state_size),
+                dtype=tf.float32,
+                initializer=self.A_initializer,
+                regularizer=self.C_regularizer,
+                constraint=self.C_constraint,
+            )
+        else:
+            self.C = tf.eye(
+                self.output_size,
+                self.state_size,
+                dtype=tf.float32,
+                name="C",
+            )
+
+        if self.learn_D:
+            self.D = self.add_weight(
+                name="D",
+                shape=(self.output_size, input_size),
+                dtype=tf.float32,
+                initializer=self.A_initializer,
+                regularizer=self.D_regularizer,
+                constraint=self.D_constraint,
+            )
+        else:
+            self.D = tf.zeros(
+                (self.output_size, input_size),
+                dtype=tf.float32,
+                name="D",
+            )
+
+        if self.stateful:
+            self.reset_states()
+        self.built = True
+
+    @property
+    def states(self):
+        return self._states
+
+    @states.setter
+    def states(self, states):
+        self._states = states
+
+    def compute_output_shape(self, input_shape):
+        # TODO: simplify this, we know state and output dim at init, just need batch + time
+        if isinstance(input_shape, list):
+            input_shape = input_shape[0]
+        input_shape = tf.TensorShape(input_shape)
+
+        batch = input_shape[0]
+        time_step = input_shape[1]
+        state_size = self.state_size
+
+        def _get_output_shape(flat_output_size):
+            output_dim = tf.TensorShape(flat_output_size).as_list()
+            if self.return_sequences:
+                output_shape = tf.TensorShape([batch, time_step] + output_dim)
+            else:
+                output_shape = tf.TensorShape([batch] + output_dim)
+            return output_shape
+
+        output_shape = tf.nest.flatten(
+            tf.nest.map_structure(_get_output_shape, self.output_size)
+        )
+        output_shape = output_shape[0] if len(output_shape) == 1 else output_shape
+
+        if self.return_state:
+
+            def _get_state_shape(flat_state):
+                if self.return_sequences:
+                    state_shape = tf.TensorShape(
+                        [batch, time_step] + tf.TensorShape(flat_state).as_list()
+                    )
+                else:
+                    state_shape = tf.TensorShape(
+                        [batch] + tf.TensorShape(flat_state).as_list()
+                    )
+                return state_shape
+
+            state_shape = tf.nest.map_structure(_get_state_shape, state_size)
+            return generic_utils.to_list(output_shape) + tf.nest.flatten(state_shape)
+        else:
+            return output_shape
+
+    def get_initial_state(self, inputs):
+        input_shape = tf.shape(inputs)
+        batch_size = input_shape[0]
+        dtype = inputs.dtype
+        init_state = tf.zeros((batch_size, self.state_size), dtype)
+        return init_state
+
+    def call(self, inputs, x0=None, A=None, B=None, C=None, D=None):
+
+        if A is None:
+            A = self.A
+        if B is None:
+            B = self.B
+        if C is None:
+            C = self.C
+        if D is None:
+            D = self.D
+
+        inputs, x0 = self._process_inputs(inputs, x0)
+
+        input_shape = backend.int_shape(inputs)
+        timesteps = input_shape[1]
+        batch = input_shape[0]
+        y0 = tf.zeros((batch, self.output_size))
+        initial_state = [y0, x0]
+
+        def step(inputs, states):
+            u = inputs
+            y0, x0 = states
+            x1 = tf.linalg.matvec(A, x0) + tf.linalg.matvec(B, u)
+            y1 = tf.linalg.matvec(C, x1) + tf.linalg.matvec(D, u)
+            return y1, [y1, x1]
+
+        last_output, outputs, states = backend.rnn(
+            step,
+            inputs,
+            initial_state,
+            constants=None,
+            go_backwards=self.go_backwards,
+            mask=None,
+            unroll=False,
+            input_length=timesteps,
+            time_major=False,
+            zero_output_for_mask=True,
+        )
+
+        # we don't care about y, thats already taken care of in outputs
+        states = states[1]
+        if self.stateful:
+            updates = [
+                tf.compat.v1.assign(self_state, tf.cast(state, self_state.dtype))
+                for self_state, state in zip(
+                    tf.nest.flatten(self.states), tf.nest.flatten(states)
+                )
+            ]
+            self.add_update(updates)
+
+        if self.return_sequences:
+            output = outputs
+        else:
+            output = last_output
+
+        if self.return_state:
+            if not isinstance(states, (list, tuple)):
+                states = [states]
+            else:
+                states = list(states)
+            return generic_utils.to_list(output) + states
+        else:
+            return output
+
+    def _process_inputs(self, inputs, initial_state):
+        # input shape: `(samples, time (padded with zeros), input_dim)`
+        if self.stateful:
+            if initial_state is not None:
+                # When layer is stateful and initial_state is provided, check if the
+                # recorded state is same as the default value (zeros). Use the recorded
+                # state if it is not same as the default.
+                non_zero_count = tf.add_n(
+                    [tf.math.count_nonzero(s) for s in tf.nest.flatten(self.states)]
+                )
+                # Set strict = True to keep the original structure of the state.
+                initial_state = tf.compat.v1.cond(
+                    non_zero_count > 0,
+                    true_fn=lambda: self.states,
+                    false_fn=lambda: initial_state,
+                    strict=True,
+                )
+            else:
+                initial_state = self.states
+        elif initial_state is None:
+            initial_state = self.get_initial_state(inputs)
+
+        return inputs, initial_state
+
+    def reset_states(self, states=None):
+        """Reset the recorded states for the stateful RNN layer.
+        Can only be used when RNN layer is constructed with `stateful` = `True`.
+
+        Parameters
+        ----------
+        states : ndarray
+            values for the initial state. When the value is None,
+            zero filled numpy array will be created based on the cell state size.
+
+        Raises
+        ------
+        AttributeError: When the RNN layer is not stateful.
+        ValueError: When the batch size of the RNN layer is unknown.
+        ValueError: When the input numpy array is not compatible with the RNN
+            layer state, either size wise or dtype wise.
+        """
+        if not self.stateful:
+            raise AttributeError("Layer must be stateful.")
+        batch_size = self._batch_size
+        if not batch_size:
+            raise ValueError(
+                "If a RNN is stateful, it needs to know "
+                "its batch size. Specify the batch size "
+                "of your input tensors: \n"
+                "- If using a Sequential model, "
+                "specify the batch size by passing "
+                "a `batch_input_shape` "
+                "argument to your first layer.\n"
+                "- If using the functional API, specify "
+                "the batch size by passing a "
+                "`batch_shape` argument to your Input layer."
+            )
+        # initialize state if None
+        if self.states is None:
+            flat_init_state_values = tf.nest.flatten(
+                self.get_initial_state(
+                    inputs=tf.zeros(
+                        [batch_size, 1, self.state_size], dtype=backend.floatx()
+                    )
+                )
+            )
+            flat_states_variables = tf.nest.map_structure(
+                backend.variable, flat_init_state_values
+            )
+            self.states = tf.nest.pack_sequence_as(
+                self.state_size, flat_states_variables
+            )
+        elif states is None:
+            backend.set_value(
+                self.states,
+                np.zeros([batch_size] + tf.TensorShape(self.state_size).as_list()),
+            )
+        else:
+            flat_states = tf.nest.flatten(self.states)
+            flat_input_states = tf.nest.flatten(states)
+            if len(flat_input_states) != len(flat_states):
+                raise ValueError(
+                    f"Layer {self.name} expects {len(flat_states)} "
+                    f"states, but it received {len(flat_input_states)} "
+                    f"state values. States received: {states}"
+                )
+            set_value_tuples = []
+            for i, (value, state) in enumerate(zip(flat_input_states, flat_states)):
+                if value.shape != state.shape:
+                    raise ValueError(
+                        f"State {i} is incompatible with layer {self.name}: "
+                        f"expected shape={(batch_size, state)} "
+                        f"but found shape={value.shape}"
+                    )
+                set_value_tuples.append((state, value))
+            backend.batch_set_value(set_value_tuples)
 
 
 class ParaMatrix(tf.keras.layers.Layer):
@@ -43,7 +454,7 @@ class ParaMatrix(tf.keras.layers.Layer):
         norm=True,
         activation=None,
         use_bias=True,
-        **kwargs
+        **kwargs,
     ):
 
         assert len(matrix_shape) == 2
@@ -96,15 +507,15 @@ class ParaMatrix(tf.keras.layers.Layer):
             inputs = [inputs]
         inputs = [self.flatten(inp) for inp in inputs]
         if len(inputs) > 1:
-            inputs = self.cat(inputs)
+            x = self.cat(inputs)
         else:
-            inputs = inputs[0]
+            x = inputs[0]
         if self.norm:
-            inputs = self.norm_layer(inputs)
+            x = self.norm_layer()
         for layer in self.layers:
-            inputs = layer(inputs)
+            x = layer(x)
 
-        return inputs
+        return x
 
 
 # copied from tf v2.6.0 to get support for multiple inputs/outputs of time distributed layer
