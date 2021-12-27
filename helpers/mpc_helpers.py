@@ -828,6 +828,12 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
 
     lran = LRANMPC(model, scenario)
 
+    if verbose:
+        print("Encoding")
+
+    # encode data
+    xk_dict = lran.normalize(xk_dict)
+    uk_dict = lran.normalize(uk_dict)
     xk = np.concatenate(
         [
             xk_dict[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
@@ -843,12 +849,6 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         axis=-1,
     )
 
-    if verbose:
-        print("Encoding")
-
-    # encode data
-    xk_dict = lran.normalize(xk_dict)
-    uk_dict = lran.normalize(uk_dict)
     zk = lran.encode(xk_dict)
     vk = np.stack([uk_dict[sig] for sig in scenario["actuator_names"]], axis=-1)
 
@@ -858,7 +858,6 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     dz = zkp - zk
 
     xkp = lran.decode(zkp)
-    xkp = lran.denormalize(xkp)
     xkp = np.concatenate(
         [
             xkp[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
