@@ -393,21 +393,31 @@ class LRANMPC:
             zmax = self._zmax
 
         # normalize actuator bounds
-        umin = self._normalize(
-            {key: umin[i] for i, key in enumerate(self._params["actuator_names"])}
-        )
-        umin = np.array([umin[key] for key in self._params["actuator_names"]])
-        umax = self._normalize(
-            {key: umax[i] for i, key in enumerate(self._params["actuator_names"])}
-        )
-        umax = np.array([umax[key] for key in self._params["actuator_names"]])
+        umina = []
+        umaxa = []
+        for i, name in enumerate(self._params["actuator_names"]):
+            if np.isinf(umin[i]):
+                umina.append(umin[i])
+            else:
+                umina.append(
+                    self.normalize({name: np.atleast_1d(umin[i])})[name].squeeze()
+                )
+            if np.isinf(umax[i]):
+                umaxa.append(umax[i])
+            else:
+                umaxa.append(
+                    self.normalize({name: np.atleast_1d(umax[i])})[name].squeeze()
+                )
+
+        umin = np.asarray(umin)
+        umax = np.asarray(umax)
 
         # encode state and target
-        xk = self._normalize(xk)
+        xk = self.normalize(xk)
         zk = self.encode(xk).squeeze()
 
         if xtarget is not None:
-            xtarget = self._normalize(xtarget)
+            xtarget = self.normalize(xtarget)
             ztarget = self.encode(xtarget).squeeze()
         else:  # default target : encoded state of 0, roughly mean value for physical state
             ztarget = np.zeros(self._nz)
@@ -443,7 +453,7 @@ class LRANMPC:
         for i, sig in enumerate(self._params["actuator_names"]):
             control[sig] = u[i]
 
-        control = self._denormalize(control)
+        control = self.denormalize(control)
         return control
 
 
