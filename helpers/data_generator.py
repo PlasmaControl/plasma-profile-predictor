@@ -353,10 +353,19 @@ class AutoEncoderDataGenerator(Sequence):
                 :,
                 :: self.profile_downsample,
             ]
+        sample_weights = np.ones(len(self.cur_shotnum))
         for sig in self.actuator_inputs:
             inp["input_" + sig] = self.data[sig][
                 idx * self.batch_size : (idx + 1) * self.batch_size, :, np.newaxis
             ]
+            if self.sample_weights == "std":
+                sample_weights += np.std(
+                    self.data[sig][
+                        idx * self.batch_size : (idx + 1) * self.batch_size, :
+                    ],
+                    axis=1,
+                )
+
         for sig in self.scalar_inputs:
             inp["input_" + sig] = self.data[sig][
                 idx * self.batch_size : (idx + 1) * self.batch_size, :, np.newaxis
@@ -372,18 +381,15 @@ class AutoEncoderDataGenerator(Sequence):
                 (self.batch_size, self.lookahead, self.state_latent_dim)
             ),
         }
+        time_weights = np.array(
+            [self.discount_factor ** i for i in range(self.lookahead)]
+        ).reshape((1, -1))
+        time_ones = np.ones(self.lookahead + 1).reshape((1, -1))
+        sample_weights = sample_weights.reshape((-1, 1))
         weights_dict = {
-            "x_residual": self.x_weight
-            * np.ones((len(self.cur_shotnum), self.lookahead + 1)),
-            "u_residual": self.u_weight
-            * np.ones((len(self.cur_shotnum), self.lookahead + 1)),
-            "linear_system_residual": np.repeat(
-                np.array(
-                    [self.discount_factor ** i for i in range(self.lookahead)]
-                ).reshape((1, self.lookahead)),
-                len(self.cur_shotnum),
-                axis=0,
-            ),
+            "x_residual": self.x_weight * sample_weights * time_ones,
+            "u_residual": self.u_weight * sample_weights * time_ones,
+            "linear_system_residual": time_weights * sample_weights,
         }
 
         if self.times_called % len(self) == 0 and self.shuffle:
