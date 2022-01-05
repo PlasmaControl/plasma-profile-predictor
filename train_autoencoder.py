@@ -451,36 +451,35 @@ def main(scenario_index=-2):
     for k, v in scenario.items():
         print("{}:{}".format(k, v))
 
-    if scenario["process_data"]:
-        scenario["sig_names"] = (
-            scenario["profile_names"]
-            + scenario["actuator_names"]
-            + scenario["scalar_names"]
-        )
+    scenario["sig_names"] = (
+        scenario["profile_names"]
+        + scenario["actuator_names"]
+        + scenario["scalar_names"]
+    )
 
-        traindata, valdata, normalization_dict = process_data(
-            scenario["raw_data_path"],
-            scenario["sig_names"],
-            scenario["normalization_method"],
-            scenario["window_length"],
-            scenario["window_overlap"],
-            0,  # scenario['lookback'],
-            scenario["lookahead"],
-            scenario["sample_step"],
-            scenario["uniform_normalization"],
-            scenario["train_frac"],
-            scenario["val_frac"],
-            scenario["nshots"],
-            verbose,
-            scenario["flattop_only"],
-            pruning_functions=scenario["pruning_functions"],
-            invert_q=scenario["invert_q"],
-            val_idx=scenario["val_idx"],
-            excluded_shots=scenario["excluded_shots"],
-        )
+    traindata, valdata, normalization_dict = process_data(
+        scenario["raw_data_path"],
+        scenario["sig_names"],
+        scenario["normalization_method"],
+        scenario["window_length"],
+        scenario["window_overlap"],
+        0,  # scenario['lookback'],
+        scenario["lookahead"],
+        scenario["sample_step"],
+        scenario["uniform_normalization"],
+        scenario["train_frac"],
+        scenario["val_frac"],
+        scenario["nshots"],
+        verbose,
+        scenario["flattop_only"],
+        pruning_functions=scenario["pruning_functions"],
+        invert_q=scenario["invert_q"],
+        val_idx=scenario["val_idx"],
+        excluded_shots=scenario["excluded_shots"],
+    )
 
-        scenario["dt"] = np.mean(np.diff(traindata["time"])) / 1000  # in seconds
-        scenario["normalization_dict"] = normalization_dict
+    scenario["dt"] = np.mean(np.diff(traindata["time"])) / 1000  # in seconds
+    scenario["normalization_dict"] = normalization_dict
 
     scenario["profile_length"] = int(np.ceil(65 / scenario["profile_downsample"]))
 
@@ -560,8 +559,6 @@ def main(scenario_index=-2):
     )
 
     model.summary()
-    if ngpu > 1:
-        parallel_model = keras.utils.multi_gpu_model(model, gpus=ngpu)
 
     optimizer = optimizers[scenario["optimizer"]](**scenario["optimizer_kwargs"])
 
@@ -599,19 +596,17 @@ def main(scenario_index=-2):
         )
     )
     callbacks.append(TimingCallback(time_limit=(runtimes[scenario_index] - 30) * 60))
-
-    if ngpu <= 1:
-        callbacks.append(
-            ModelCheckpoint(
-                scenario["model_path"],
-                monitor="val_loss",
-                verbose=0,
-                save_best_only=True,
-                save_weights_only=False,
-                mode="auto",
-                period=1,
-            )
+    callbacks.append(
+        ModelCheckpoint(
+            scenario["model_path"],
+            monitor="val_loss",
+            verbose=0,
+            save_best_only=True,
+            save_weights_only=False,
+            mode="auto",
+            period=1,
         )
+    )
 
     scenario["steps_per_epoch"] = len(train_generator)
     scenario["val_steps"] = len(val_generator)
@@ -627,30 +622,17 @@ def main(scenario_index=-2):
     ###############
     # Compile and Train
     ###############
-    if ngpu > 1:
-        parallel_model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
-        print("Parallel model compiled, starting training")
-        history = parallel_model.fit_generator(
-            train_generator,
-            steps_per_epoch=scenario["steps_per_epoch"],
-            epochs=scenario["epochs"],
-            callbacks=callbacks,
-            validation_data=val_generator,
-            validation_steps=scenario["val_steps"],
-            verbose=verbose,
-        )
-    else:
-        model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
-        print("Model compiled, starting training")
-        history = model.fit_generator(
-            train_generator,
-            steps_per_epoch=scenario["steps_per_epoch"],
-            epochs=scenario["epochs"],
-            callbacks=callbacks,
-            validation_data=val_generator,
-            validation_steps=scenario["val_steps"],
-            verbose=verbose,
-        )
+    model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
+    print("Model compiled, starting training")
+    history = model.fit_generator(
+        train_generator,
+        steps_per_epoch=scenario["steps_per_epoch"],
+        epochs=scenario["epochs"],
+        callbacks=callbacks,
+        validation_data=val_generator,
+        validation_steps=scenario["val_steps"],
+        verbose=verbose,
+    )
 
     ###############
     # Save Results
