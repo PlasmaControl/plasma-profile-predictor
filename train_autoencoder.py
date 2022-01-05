@@ -1,34 +1,26 @@
-import pickle
-from tensorflow import keras
-import numpy as np
-import random
 import os
 import sys
-import itertools
 import copy
-from collections import OrderedDict
-from time import strftime, localtime
-from helpers import schedulers
-from helpers.data_generator import process_data, AutoEncoderDataGenerator
-from helpers.hyperparam_helpers import make_bash_scripts
-from helpers.custom_losses import (
-    denorm_loss,
-    hinge_mse_loss,
-    percent_baseline_error,
-    percent_correct_sign,
-    baseline_MAE,
-)
-from helpers.custom_constraints import Orthonormal
-import models.autoencoder
-from helpers.callbacks import CyclicLR, TensorBoardWrapper, TimingCallback
+import time
+import pickle
+import random
+import itertools
+import collections
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
 from tensorflow.keras.callbacks import (
     LearningRateScheduler,
     ModelCheckpoint,
     ReduceLROnPlateau,
     EarlyStopping,
 )
-import tensorflow as tf
-from tensorflow.keras import backend as K
+import models.autoencoder
+import helpers
+from helpers import schedulers
+from helpers import signal_groups
+from helpers.data_generator import process_data, AutoEncoderDataGenerator
+from helpers.callbacks import TimingCallback
 
 
 def main(scenario_index=-2):
@@ -39,19 +31,11 @@ def main(scenario_index=-2):
     num_cores = 8
     req_mem = 80  # gb
     ngpu = 1
-    # seed_value= 0
-    # os.environ['PYTHONHASHSEED']=str(seed_value)
-    # random.seed(seed_value)
-    # np.random.seed(seed_value)
-    # tf.set_random_seed(seed_value)
 
-    config = tf.compat.v1.ConfigProto(
-        intra_op_parallelism_threads=4 * num_cores,
-        inter_op_parallelism_threads=4 * num_cores,
-        allow_soft_placement=True,
-        device_count={"CPU": 1, "GPU": ngpu},
-    )
-    session = tf.compat.v1.Session(config=config)
+    seed_value = 0
+    os.environ["PYTHONHASHSEED"] = str(seed_value)
+    random.seed(seed_value)
+    np.random.seed(seed_value)
 
     ###############
     # global stuff
@@ -62,11 +46,12 @@ def main(scenario_index=-2):
         os.makedirs(checkpt_dir)
 
     ###############
-    # scenarios
+    # Default set of hyperparameters
     ###############
 
     efit_type = "EFIT01"
     default_scenario = {
+        ### names of signals to use
         "actuator_names": ["pinj", "tinj", "curr_target", "target_density", "bt"],
         "profile_names": [
             "temp",
@@ -89,54 +74,65 @@ def main(scenario_index=-2):
             "triangularity_top_{}".format(efit_type),
             "triangularity_bot_{}".format(efit_type),
         ],
-        "profile_downsample": 2,
+        ### what type of model to use and settings etc.
         "state_encoder_type": "dense",
         "state_decoder_type": "dense",
         "control_encoder_type": "none",
         "control_decoder_type": "none",
         "state_encoder_kwargs": {
             "num_layers": 6,
-            "layer_scale": 2,
             "activation": "elu",
             "norm": True,
         },
         "state_decoder_kwargs": {
             "num_layers": 6,
-            "layer_scale": 2,
             "activation": "elu",
         },
         "control_encoder_kwargs": {},
         "control_decoder_kwargs": {},
-        "state_latent_dim": 50,
-        "control_latent_dim": 5,
-        "sample_weights": True,
-        "x_weight": 1,
-        "u_weight": 1,
-        "discount_factor": 1,
-        "batch_size": 64,
-        "epochs": 200,
-        "flattop_only": True,
-        "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms.pkl",
-        "process_data": True,
-        "invert_q": True,
+        ### dimension of latent states: negative means same as physical state, scaled
+        "state_latent_dim": -1,
+        "control_latent_dim": -1,
+        ### weighting for different terms. latent state loss == 1
+        "sample_weights": True,  # True to weight samples temporally, "std" to weight by how much things are changing
+        "x_weight": 1,  # state encode/decode error
+        "u_weight": 1,  # control encode/decode error
+        "discount_factor": 1,  # reduction ratio for future predictions
+        ### loss and training parameters
         "optimizer": "adam",
         "optimizer_kwargs": {"lr": 0.001},
-        "shuffle_generators": True,
+        "shuffle_generators": True,  # re-order samples on each epoch
+        "loss_function": "mse",
+        "loss_function_kwargs": {},
+        "batch_size": 64,
+        "epochs": 200,
+        ### data processing stuff
+        "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms.pkl",
+        "flattop_only": True,  # only include data during "steady state"
+        "invert_q": True,  # to avoid singularity at psi=1
+        "normalization_method": None,  # if normalizing data beforehand, None if using BatchNormalization layers
+        "uniform_normalization": True,  # whether to use same mean/std for entire profile
+        "profile_downsample": 2,  # by default. profiles are 65 pts long, so may be downsampled
+        "lookahead": 6,  # horizon for prediction / control, in 50ms chunks
+        ### leave these params alone
+        "lookback": 0,  # should always be 0 state space model
+        "window_length": 1,  # number of samples to average over
+        "window_overlap": 0,  # how much to overlap averaging windows
+        "sample_step": 1,  # number of samples between starts of sequential samples
+        ### how to split up training/validation
+        "train_frac": 1,  # fraction in (0,1)
+        "val_frac": 0,  # fraction in (0,1)
+        "val_idx": np.random.randint(
+            1, 10
+        ),  # override frac, use specific shots instead
+        "nshots": np.inf,  # maximum number of shots to use
+        ### what data to exclude from training
         "pruning_functions": [
-            "remove_nan",
-            "remove_dudtrip",
-            "remove_outliers",
+            "remove_nan",  # remove junk data
+            "remove_dudtrip",  # remove PCS crashes etc
+            "remove_outliers",  # remove weird fits and bad postprocessing
         ],
-        "normalization_method": None,
-        "window_length": 1,
-        "window_overlap": 0,
-        "lookahead": 6,
-        "sample_step": 1,
-        "uniform_normalization": True,
-        "train_frac": 0.8,
-        "val_idx": np.random.randint(1, 10),
-        "val_frac": 0.2,
-        "nshots": 12000,
+        ### lists of specific shots to exclude, mostly based on rare topology
         "excluded_shots": [
             "topology_TOP",
             "topology_OUT",
@@ -148,64 +144,19 @@ def main(scenario_index=-2):
         ],
     }
 
-    IC_coils = [
-        "C_coil_139",
-        "C_coil_19",
-        "C_coil_199",
-        "C_coil_259",
-        "C_coil_319",
-        "C_coil_79",
-        "I_coil_150L",
-        "I_coil_150U",
-        "I_coil_210L",
-        "I_coil_210U",
-        "I_coil_270L",
-        "I_coil_270U",
-        "I_coil_30L",
-        "I_coil_30U",
-        "I_coil_330L",
-        "I_coil_330U",
-        "I_coil_90L",
-        "I_coil_90U",
-    ]
-    F_coils = [
-        "F_coil_1a",
-        "F_coil_1b",
-        "F_coil_2a",
-        "F_coil_2b",
-        "F_coil_3a",
-        "F_coil_3b",
-        "F_coil_4a",
-        "F_coil_4b",
-        "F_coil_5a",
-        "F_coil_5b",
-        "F_coil_6a",
-        "F_coil_6b",
-        "F_coil_7a",
-        "F_coil_7b",
-        "F_coil_8a",
-        "F_coil_8b",
-        "F_coil_9a",
-        "F_coil_9b",
-    ]
-
-    scenarios_dict = OrderedDict()
+    ###############
+    # For hyperparameter scans
+    ###############
+    scenarios_dict = collections.OrderedDict()
     scenarios_dict["actuator_names"] = [
         {
             "actuator_names": [
-                "pinj_30L",
-                "pinj_30R",
-                "pinj_15L",
-                "pinj_15R",
-                "pinj_21L",
-                "pinj_21R",
-                "pinj_33L",
-                "pinj_33R",
                 "curr_target",
                 "target_density",
                 "bt",
                 "ech",
             ]
+            + signal_groups.PINJs
         },
         {
             "actuator_names": [
@@ -219,19 +170,13 @@ def main(scenario_index=-2):
         },
         {
             "actuator_names": [
-                "pinj_30L",
-                "pinj_30R",
-                "pinj_15L",
-                "pinj_15R",
-                "pinj_21L",
-                "pinj_21R",
-                "pinj_33L",
-                "pinj_33R",
                 "curr_target",
                 "target_density",
                 "bt",
             ]
-            + IC_coils
+            + signal_groups.C_coils
+            + signal_groups.I_coils
+            + signal_groups.PINJs
         },
         {
             "actuator_names": [
@@ -241,24 +186,19 @@ def main(scenario_index=-2):
                 "target_density",
                 "bt",
             ]
-            + IC_coils
+            + signal_groups.C_coils
+            + signal_groups.I_coils
         },
         {
             "actuator_names": [
-                "pinj_30L",
-                "pinj_30R",
-                "pinj_15L",
-                "pinj_15R",
-                "pinj_21L",
-                "pinj_21R",
-                "pinj_33L",
-                "pinj_33R",
                 "curr_target",
                 "target_density",
                 "bt",
                 "ech",
             ]
-            + IC_coils
+            + signal_groups.C_coils
+            + signal_groups.I_coils
+            + signal_groups.PINJs
         },
         {
             "actuator_names": [
@@ -269,14 +209,14 @@ def main(scenario_index=-2):
                 "bt",
                 "ech",
             ]
-            + IC_coils
+            + signal_groups.C_coils
+            + signal_groups.I_coils
         },
     ]
     scenarios_dict["flattop_only"] = [{"flattop_only": True}, {"flattop_only": False}]
     scenarios_dict["state_latent_dim"] = [
-        {"state_latent_dim": 165},
-        {"state_latent_dim": 177},
-        {"state_latent_dim": 200},
+        {"state_latent_dim": -1.00},
+        {"state_latent_dim": -1.25},
     ]
     scenarios_dict["lookahead"] = [
         {"lookahead": 20},
@@ -285,104 +225,88 @@ def main(scenario_index=-2):
         {
             "state_encoder_kwargs": {
                 "num_layers": 4,
-                "layer_scale": 1,
                 "activation": "elu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 4,
-                "layer_scale": 1,
                 "activation": "elu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 4,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 4,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 6,
-                "layer_scale": 1,
                 "activation": "elu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 6,
-                "layer_scale": 1,
                 "activation": "elu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 6,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 6,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 8,
-                "layer_scale": 1,
                 "activation": "elu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 8,
-                "layer_scale": 1,
                 "activation": "elu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 8,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 8,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 10,
-                "layer_scale": 1,
                 "activation": "elu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 10,
-                "layer_scale": 1,
                 "activation": "elu",
             },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 10,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
                 "num_layers": 10,
-                "layer_scale": 1,
                 "activation": "leaky_relu",
             },
         },
@@ -400,7 +324,7 @@ def main(scenario_index=-2):
     # Batch Run
     ###############
     if scenario_index == -1:
-        make_bash_scripts(
+        helpers.hyperparam_helpers.make_bash_scripts(
             num_scenarios,
             checkpt_dir,
             num_cores,
@@ -478,17 +402,14 @@ def main(scenario_index=-2):
         val_idx=scenario["val_idx"],
         excluded_shots=scenario["excluded_shots"],
     )
-
-    scenario["dt"] = np.mean(np.diff(traindata["time"])) / 1000  # in seconds
     scenario["normalization_dict"] = normalization_dict
-
+    scenario["dt"] = np.mean(np.diff(traindata["time"])) / 1000  # in seconds
     scenario["profile_length"] = int(np.ceil(65 / scenario["profile_downsample"]))
 
-    scenario["runname"] = "LRAN" + strftime("_%d%b%y-%H-%M", localtime())
+    scenario["runname"] = "LRAN" + time.strftime("_%d%b%y-%H-%M", time.localtime())
     if scenario_index >= 0:
         scenario["runname"] += "_Scenario-{:04d}".format(scenario_index)
     scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.h5"
-
     print(scenario["runname"])
 
     ###############
@@ -525,13 +446,11 @@ def main(scenario_index=-2):
         scenario["shuffle_generators"],
         sample_weights=scenario["sample_weights"],
     )
-
     print("Made Generators")
 
     ###############
-    # Get model and optimizer
+    # Get optimizer, losses metrics, callbacks
     ###############
-
     optimizers = {
         "sgd": keras.optimizers.SGD,
         "rmsprop": keras.optimizers.RMSprop,
@@ -541,46 +460,13 @@ def main(scenario_index=-2):
         "adamax": keras.optimizers.Adamax,
         "nadam": keras.optimizers.Nadam,
     }
-
-    model = models.autoencoder.make_autoencoder(
-        scenario["state_encoder_type"],
-        scenario["state_decoder_type"],
-        scenario["control_encoder_type"],
-        scenario["control_decoder_type"],
-        scenario["state_encoder_kwargs"],
-        scenario["state_decoder_kwargs"],
-        scenario["control_encoder_kwargs"],
-        scenario["control_decoder_kwargs"],
-        scenario["profile_names"],
-        scenario["scalar_names"],
-        scenario["actuator_names"],
-        scenario["state_latent_dim"],
-        scenario["control_latent_dim"],
-        scenario["profile_length"],
-        scenario["lookahead"],
-        None,  # scenario["batch_size"],
-    )
-
-    model.summary()
-
     optimizer = optimizers[scenario["optimizer"]](**scenario["optimizer_kwargs"])
 
-    ###############
-    # Get losses and metrics
-    ###############
+    loss = scenario["loss"]
 
-    loss = "mse"
-    metrics = ["mse", "mae"]
+    metrics = ["mse", "mae", "logcosh"]
+
     callbacks = []
-    schedules = {
-        "exp": schedulers.exp,
-        "poly": schedulers.poly,
-        "piece": schedulers.piece,
-        "inverseT": schedulers.decayed_learning_rate,
-    }
-    if "lr_schedule" in scenario:
-        schedule = schedules[scenario["lr_schedule"]](**scenario.get("lr_kwargs", {}))
-        callbacks.append(LearningRateScheduler(schedule=schedule, verbose=1))
     callbacks.append(
         ReduceLROnPlateau(
             monitor="val_loss",
@@ -610,6 +496,15 @@ def main(scenario_index=-2):
             period=1,
         )
     )
+    schedules = {
+        "exp": schedulers.exp,
+        "poly": schedulers.poly,
+        "piece": schedulers.piece,
+        "inverseT": schedulers.decayed_learning_rate,
+    }
+    if "lr_schedule" in scenario:
+        schedule = schedules[scenario["lr_schedule"]](**scenario.get("lr_kwargs", {}))
+        callbacks.append(LearningRateScheduler(schedule=schedule, verbose=1))
 
     scenario["steps_per_epoch"] = len(train_generator)
     scenario["val_steps"] = len(val_generator)
@@ -623,16 +518,39 @@ def main(scenario_index=-2):
     print("Saved Analysis params before run")
 
     ###############
-    # Compile and Train
+    # Get and compile model
     ###############
-    model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
+    model = models.autoencoder.make_autoencoder(
+        scenario["state_encoder_type"],
+        scenario["state_decoder_type"],
+        scenario["control_encoder_type"],
+        scenario["control_decoder_type"],
+        scenario["state_encoder_kwargs"],
+        scenario["state_decoder_kwargs"],
+        scenario["control_encoder_kwargs"],
+        scenario["control_decoder_kwargs"],
+        scenario["profile_names"],
+        scenario["scalar_names"],
+        scenario["actuator_names"],
+        scenario["state_latent_dim"],
+        scenario["control_latent_dim"],
+        scenario["profile_length"],
+        scenario["lookahead"],
+        None,  # scenario["batch_size"],
+    )
+    model.summary()
+    model.compile(optimizer, loss, metrics)
     print("Model compiled, starting training")
-    history = model.fit_generator(
+
+    ###############
+    # Do the training thing
+    ###############
+    history = model.fit(
         train_generator,
-        steps_per_epoch=scenario["steps_per_epoch"],
-        epochs=scenario["epochs"],
-        callbacks=callbacks,
         validation_data=val_generator,
+        callbacks=callbacks,
+        epochs=scenario["epochs"],
+        steps_per_epoch=scenario["steps_per_epoch"],
         validation_steps=scenario["val_steps"],
         verbose=verbose,
     )
