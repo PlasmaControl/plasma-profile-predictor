@@ -109,6 +109,7 @@ def main(scenario_index=-2):
         "control_decoder_kwargs": {},
         "state_latent_dim": 50,
         "control_latent_dim": 5,
+        "sample_weights": True,
         "x_weight": 1,
         "u_weight": 1,
         "discount_factor": 1,
@@ -507,6 +508,7 @@ def main(scenario_index=-2):
         scenario["x_weight"],
         scenario["u_weight"],
         scenario["shuffle_generators"],
+        sample_weights=scenario["sample_weights"],
     )
     val_generator = AutoEncoderDataGenerator(
         valdata,
@@ -521,6 +523,7 @@ def main(scenario_index=-2):
         scenario["x_weight"],
         scenario["u_weight"],
         scenario["shuffle_generators"],
+        sample_weights=scenario["sample_weights"],
     )
 
     print("Made Generators")
