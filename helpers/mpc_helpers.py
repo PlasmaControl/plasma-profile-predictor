@@ -19,14 +19,10 @@ class LRANMPC:
         should be LRAN type with encoders/decoders etc
     params : dict
         parameters used for training, ie "scenario"
-    xtarget : dict of ndarray
-        target state
     Q, R : ndarray
         weight matrices
     Nlook : int
         mpc lookahead
-    umin, umax : ndarray
-        bounds on control
     terminal : bool
         whether to include terminal cost in objective
     """
@@ -39,14 +35,11 @@ class LRANMPC:
         Q=None,
         R=None,
         Nlook=None,
-        umin=None,
-        umax=None,
         terminal=True,
     ):
 
         self._model = model
         self._params = params
-        self._xtarget = xtarget
         self._parse_model()
         self._nu = self.B.shape[1]
         self._nz = self.A.shape[0]
@@ -59,17 +52,14 @@ class LRANMPC:
         if Nlook is None:
             Nlook = 10
         self._Nlook = Nlook
-        if umin is None:
-            umin = -np.inf * np.ones(self._nu)
-        self._umin = umin
-        if umax is None:
-            umax = np.inf * np.ones(self._nu)
-        self._umax = umax
-
-        self._zmin = -np.inf * np.ones(self._nz)
-        self._zmax = np.inf * np.ones(self._nz)
-
         self.mpc_setup()
+
+        # set default bounds/targets
+        self._umin_default = {name: -np.inf for name in self.actuator_names}
+        self._umax_default = {name: np.inf for name in self.actuator_names}
+        self._zmin_default = -np.inf * np.ones(self._nz)
+        self._zmax_default = np.inf * np.ones(self._nz)
+        self._xtarget_default = self.denormalize(self.decode(np.zeros(self._nz)))
 
     @property
     def A(self):
@@ -353,7 +343,15 @@ class LRANMPC:
         self._H = H
 
     def mpc_action(
-        self, t, xk, xtarget=None, umin=None, umax=None, zmin=None, zmax=None
+        self,
+        t,
+        xk,
+        xtarget=None,
+        umin={},
+        umax={},
+        zmin=None,
+        zmax=None,
+        return_all=False,
     ):
         """find control action via MPC
 
@@ -363,17 +361,22 @@ class LRANMPC:
             current value for the physical state
         xtarget : dictionary of ndarray
             target value for physical state
-        umin, umax : ndarray
+        umin, umax : dict of float
             upper and lower bounds on control input
+            defaults to +/- inf
         zmin, zmax : ndarray
             upper and lower bounds on latent state
+            defaults to +/- inf
+        return_all : bool
+            whether to also return optimal control sequence for entire
+            prediction horizon
 
         Returns
         -------
-        u : ndarray
+        u : dict of float
             action to take at current timestep
-        uhat : ndarray
-            actions to take over prediction horizon
+        uhat : dict of ndarray
+            actions to take over horizon, only returned if return_all is True
         """
 
         if self._qp is None:
@@ -381,46 +384,42 @@ class LRANMPC:
         # TODO: allow bounds and target to be time varying
 
         # set values
-        if xtarget is None:
-            xtarget = self._xtarget
-        if umin is None:
-            umin = self._umin
-        if umax is None:
-            umax = self._umax
         if zmin is None:
-            zmin = self._zmin
+            zmin = self._zmin_default
         if zmax is None:
-            zmax = self._zmax
-
-        # normalize actuator bounds
+            zmax = self._zmax_default
+        if xtarget is None:
+            xtarget = self._xtarget_default
+        umind = self._umin_default.copy()
+        umaxd = self._umax_default.copy()
+        umind.update(umin)
+        umaxd.update(umax)
+        # normalize actuator bounds, keeping infs
+        # TODO: allow constraints on du/dt, reference values for actuators
         umina = []
         umaxa = []
-        for i, name in enumerate(self._params["actuator_names"]):
-            if np.isinf(umin[i]):
-                umina.append(umin[i])
+        for name in self.actuator_names:
+            if np.isinf(umind[name]):
+                umina.append(umind[name])
             else:
                 umina.append(
-                    self.normalize({name: np.atleast_1d(umin[i])})[name].squeeze()
+                    self.normalize({name: np.atleast_1d(umind[name])})[name].squeeze()
                 )
-            if np.isinf(umax[i]):
-                umaxa.append(umax[i])
+            if np.isinf(umaxd[name]):
+                umaxa.append(umaxd[name])
             else:
                 umaxa.append(
-                    self.normalize({name: np.atleast_1d(umax[i])})[name].squeeze()
+                    self.normalize({name: np.atleast_1d(umaxd[name])})[name].squeeze()
                 )
 
-        umin = np.asarray(umin)
-        umax = np.asarray(umax)
+        umin = np.asarray(umina)
+        umax = np.asarray(umaxa)
 
         # encode state and target
         xk = self.normalize(xk)
         zk = self.encode(xk).squeeze()
-
-        if xtarget is not None:
-            xtarget = self.normalize(xtarget)
-            ztarget = self.encode(xtarget).squeeze()
-        else:  # default target : encoded state of 0, roughly mean value for physical state
-            ztarget = np.zeros(self._nz)
+        xtarget = self.normalize(xtarget)
+        ztarget = self.encode(xtarget).squeeze()
 
         # set up inequality constraints
         Ix = np.concatenate(
@@ -445,16 +444,15 @@ class LRANMPC:
         # solve qp
         self._qp.update(q=f, l=-np.inf * np.ones_like(bineq), u=bineq)
         results = self._qp.solve()
-        uhat = results.x
-        u = uhat[: self._nu].reshape((-1, 1))
+        uhat = results.x.reshape((self._Nlook, -1))
 
         # parse into output dict in physical units
-        control = {}
-        for i, sig in enumerate(self._params["actuator_names"]):
-            control[sig] = u[i]
-
-        control = self.denormalize(control)
-        return control
+        control = {sig: uhat[:, i] for i, sig in enumerate(self.actuator_names)}
+        uhat = self.denormalize(control)
+        u = {key: val[0] for key, val in uhat.items()}
+        if return_all:
+            return u, uhat
+        return u
 
 
 def get_AB(model):
