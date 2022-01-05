@@ -37,7 +37,7 @@ def main(scenario_index=-2):
     # set session
     ###################
     num_cores = 8
-    req_mem = 48  # gb
+    req_mem = 80  # gb
     ngpu = 1
     # seed_value= 0
     # os.environ['PYTHONHASHSEED']=str(seed_value)
@@ -278,7 +278,6 @@ def main(scenario_index=-2):
         {"state_latent_dim": 200},
     ]
     scenarios_dict["lookahead"] = [
-        {"lookahead": 10},
         {"lookahead": 20},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
