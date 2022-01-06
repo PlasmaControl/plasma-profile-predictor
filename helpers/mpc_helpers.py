@@ -57,6 +57,7 @@ class LRANMPC:
         # set default bounds/targets
         self._umin_default = {name: -np.inf for name in self.actuator_names}
         self._umax_default = {name: np.inf for name in self.actuator_names}
+        self._uref_default = {name: 0 for name in self.actuator_names}
         self._zmin_default = -np.inf * np.ones(self._nz)
         self._zmax_default = np.inf * np.ones(self._nz)
         self._xtarget_default = self.denormalize(self.decode(np.zeros(self._nz)))
@@ -288,7 +289,7 @@ class LRANMPC:
         # F = [B 0 0 ...]
         #     [AB B 0 0 ...]
         #     [A^2B AB B 0 0 ...]
-        E = np.vstack([np.linalg.matrix_power(A, i + 1) for i in range(Nlook)])
+        E = np.hstack([np.linalg.matrix_power(A, i + 1) for i in range(Nlook)])
         F = []
         for i in range(Nlook):
             Frow = np.hstack(
@@ -301,11 +302,11 @@ class LRANMPC:
         F = np.vstack(F)
         nx = A.shape[0]
         nu = B.shape[1]
-        Ix = np.vstack([np.eye(Nlook * nx), -np.eye(Nlook * nx)])
-        Iu = np.vstack([np.eye(Nlook * nu), -np.eye(Nlook * nu)])
+        Ix = np.eye(Nlook * nx)
+        Iu = np.eye(Nlook * nu)
         Aineq_x = Ix @ F
         Aineq_u = Iu
-        Aineq = np.vstack([Aineq_x, Aineq_u])
+        Aineq = np.vstack([Aineq_u, Aineq_x])
 
         # expand cost matrices
         Qhat = [Q] * Nlook
@@ -349,6 +350,7 @@ class LRANMPC:
         xtarget=None,
         umin={},
         umax={},
+        uref={},
         zmin=None,
         zmax=None,
         return_all=False,
@@ -364,6 +366,9 @@ class LRANMPC:
         umin, umax : dict of float
             upper and lower bounds on control input
             defaults to +/- inf
+        uref : dict of float
+            nominal feedforward values for control
+            defaults to 0
         zmin, zmax : ndarray
             upper and lower bounds on latent state
             defaults to +/- inf
@@ -392,12 +397,16 @@ class LRANMPC:
             xtarget = self._xtarget_default
         umind = self._umin_default.copy()
         umaxd = self._umax_default.copy()
+        urefd = self._uref_default.copy()
         umind.update(umin)
         umaxd.update(umax)
+        urefd.update(uref)
         # normalize actuator bounds, keeping infs
-        # TODO: allow constraints on du/dt, reference values for actuators
+        # TODO: allow constraints on du/dt
+        # TODO: allow constraints / targets into the future
         umina = []
         umaxa = []
+        urefa = []
         for name in self.actuator_names:
             if np.isinf(umind[name]):
                 umina.append(umind[name])
@@ -411,9 +420,12 @@ class LRANMPC:
                 umaxa.append(
                     self.normalize({name: np.atleast_1d(umaxd[name])})[name].squeeze()
                 )
-
+            urefa.append(
+                self.normalize({name: np.atleast_1d(urefd[name])})[name].squeeze()
+            )
         umin = np.asarray(umina)
         umax = np.asarray(umaxa)
+        uref = np.asarray(urefa)
 
         # encode state and target
         xk = self.normalize(xk)
@@ -422,27 +434,20 @@ class LRANMPC:
         ztarget = self.encode(xtarget).squeeze()
 
         # set up inequality constraints
-        Ix = np.concatenate(
-            [np.eye(self._Nlook * self._nz), -np.eye(self._Nlook * self._nz)]
-        )
-        bineq_z = (
-            np.concatenate(
-                [np.tile(zmax, (self._Nlook,)), -np.tile(zmin, (self._Nlook,))]
-            )
-            - Ix @ self._E @ zk
-        )
-        bineq_u = np.concatenate(
-            [np.tile(umax, (self._Nlook,)), -np.tile(umin, (self._Nlook,))]
-        )
-        bineq = np.concatenate([bineq_z, bineq_u])
+        umin_hat = np.tile(umin, (self._Nlook,))
+        umax_hat = np.tile(umax, (self._Nlook,))
+        uref_hat = np.tile(uref, (self._Nlook,))
+        zmin_hat = np.tile(zmin, (self._Nlook,)) - zk @ self._E.T
+        zmax_hat = np.tile(zmax, (self._Nlook,)) - zk @ self._E.T
+        zref_hat = np.tile(ztarget, (self._Nlook,))
+        lower = np.concatenate([umin_hat, zmin_hat])
+        upper = np.concatenate([umax_hat, zmax_hat])
 
-        # form qp
-        rhat = np.tile(ztarget, (self._Nlook,))
-        ft = (zk.T @ self._E.T - rhat.T) @ self._Qhat @ self._F
-        f = ft.T
+        # form qp linear term
+        f = (zk @ self._E - zref_hat) @ self._Qhat @ self._F - self._Rhat @ uref_hat
 
         # solve qp
-        self._qp.update(q=f, l=-np.inf * np.ones_like(bineq), u=bineq)
+        self._qp.update(q=f, l=lower, u=upper)
         results = self._qp.solve()
         uhat = results.x.reshape((self._Nlook, -1))
 
