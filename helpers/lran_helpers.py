@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import helpers.plot_settings
 import multiprocessing
 from helpers.data_generator import process_data
-
+from helpers.qpmpc import mpc_setup, mpc_action
 
 class LRANMPC:
     """Helper class for doing MPC with LRAN model
@@ -23,8 +23,6 @@ class LRANMPC:
         weight matrices
     Nlook : int
         mpc lookahead
-    terminal : bool
-        whether to include terminal cost in objective
     """
 
     def __init__(
@@ -35,7 +33,7 @@ class LRANMPC:
         Q=None,
         R=None,
         Nlook=None,
-        terminal=True,
+        use_osqp=False,
     ):
 
         self._model = model
@@ -43,7 +41,7 @@ class LRANMPC:
         self._parse_model()
         self._nu = self.B.shape[1]
         self._nz = self.A.shape[0]
-        self._terminal = terminal
+        self._use_osqp = use_osqp
 
         self.state_names = self._params["profile_names"] + self._params["scalar_names"]
         self.actuator_names = self._params["actuator_names"]
@@ -57,6 +55,8 @@ class LRANMPC:
         # set default bounds/targets
         self._umin_default = {name: -np.inf for name in self.actuator_names}
         self._umax_default = {name: np.inf for name in self.actuator_names}
+        self._dumin_default = {name: -np.inf for name in self.actuator_names}
+        self._dumax_default = {name: np.inf for name in self.actuator_names}
         self._uref_default = {name: 0 for name in self.actuator_names}
         self._zmin_default = -np.inf * np.ones(self._nz)
         self._zmax_default = np.inf * np.ones(self._nz)
@@ -171,6 +171,7 @@ class LRANMPC:
         return xt
 
     def normalize(self, data):
+        # TODO: flag to ignore infs
         out = renormalize(
             copy.copy(data), self._params["normalization_dict"], verbose=0
         )
@@ -258,7 +259,9 @@ class LRANMPC:
             out = {key: val for key, val in zip(self.state_names, out)}
         return out
 
-    def mpc_setup(self, Q=None, R=None, Nlook=None):
+    def mpc_setup(
+        self, Q=None, R=None, Nlook=None, rho=0.1, sigma=1e-4, dt=None, use_osqp=None
+    ):
         """setup mpc problem
 
         Parameters
@@ -284,75 +287,42 @@ class LRANMPC:
             Nlook = self._Nlook
         else:
             self._Nlook = Nlook
+        if use_osqp is None:
+            use_osqp = self._use_osqp
+        if dt is None:
+            dt = self._params["dt"]
 
-        # E = [A, A**2, A**3,...]
-        # F = [B 0 0 ...]
-        #     [AB B 0 0 ...]
-        #     [A^2B AB B 0 0 ...]
-        E = np.hstack([np.linalg.matrix_power(A, i + 1) for i in range(Nlook)])
-        F = []
-        for i in range(Nlook):
-            Frow = np.hstack(
-                [np.linalg.matrix_power(A, j) @ B for j in range(i + 1)][::-1]
-            )
-            F.append(
-                np.hstack([Frow, np.zeros((A.shape[0], (Nlook - i - 1) * B.shape[1]))])
-            )
+        out = mpc_setup(A, B, Q, R, Nlook, rho, sigma, dt, use_osqp)
 
-        F = np.vstack(F)
-        nx = A.shape[0]
-        nu = B.shape[1]
-        Ix = np.eye(Nlook * nx)
-        Iu = np.eye(Nlook * nu)
-        Aineq_x = Ix @ F
-        Aineq_u = Iu
-        Aineq = np.vstack([Aineq_u, Aineq_x])
+        if use_osqp:
+            self._qp = out[0]
+            self._E = out[1]
+            self._F = out[2]
+            self._P = None
+            self._G = None
+            self._Ac = None
+            self._Qhat = out[3]
+            self._Rhat = out[4]
 
-        # expand cost matrices
-        Qhat = [Q] * Nlook
-        Rhat = [R] * Nlook
-
-        if self._terminal:
-            P = scipy.linalg.solve_discrete_are(A, B, Q, R)
-            Qhat[-1] = P
-        Qhat = scipy.linalg.block_diag(*Qhat)
-        Rhat = scipy.linalg.block_diag(*Rhat)
-
-        H = F.T @ Qhat @ F + Rhat
-        # symmetrize for accuracy
-        H = (H + H.T) / 2
-        lu = np.ones(Aineq.shape[0])
-        try:
-            import osqp
-
-            qp = osqp.OSQP()
-            qp.setup(
-                P=scipy.sparse.csc_matrix(H),
-                q=np.ones(H.shape[1]),
-                A=scipy.sparse.csc_matrix(Aineq),
-                l=-lu,
-                u=lu,
-                verbose=False,
-            )
-        except:
-            qp = None
-
-        self._qp = qp
-        self._Qhat = Qhat
-        self._E = E
-        self._F = F
-        self._H = H
+        else:
+            self._qp = None
+            self._E = out[0]
+            self._F = out[1]
+            self._P = out[2]
+            self._G = out[3]
+            self._Ac = out[4]
+            self._Qhat = out[5]
+            self._Rhat = out[6]
 
     def mpc_action(
         self,
-        t,
         xk,
         xtarget=None,
         umin={},
-        umax={},
+        dumin={},
         uref={},
-        zmin=None,
-        zmax=None,
+        dumax={},
+        umax={},
         return_all=False,
     ):
         """find control action via MPC
@@ -366,12 +336,11 @@ class LRANMPC:
         umin, umax : dict of float
             upper and lower bounds on control input
             defaults to +/- inf
+        dumin, dumax : dict of float
+            upper/lower bounds for actuator derivatives
         uref : dict of float
             nominal feedforward values for control
             defaults to 0
-        zmin, zmax : ndarray
-            upper and lower bounds on latent state
-            defaults to +/- inf
         return_all : bool
             whether to also return optimal control sequence for entire
             prediction horizon
@@ -383,36 +352,44 @@ class LRANMPC:
         uhat : dict of ndarray
             actions to take over horizon, only returned if return_all is True
         """
-
-        if self._qp is None:
-            raise ValueError("osqp must be installed")
-        # TODO: allow bounds and target to be time varying
-
         # set values
-        if zmin is None:
-            zmin = self._zmin_default
-        if zmax is None:
-            zmax = self._zmax_default
         if xtarget is None:
             xtarget = self._xtarget_default
         umind = self._umin_default.copy()
         umaxd = self._umax_default.copy()
         urefd = self._uref_default.copy()
+        dumind = self._dumin_default.copy()
+        dumaxd = self._dumax_default.copy()
+        # TODO: target/bounds in future
         umind.update(umin)
         umaxd.update(umax)
         urefd.update(uref)
+        dumind.update(dumin)
+        dumaxd.update(dumax)
         # normalize actuator bounds, keeping infs
-        # TODO: allow constraints on du/dt
-        # TODO: allow constraints / targets into the future
         umina = []
         umaxa = []
         urefa = []
+        dumina = []
+        dumaxa = []
         for name in self.actuator_names:
             if np.isinf(umind[name]):
                 umina.append(umind[name])
             else:
                 umina.append(
                     self.normalize({name: np.atleast_1d(umind[name])})[name].squeeze()
+                )
+            if np.isinf(dumind[name]):
+                dumina.append(dumind[name])
+            else:
+                dumina.append(
+                    self.normalize({name: np.atleast_1d(dumind[name])})[name].squeeze()
+                )
+            if np.isinf(dumaxd[name]):
+                dumaxa.append(dumaxd[name])
+            else:
+                dumaxa.append(
+                    self.normalize({name: np.atleast_1d(dumaxd[name])})[name].squeeze()
                 )
             if np.isinf(umaxd[name]):
                 umaxa.append(umaxd[name])
@@ -426,6 +403,8 @@ class LRANMPC:
         umin = np.asarray(umina)
         umax = np.asarray(umaxa)
         uref = np.asarray(urefa)
+        dumin = np.asarray(dumina)
+        dumax = np.asarray(dumaxa)
 
         # encode state and target
         xk = self.normalize(xk)
@@ -434,22 +413,41 @@ class LRANMPC:
         ztarget = self.encode(xtarget).squeeze()
 
         # set up inequality constraints
-        umin_hat = np.tile(umin, (self._Nlook,))
-        umax_hat = np.tile(umax, (self._Nlook,))
-        uref_hat = np.tile(uref, (self._Nlook,))
-        zmin_hat = np.tile(zmin, (self._Nlook,)) - zk @ self._E.T
-        zmax_hat = np.tile(zmax, (self._Nlook,)) - zk @ self._E.T
-        zref_hat = np.tile(ztarget, (self._Nlook,))
-        lower = np.concatenate([umin_hat, zmin_hat])
-        upper = np.concatenate([umax_hat, zmax_hat])
+        uminhat = np.tile(umin, (self._Nlook,))
+        umaxhat = np.tile(umax, (self._Nlook,))
+        duminhat = np.tile(dumin, (self._Nlook - 1,))
+        dumaxhat = np.tile(dumax, (self._Nlook - 1,))
+        urefhat = np.tile(uref, (self._Nlook,))
+        ztarget = np.tile(ztarget, (self._Nlook,))
 
-        # form qp linear term
-        f = (zk @ self._E - zref_hat) @ self._Qhat @ self._F - self._Rhat @ uref_hat
+        # TODO: warm starting based on prev soln?
+        uhat = np.zeros(self._nu * self._Nlook)
+        lagrange = np.zeros(self._nu * (2 * self._Nlook - 1))
 
-        # solve qp
-        self._qp.update(q=f, l=lower, u=upper)
-        results = self._qp.solve()
-        uhat = results.x.reshape((self._Nlook, -1))
+        uhat, lagrange = mpc_action(
+            zk,
+            ztarget,
+            uhat,
+            lagrange,
+            uminhat,
+            duminhat,
+            urefhat,
+            dumaxhat,
+            umaxhat,
+            self._E,
+            self._F,
+            self._P,
+            self._G,
+            self._Ac,
+            self._Qhat,
+            self._Rhat,
+            rho=0.1,
+            sigma=1e-4,
+            alpha=1.6,
+            maxiter=100,
+            qp=self._qp,
+        )
+        uhat = uhat.reshape((self._Nlook, -1))
 
         # parse into output dict in physical units
         control = {sig: uhat[:, i] for i, sig in enumerate(self.actuator_names)}
@@ -606,71 +604,6 @@ def plot_autoencoder_spectrum(A, dt=0.05, filename=None, **kwargs):
         f.savefig(filename, bbox_inches="tight")
 
     return f, axes
-
-
-def compute_ctrb(A, B):
-    """Compute controllability matrix
-
-    Parameters
-    ----------
-    A : ndarray, shape(N,N)
-        system dynamics matrix
-    B : ndarray, shape(N,M)
-        system control matrix
-
-    Returns
-    -------
-    C : ndarray, shape(N, N*M)
-        controllability matrix
-    k : int
-        rank of controllability matrix
-    cols : int
-        number of columns needed for rank(C) = k
-    """
-    C = np.hstack(
-        [B] + [(np.linalg.matrix_power(A, i) @ B) for i in range(1, A.shape[0])]
-    )
-    k = np.linalg.matrix_rank(C)
-
-    # find out how many cols are needed for full rank
-    cols = k - 1
-    ki = 0
-    while ki < k:
-        cols += 1
-        ki = np.linalg.matrix_rank(C[:, :cols])
-
-    return C, k, cols
-
-
-def compute_grammian(A, B, k=None):
-    """Compute discrete time controllability grammian
-
-    Parameters
-    ----------
-    A : ndarray, shape(N,N)
-        system dynamics matrix
-    B : ndarray, shape(N,M)
-        system control matrix
-    k : int, optional
-        number of timesteps for finite horizon. If None or np.inf, defaults to infinite horizon
-
-    Returns
-    -------
-    Wc : ndarray, shape(N,N)
-        discrete time controllability grammian
-    """
-
-    if k == np.inf or k is None:
-        Wc = scipy.linalg.solve_discrete_lyapunov(A, B @ B.T)
-
-    else:  # finite horizon
-        Wc = np.zeros_like(A)
-        Ai = np.eye(A.shape[0])
-        for i in range(k):
-            AiB = Ai @ B
-            Wc += AiB @ AiB.T
-            Ai = Ai @ A
-    return Wc
 
 
 def _calc_delta_norm(i, data):
