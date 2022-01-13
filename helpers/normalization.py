@@ -34,7 +34,6 @@ def normalize_arr(data, method, uniform_over_profile=True):
     if method is None:
         param_dict = {"method": None}
         return data, param_dict
-
     if method == "StandardScaler":
         if uniform_over_profile or data.ndim < 3:
             mean = np.mean(data)
@@ -69,9 +68,15 @@ def normalize_arr(data, method, uniform_over_profile=True):
         if uniform_over_profile or data.ndim < 3:
             median = np.median(data)
             iqr = np.subtract(*np.percentile(data, [75, 25]))
+            if iqr == 0:  # if too many zeros, revert to min/max scaling
+                iqr = np.amax(abs(data))
         else:
-            median = np.median(data, axis=0)
-            iqr = np.subtract(*np.percentile(data, [75, 25], axis=(0, 1)))
+            median = np.median(data, axis=(0, 1), keepdims=True)
+            iqr = np.subtract(
+                *np.percentile(data, [75, 25], axis=(0, 1), keepdims=True)
+            )
+            if iqr == 0:
+                iqr = np.amax(abs(data), axis=(0, 1), keepdims=True)
         param_dict.update({"method": method, "median": median, "iqr": iqr})
         return (data - median) / np.maximum(iqr, np.finfo(np.float32).eps), param_dict
 
