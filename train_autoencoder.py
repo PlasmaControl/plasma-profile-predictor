@@ -382,7 +382,7 @@ def main(scenario_index=-2):
     }
     optimizer = optimizers[scenario["optimizer"]](**scenario["optimizer_kwargs"])
 
-    loss = scenario["loss"]
+    loss = scenario["loss_function"]
 
     metrics = ["mse", "mae", "logcosh"]
 
