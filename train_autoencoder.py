@@ -459,7 +459,7 @@ def main(scenario_index=-2):
         None,  # scenario["batch_size"],
     )
     model.summary()
-    model.compile(optimizer, loss, metrics)
+    model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")
     print("Model compiled, starting training")
 
     ###############
