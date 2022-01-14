@@ -734,8 +734,8 @@ def process_data(
 
     del rawdata
     gc.collect()
-    if nshots is not None:
-        nshots = np.minimum(nshots, len(usabledata))
+    if nshots is not None and np.isfinite(nshots):
+        nshots = int(np.minimum(nshots, len(usabledata)))
         usabledata = usabledata[:nshots]
     else:
         nshots = len(usabledata)
