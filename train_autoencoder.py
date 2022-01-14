@@ -173,7 +173,8 @@ def main(scenario_index=-2):
         {"sample_weights": "std"},
     ]
     scenarios_dict["state_latent_dim"] = [
-        {"state_latent_dim": -1.00},
+        {"state_latent_dim": 50},
+        {"state_latent_dim": 75},
     ]
     scenarios_dict["lookahead"] = [
         {"lookahead": 10},
@@ -183,7 +184,6 @@ def main(scenario_index=-2):
         {"loss_function": "mse"},
         {"loss_function": "mae"},
         {"loss_function": "logcosh"},
-        {"loss_function": "huber_loss"},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
         {
@@ -191,10 +191,12 @@ def main(scenario_index=-2):
                 "num_layers": 4,
                 "activation": "leaky_relu",
                 "norm": True,
+                "layer_scale": np.inf,
             },
             "state_decoder_kwargs": {
                 "num_layers": 5,
                 "activation": "leaky_relu",
+                "layer_scale": np.inf,
             },
         },
         {
@@ -202,10 +204,12 @@ def main(scenario_index=-2):
                 "num_layers": 6,
                 "activation": "leaky_relu",
                 "norm": True,
+                "layer_scale": np.inf,
             },
             "state_decoder_kwargs": {
                 "num_layers": 7,
                 "activation": "leaky_relu",
+                "layer_scale": np.inf,
             },
         },
         {
@@ -213,21 +217,12 @@ def main(scenario_index=-2):
                 "num_layers": 8,
                 "activation": "leaky_relu",
                 "norm": True,
+                "layer_scale": np.inf,
             },
             "state_decoder_kwargs": {
                 "num_layers": 9,
                 "activation": "leaky_relu",
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 10,
-                "activation": "leaky_relu",
-                "norm": True,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 11,
-                "activation": "leaky_relu",
+                "layer_scale": np.inf,
             },
         },
     ]
