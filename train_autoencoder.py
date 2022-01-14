@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_12_22_21/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_13_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -52,7 +52,7 @@ def main(scenario_index=-2):
     efit_type = "EFIT01"
     default_scenario = {
         ### names of signals to use
-        "actuator_names": ["pinj", "tinj", "curr_target", "target_density", "bt"],
+        "actuator_names": ["pinj", "tinj", "curr_target", "target_density"],
         "profile_names": [
             "temp",
             "dens",
@@ -105,15 +105,15 @@ def main(scenario_index=-2):
         "loss_function": "mse",
         "loss_function_kwargs": {},
         "batch_size": 64,
-        "epochs": 200,
+        "epochs": 400,
         ### data processing stuff
         "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms.pkl",
         "flattop_only": True,  # only include data during "steady state"
         "invert_q": True,  # to avoid singularity at psi=1
-        "normalization_method": None,  # if normalizing data beforehand, None if using BatchNormalization layers
+        "normalization_method": "RobustScaler",  # if normalizing data beforehand, None if using BatchNormalization layers
         "uniform_normalization": True,  # whether to use same mean/std for entire profile
         "profile_downsample": 2,  # by default. profiles are 65 pts long, so may be downsampled
-        "lookahead": 6,  # horizon for prediction / control, in 50ms chunks
+        "lookahead": 10,  # horizon for prediction / control, in 50ms chunks
         ### leave these params alone
         "lookback": 0,  # should always be 0 state space model
         "window_length": 1,  # number of samples to average over
@@ -153,10 +153,10 @@ def main(scenario_index=-2):
             "actuator_names": [
                 "curr_target",
                 "target_density",
-                "bt",
                 "ech",
+                "pinj",
+                "tinj",
             ]
-            + signal_groups.PINJs
         },
         {
             "actuator_names": [
@@ -164,95 +164,37 @@ def main(scenario_index=-2):
                 "tinj",
                 "curr_target",
                 "target_density",
-                "bt",
-                "ech",
             ]
-        },
-        {
-            "actuator_names": [
-                "curr_target",
-                "target_density",
-                "bt",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
-            + signal_groups.PINJs
-        },
-        {
-            "actuator_names": [
-                "pinj",
-                "tinj",
-                "curr_target",
-                "target_density",
-                "bt",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
-        },
-        {
-            "actuator_names": [
-                "curr_target",
-                "target_density",
-                "bt",
-                "ech",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
-            + signal_groups.PINJs
-        },
-        {
-            "actuator_names": [
-                "pinj",
-                "tinj",
-                "curr_target",
-                "target_density",
-                "bt",
-                "ech",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
         },
     ]
     scenarios_dict["flattop_only"] = [{"flattop_only": True}, {"flattop_only": False}]
+    scenarios_dict["sample_weights"] = [
+        {"sample_weights": True},
+        {"sample_weights": "std"},
+    ]
     scenarios_dict["state_latent_dim"] = [
         {"state_latent_dim": -1.00},
-        {"state_latent_dim": -1.25},
     ]
     scenarios_dict["lookahead"] = [
+        {"lookahead": 10},
         {"lookahead": 20},
+    ]
+    scenarios_dict["loss"] = [
+        {"loss_function": "mse"},
+        {"loss_function": "mae"},
+        {"loss_function": "logcosh"},
+        {"loss_function": "huber_loss"},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
         {
             "state_encoder_kwargs": {
                 "num_layers": 4,
-                "activation": "elu",
-                "norm": True,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 4,
-                "activation": "elu",
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 4,
                 "activation": "leaky_relu",
                 "norm": True,
             },
             "state_decoder_kwargs": {
-                "num_layers": 4,
+                "num_layers": 5,
                 "activation": "leaky_relu",
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 6,
-                "activation": "elu",
-                "norm": True,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 6,
-                "activation": "elu",
             },
         },
         {
@@ -262,19 +204,8 @@ def main(scenario_index=-2):
                 "norm": True,
             },
             "state_decoder_kwargs": {
-                "num_layers": 6,
+                "num_layers": 7,
                 "activation": "leaky_relu",
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 8,
-                "activation": "elu",
-                "norm": True,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 8,
-                "activation": "elu",
             },
         },
         {
@@ -284,19 +215,8 @@ def main(scenario_index=-2):
                 "norm": True,
             },
             "state_decoder_kwargs": {
-                "num_layers": 8,
+                "num_layers": 9,
                 "activation": "leaky_relu",
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 10,
-                "activation": "elu",
-                "norm": True,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 10,
-                "activation": "elu",
             },
         },
         {
@@ -306,7 +226,7 @@ def main(scenario_index=-2):
                 "norm": True,
             },
             "state_decoder_kwargs": {
-                "num_layers": 10,
+                "num_layers": 11,
                 "activation": "leaky_relu",
             },
         },
@@ -317,7 +237,7 @@ def main(scenario_index=-2):
     for scenario in itertools.product(*list(scenarios_dict.values())):
         foo = {k: v for d in scenario for k, v in d.items()}
         scenarios.append(foo)
-        runtimes.append(6 * 60)
+        runtimes.append(18 * 60)
     num_scenarios = len(scenarios)
 
     ###############
