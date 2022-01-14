@@ -390,21 +390,30 @@ def main(scenario_index=-2):
     callbacks.append(
         ReduceLROnPlateau(
             monitor="val_loss",
-            factor=0.5,
-            patience=50,
+            factor=0.25,
+            patience=10,
             verbose=1,
-            mode="auto",
-            min_delta=0.001,
-            cooldown=1,
+            mode="min",
+            min_delta=0.0001,
+            cooldown=0,
             min_lr=0,
         )
     )
     callbacks.append(
         EarlyStopping(
-            monitor="val_loss", min_delta=0, patience=50, verbose=1, mode="min"
+            monitor="val_loss",
+            min_delta=0,
+            patience=12,
+            verbose=1,
+            mode="min",
+            restore_best_weights=True,
         )
     )
-    callbacks.append(TimingCallback(time_limit=(runtimes[scenario_index] - 30) * 60))
+    callbacks.append(
+        TimingCallback(
+            time_limit=(runtimes[scenario_index] - 30) * 60,
+        )
+    )
     callbacks.append(
         ModelCheckpoint(
             scenario["model_path"],
