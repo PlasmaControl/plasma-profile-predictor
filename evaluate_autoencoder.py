@@ -11,12 +11,13 @@ import tensorflow as tf
 
 sys.path.append(os.path.abspath("../"))
 sys.path.append(os.path.abspath("./"))
-import helpers.mpc_helpers
+import helpers.lran_helpers
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.normalization import normalize, denormalize, renormalize
 from helpers.custom_layers import MultiTimeDistributed
 from helpers.hyperparam_helpers import slurm_script
-from helpers.custom_constraints import Orthonormal
+from helpers.custom_constraints import Orthonormal, SoftOrthonormal, Invertible
+from helpers.custom_activations import InverseLeakyReLU
 
 ##########
 # set tf session
@@ -135,6 +136,12 @@ def evaluate(file_path):
             custom_objects={
                 "MultiTimeDistributed": MultiTimeDistributed,
                 "Orthonormal": Orthonormal,
+                "SoftOrthonormal": SoftOrthonormal,
+                "Invertible": Invertible,
+                "ELU": tf.keras.layers.ELU,
+                "ReLU": tf.keras.layers.ReLU,
+                "LeakyReLU": tf.keras.layers.LeakyReLU,
+                "InverseLeakyReLU":InverseLeakyReLU
             },
         )
         print("took {}s".format(time.time() - T1))
@@ -216,7 +223,7 @@ def evaluate(file_path):
     print("Computing metrics took {}s".format(time.time() - T1))
     T1 = time.time()
 
-    encoder_data = helpers.mpc_helpers.compute_encoder_data(
+    encoder_data = helpers.lran_helpers.compute_encoder_data(
         model, scenario, valdata, verbose=0
     )
     del valdata
@@ -224,7 +231,7 @@ def evaluate(file_path):
     print("Computing encoder data took {}s".format(time.time() - T1))
     T1 = time.time()
 
-    norm_data = helpers.mpc_helpers.compute_norm_data(
+    norm_data = helpers.lran_helpers.compute_norm_data(
         encoder_data["x0"], encoder_data["z0"]
     )
     print("Computing norm data took {}s".format(time.time() - T1))
@@ -294,7 +301,7 @@ if __name__ == "__main__":
             base_path = "/".join(os.path.abspath(args[i]).split("/")[:-1]) + "/"
             file_path = base_path + job + ".slurm"
             paths = [os.path.abspath(arg) for arg in args[i : i + 10]]
-            command = ""
+            command =  "module purge \n" 
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
             command += "\n".join(
@@ -311,6 +318,6 @@ if __name__ == "__main__":
                 ngpu=0,
                 mem=60,
                 time=200,
-                user="wconlin",
+                user="aaronwu",
             )
         print("Jobs submitted, exiting")
