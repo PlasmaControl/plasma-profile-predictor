@@ -10,6 +10,7 @@ import multiprocessing
 from helpers.data_generator import process_data
 from helpers.qpmpc import mpc_setup, mpc_action
 
+
 class LRANMPC:
     """Helper class for doing MPC with LRAN model
 
@@ -36,6 +37,7 @@ class LRANMPC:
         use_osqp=False,
     ):
 
+        self._setup = False
         self._model = model
         self._params = params
         self._parse_model()
@@ -83,6 +85,8 @@ class LRANMPC:
         elif np.atleast_1d(newQ).ndim == 1:
             newQ = np.diag(newQ)
         self._Q = newQ
+        if self._setup:
+            self.mpc_setup()
 
     @property
     def R(self):
@@ -97,6 +101,8 @@ class LRANMPC:
         elif np.atleast_1d(newR).ndim == 1:
             newR = np.diag(newR)
         self._R = newR
+        if self._setup:
+            self.mpc_setup()
 
     def _parse_model(self):
         self._A, self._B = get_AB(self._model)
@@ -313,6 +319,7 @@ class LRANMPC:
             self._Ac = out[4]
             self._Qhat = out[5]
             self._Rhat = out[6]
+        self._setup = True
 
     def mpc_action(
         self,
@@ -324,6 +331,7 @@ class LRANMPC:
         dumax={},
         umax={},
         return_all=False,
+        maxiter=100,
     ):
         """find control action via MPC
 
@@ -444,7 +452,7 @@ class LRANMPC:
             rho=0.1,
             sigma=1e-4,
             alpha=1.6,
-            maxiter=100,
+            maxiter=maxiter,
             qp=self._qp,
         )
         uhat = uhat.reshape((self._Nlook, -1))
