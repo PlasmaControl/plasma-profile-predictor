@@ -24,6 +24,7 @@ def qp_setup(P, A, rho, sigma):
     """
 
     G = P + sigma * np.eye(P.shape[0]) + rho * A.T @ A
+
     return np.linalg.inv(G)
 
 
@@ -75,7 +76,7 @@ def qp_solve(G, P, q, A, l, u, rho, sigma, alpha, x0, y0, maxiter):
 
     r_prim = np.inf
     r_dual = np.inf
-    k = 1
+    k = 0
     while k < maxiter:
         k += 1
         w = sigma * xk - q + A.T @ (rho * zk - yk)
@@ -181,6 +182,13 @@ def mpc_setup(A, B, Q, R, Nlook, rho, sigma, dt, use_osqp=False):
             l=-lu,
             u=lu,
             verbose=False,
+            adaptive_rho=False,
+            scaling=10,
+            rho=0.1,
+            alpha=1.6,
+            sigma=1e-4,
+            check_termination=0,
+            warm_start=True,
         )
         return qp, E, F, np.diag(Qhat), np.diag(Rhat)
 
@@ -266,11 +274,12 @@ def mpc_action(
     upper_bound = np.concatenate([umaxhat, dumaxhat])
 
     # A.2.5
-    f = (E @ zk - ztarget) @ (Qhat * F) - Rhat * urefhat
-    f = 2 * f
+    f = (E @ zk - ztarget) @ (Qhat[:, None] * F) - (Rhat * urefhat)
+    #     f = 2 * f
 
     if qp is not None:
         qp.update(q=f, l=lower_bound, u=upper_bound)
+        qp.update_settings(max_iter=maxiter)
         qp.warm_start(x=uhat, y=lagrange)
         results = qp.solve()
         uhat = results.x
