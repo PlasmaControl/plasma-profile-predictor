@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_13_22/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_21_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -61,18 +61,18 @@ def main(scenario_index=-2):
             "q_{}".format(efit_type),
         ],
         "scalar_names": [
-            "density_estimate",
-            "curr",
-            "a_{}".format(efit_type),
-            "betan_{}".format(efit_type),
-            "drsep_{}".format(efit_type),
-            "kappa_{}".format(efit_type),
-            "li_{}".format(efit_type),
-            "rmagx_{}".format(efit_type),
-            "zmagX_{}".format(efit_type),
-            "volume_{}".format(efit_type),
-            "triangularity_top_{}".format(efit_type),
-            "triangularity_bot_{}".format(efit_type),
+            # "density_estimate",
+            # "curr",
+            # "a_{}".format(efit_type),
+            # "betan_{}".format(efit_type),
+            # "drsep_{}".format(efit_type),
+            # "kappa_{}".format(efit_type),
+            # "li_{}".format(efit_type),
+            # "rmagx_{}".format(efit_type),
+            # "zmagX_{}".format(efit_type),
+            # "volume_{}".format(efit_type),
+            # "triangularity_top_{}".format(efit_type),
+            # "triangularity_bot_{}".format(efit_type),
         ],
         ### what type of model to use and settings etc.
         "state_encoder_type": "dense",
@@ -151,15 +151,6 @@ def main(scenario_index=-2):
     scenarios_dict["actuator_names"] = [
         {
             "actuator_names": [
-                "curr_target",
-                "target_density",
-                "ech",
-                "pinj",
-                "tinj",
-            ]
-        },
-        {
-            "actuator_names": [
                 "pinj",
                 "tinj",
                 "curr_target",
@@ -167,9 +158,8 @@ def main(scenario_index=-2):
             ]
         },
     ]
-    scenarios_dict["flattop_only"] = [{"flattop_only": True}, {"flattop_only": False}]
+    scenarios_dict["flattop_only"] = [{"flattop_only": False}]
     scenarios_dict["sample_weights"] = [
-        {"sample_weights": True},
         {"sample_weights": "std"},
     ]
     scenarios_dict["state_latent_dim"] = [
@@ -177,7 +167,6 @@ def main(scenario_index=-2):
         {"state_latent_dim": 75},
     ]
     scenarios_dict["lookahead"] = [
-        {"lookahead": 10},
         {"lookahead": 20},
     ]
     scenarios_dict["loss"] = [
