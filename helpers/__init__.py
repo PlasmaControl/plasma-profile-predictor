@@ -9,17 +9,15 @@ from . import signal_groups
 from . import hyperparam_helpers
 
 
-custom_objects = (
-    {
-        "MultiTimeDistributed": custom_layers.MultiTimeDistributed,
-        "InverseDense": custom_layers.InverseDense,
-        "InverseBatchNormalization": custom_layers.InverseBatchNormalization,
-        "ParametricLinearSystem": custom_layers.ParametricLinearSystem,
-        "ParaMatrix": custom_layers.ParaMatrix,
-        "Orthonormal": custom_constraints.Orthonormal,
-        "SoftOrthonormal": custom_constraints.SoftOrthonormal,
-        "Invertible": custom_constraints.Invertible,
-        "InverseLeakyReLU": custom_activations.InverseLeakyReLU,
-        "inverse_selu": custom_activations.inverse_selu,
-    },
-)
+custom_objects = {
+    "MultiTimeDistributed": custom_layers.MultiTimeDistributed,
+    "InverseDense": custom_layers.InverseDense,
+    "InverseBatchNormalization": custom_layers.InverseBatchNormalization,
+    "ParametricLinearSystem": custom_layers.ParametricLinearSystem,
+    "ParaMatrix": custom_layers.ParaMatrix,
+    "Orthonormal": custom_constraints.Orthonormal,
+    "SoftOrthonormal": custom_constraints.SoftOrthonormal,
+    "Invertible": custom_constraints.Invertible,
+    "InverseLeakyReLU": custom_activations.InverseLeakyReLU,
+    "inverse_selu": custom_activations.inverse_selu,
+}
