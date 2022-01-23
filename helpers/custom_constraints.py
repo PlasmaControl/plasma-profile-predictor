@@ -26,13 +26,17 @@ class SoftOrthonormal(tf.keras.constraints.Constraint):
 class Orthonormal(tf.keras.constraints.Constraint):
     """Constrains weight tensors to be orthonormal matrices.
 
-    Can be somewhat slow, as it uses the full SVD of the weight matrix.
+    Can be somewhat slow, as it uses the full QR of the weight matrix.
     """
 
     def __call__(self, w):
-        s, u, v = tf.linalg.svd(w, full_matrices=False, compute_uv=True)
-        w = tf.linalg.matmul(u, v, adjoint_b=True)
-        return w
+        m, n = w.shape
+        if m >= n:
+            q, r = tf.linalg.qr(w)
+            return q
+        else:
+            q, r = tf.linalg.qr(tf.transpose(w))
+            return tf.transpose(q)
 
     def get_config(self):
         return {}
