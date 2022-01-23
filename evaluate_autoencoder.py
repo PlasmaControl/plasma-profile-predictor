@@ -14,10 +14,8 @@ sys.path.append(os.path.abspath("./"))
 import helpers.lran_helpers
 from helpers.data_generator import process_data, AutoEncoderDataGenerator
 from helpers.normalization import normalize, denormalize, renormalize
-from helpers.custom_layers import MultiTimeDistributed
 from helpers.hyperparam_helpers import slurm_script
-from helpers.custom_constraints import Orthonormal, SoftOrthonormal, Invertible
-from helpers.custom_activations import InverseLeakyReLU
+from helpers import custom_objects
 
 ##########
 # set tf session
@@ -133,16 +131,7 @@ def evaluate(file_path):
         model = tf.keras.models.load_model(
             model_path,
             compile=False,
-            custom_objects={
-                "MultiTimeDistributed": MultiTimeDistributed,
-                "Orthonormal": Orthonormal,
-                "SoftOrthonormal": SoftOrthonormal,
-                "Invertible": Invertible,
-                "ELU": tf.keras.layers.ELU,
-                "ReLU": tf.keras.layers.ReLU,
-                "LeakyReLU": tf.keras.layers.LeakyReLU,
-                "InverseLeakyReLU":InverseLeakyReLU
-            },
+            custom_objects=custom_objects,
         )
         print("took {}s".format(time.time() - T1))
     else:
@@ -238,22 +227,37 @@ def evaluate(file_path):
     T1 = time.time()
 
     # store operator norm data
-    evaluation_metrics["median_operator_norm"] = np.nanmedian(
-        norm_data["operator_norm"]
+    evaluation_metrics["p25_operator_norm"] = np.nanpercentile(
+        norm_data["operator_norm"], 25
     )
-    evaluation_metrics["median_lipschitz_const"] = np.nanmedian(
-        norm_data["lipschitz_constant"]
+    evaluation_metrics["p50_operator_norm"] = np.nanpercentile(
+        norm_data["operator_norm"], 50
     )
-    evaluation_metrics["std_operator_norm"] = np.nanstd(norm_data["operator_norm"])
-    evaluation_metrics["std_lipschitz_const"] = np.nanstd(
-        norm_data["lipschitz_constant"]
+    evaluation_metrics["p75_operator_norm"] = np.nanpercentile(
+        norm_data["operator_norm"], 75
+    )
+    evaluation_metrics["p99_operator_norm"] = np.nanpercentile(
+        norm_data["operator_norm"], 99
+    )
+
+    evaluation_metrics["p25_lipschitz_constant"] = np.nanpercentile(
+        norm_data["lipschitz_constant"], 25
+    )
+    evaluation_metrics["p50_lipschitz_constant"] = np.nanpercentile(
+        norm_data["lipschitz_constant"], 50
+    )
+    evaluation_metrics["p75_lipschitz_constant"] = np.nanpercentile(
+        norm_data["lipschitz_constant"], 75
+    )
+    evaluation_metrics["p99_lipschitz_constant"] = np.nanpercentile(
+        norm_data["lipschitz_constant"], 99
     )
 
     # time dependent residuals in z, x
     for metric_name, metric in metrics.items():
         evaluation_metrics["dzrel_" + metric_name] = np.array(
             [
-                metric(encoder_data["dz"][:, i, :]) / metric(encoder_data["z0"])
+                metric(encoder_data["dz"][:, i, :]) / np.nanmedian(norm_data["z0_norm"])
                 for i in range(encoder_data["dz"].shape[1])
             ]
         )
@@ -265,7 +269,7 @@ def evaluate(file_path):
         )
         evaluation_metrics["dxrel_" + metric_name] = np.array(
             [
-                metric(encoder_data["dx"][:, i, :]) / metric(encoder_data["x0"])
+                metric(encoder_data["dx"][:, i, :]) / np.nanmedian(norm_data["x0_norm"])
                 for i in range(encoder_data["dx"].shape[1])
             ]
         )
@@ -301,7 +305,7 @@ if __name__ == "__main__":
             base_path = "/".join(os.path.abspath(args[i]).split("/")[:-1]) + "/"
             file_path = base_path + job + ".slurm"
             paths = [os.path.abspath(arg) for arg in args[i : i + 10]]
-            command =  "module purge \n" 
+            command = "module purge \n"
             command += "module load anaconda \n"
             command += "conda activate tf2-gpu \n"
             command += "\n".join(
