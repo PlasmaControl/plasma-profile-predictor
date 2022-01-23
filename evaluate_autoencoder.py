@@ -139,7 +139,7 @@ def evaluate(file_path):
         return
 
     T1 = time.time()
-
+    print("loading data")
     traindata, valdata, normalization_dict = process_data(
         scenario["raw_data_path"],
         scenario["sig_names"],
@@ -153,7 +153,7 @@ def evaluate(file_path):
         1,  # scenario['train_frac'],
         0,  # scenario['val_frac'],
         scenario["nshots"],
-        0,  # verbose,
+        2,  # verbose,
         scenario["flattop_only"],
         pruning_functions=scenario["pruning_functions"],
         invert_q=scenario["invert_q"],
@@ -197,16 +197,12 @@ def evaluate(file_path):
         s = 0
         key = "linear_sys_" + metric_name
         val = metric(lres)
-        print(key)
-        print(val)
         evaluation_metrics[key] = val
         for sig in scenario["profile_names"]:
             key = sig + "_" + metric_name
             val = metric(x_residuals[sig])
             s += val / len(scenario["profile_names"])
             evaluation_metrics[key] = val
-            print(key)
-            print(val)
         evaluation_metrics["coder_" + metric_name] = s
 
     print("Computing metrics took {}s".format(time.time() - T1))
@@ -283,6 +279,10 @@ def evaluate(file_path):
     scenario["norm_data"] = norm_data
     scenario["evaluation_metrics"] = evaluation_metrics
 
+    for key, val in evaluation_metrics.items():
+        print(key)
+        print(val)
+
     T1 = time.time()
 
     with open(file_path, "wb+") as f:
@@ -321,7 +321,7 @@ if __name__ == "__main__":
                 ncpu=1,
                 ngpu=0,
                 mem=60,
-                time=200,
-                user="aaronwu",
+                time=235,
+                user="",
             )
         print("Jobs submitted, exiting")
