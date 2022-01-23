@@ -669,6 +669,9 @@ def compute_lipschitz_constant(x, z, workers=1, verbose=True):
 
     delta_x_norms = np.concatenate(delta_x_norms).flatten()
     delta_z_norms = np.concatenate(delta_z_norms).flatten()
+    mask = delta_x_norms != 0
+    delta_x_norms = delta_x_norms[mask]
+    delta_z_norms = delta_z_norms[mask]
     lipschitz_constant = delta_z_norms / delta_x_norms
     return lipschitz_constant, delta_x_norms, delta_z_norms
 
@@ -695,6 +698,9 @@ def compute_operator_norm(x, z):
 
     z_norm = np.linalg.norm(z, axis=1)
     x_norm = np.linalg.norm(x, axis=1)
+    mask = x_norm != 0
+    z_norm = z_norm[mask]
+    x_norm = x_norm[mask]
     operator_norm = z_norm / x_norm
     return operator_norm, x_norm, z_norm
 
