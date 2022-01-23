@@ -15,6 +15,102 @@ from tensorflow.python.util import nest
 from tensorflow.python.keras.layers.wrappers import Wrapper
 from tensorflow.python.keras.utils import generic_utils
 from tensorflow.python.keras import backend
+from helpers.custom_activations import inverse_activation
+from helpers.custom_constraints import Orthonormal, SoftOrthonormal
+
+
+class InverseDense(tf.keras.layers.Layer):
+    """Inverse of a dense layer
+
+    Initialized with the forward layer, this layer computes the
+    inverse transformation, or the least squares approximation if
+    the layer is not directly invertible
+
+    Parameters
+    ----------
+    layer : keras layer
+        forward dense layer to invert
+    """
+
+    def __init__(self, layer, **kwargs):
+
+        self.kernel = layer.kernel
+        self.bias = layer.bias if hasattr(layer, "bias") else 0
+        self.activation = inverse_activation(layer.activation)
+        super(InverseDense, self).__init__(**kwargs)
+
+        self.kernel_initializer = layer.kernel_initializer
+        self.bias_initializer = layer.bias_initializer
+        self.kernel_regularizer = layer.kernel_regularizer
+        self.bias_regularizer = layer.bias_regularizer
+        self.kernel_constraint = layer.kernel_constraint
+        self.bias_constraint = layer.bias_constraint
+
+    def build(self, input_shape):
+        assert input_shape[1] == self.kernel.shape[1]
+        self.built = True
+
+    # TODO: get_config / from_config for serialization?
+
+    def call(self, inputs):
+
+        sy = self.activation(inputs)
+        if self.bias is not None:
+            sy = sy - self.bias
+        if isinstance(self.kernel_constraint, (Orthonormal, SoftOrthonormal)):
+            x = tf.linalg.matmul(self.kernel, sy, transpose_a=False, transpose_b=True)
+        elif self.kernel.shape[0] == self.kernel.shape[1]:
+            x = tf.linalg.solve(self.kernel, tf.transpose(sy), adjoint=True)
+        else:
+            x = tf.linalg.lstsq(tf.transpose(self.kernel), tf.transpose(sy), fast=False)
+        return tf.transpose(x)
+
+
+class InverseBatchNormalization(tf.keras.layers.Layer):
+    """Inverse of BatchNormalization layer
+
+    Initialized with a forward BatchNormalization layer, this layer undoes the
+    normalization to recover the inputs
+
+    Parameters
+    ----------
+    layer : keras layer
+        forward BatchNormalization layer to invert
+    """
+
+    def __init__(self, layer, **kwargs):
+
+        super(InverseBatchNormalization, self).__init__(**kwargs)
+
+        self.moving_mean = layer.moving_mean
+        self.moving_variance = layer.moving_variance
+        self.epsilon = layer.epsilon
+        self.gamma = layer.gamma
+        self.beta = layer.beta
+        self.axis = layer.axis
+
+        self.beta_initializer = layer.beta_initializer
+        self.gamma_initializer = layer.gamma_initializer
+        self.beta_regularizer = layer.beta_regularizer
+        self.gamma_regularizer = layer.gamma_regularizer
+        self.beta_constraint = layer.beta_constraint
+        self.gamma_constraint = layer.gamma_constraint
+
+    def build(self, input_shape):
+        assert input_shape == self.moving_mean.shape
+
+    def call(self, inputs):
+        # out = gamma * (inputs - mean) / sqrt(var + epsilon) + beta
+        # inputs = (out - beta)/gamma * sqrt(var + epsilon) + mean
+
+        # note - this will not working during training
+        out = inputs
+        if self.beta is not None:
+            out = out - self.beta
+        if self.gamma is not None:
+            out = out / self.gamma
+        out = out * tf.math.sqrt(self.moving_variance + self.epsilon) + self.moving_mean
+        return out
 
 
 class ParametricLinearSystem(tf.keras.layers.Layer):
