@@ -113,6 +113,43 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
         return out
 
 
+class relativeSquaredError(tf.keras.layers.Layer):
+    """ Layer for computing relative squared error
+    for the latent state
+
+    """
+    
+    def __init__(self, lookahead, stepwise=False, name=''):
+        super(relativeSquaredError, self).__init__(name=name)
+        self.lookahead = lookahead
+        self.stepwise = stepwise
+        
+    # Call with true value as first element, predicted
+    # as second
+    def call(self, inputs):
+        pred_unstack = tf.unstack(inputs[1], num=self.lookahead, axis=1)
+        true_unstack = tf.unstack(inputs[0], num=self.lookahead, axis=1)
+
+        # compute relative error normalized by the true encoded state at
+        # each time step
+        if self.stepwise:
+            rel_error = [(elem[0]-elem[1])/(tf.norm(elem[1], axis=1, keepdims=True))
+                         for elem in zip(pred_unstack, true_unstack)]
+            return tf.stack(rel_error, axis=1)
+        # scale everything by the first true encoded state and then subtract 
+        else:
+            scaling_factor = tf.norm(true_unstack[0], axis=1, keepdims=True)
+            rel_error = [(elem[0] - elem[1])/scaling_factor for elem in zip(pred_unstack, true_unstack)]
+            return tf.stack(rel_error, axis=1)
+
+        
+    def get_config(self):
+        config = super(relativeSquaredError, self).get_config()
+        config.update({"stepwise_normalization": self.stepwise})
+        return config
+
+
+
 class ParametricLinearSystem(tf.keras.layers.Layer):
     """Layer representing a discrete time linear system
 
@@ -234,6 +271,7 @@ class ParametricLinearSystem(tf.keras.layers.Layer):
                 "stateful": self.stateful,
             }
         )
+        return config
 
     def build(self, input_shape):
         assert len(input_shape) == 3
@@ -838,3 +876,7 @@ class MultiTimeDistributed(Wrapper):
                     )
 
         return y
+
+
+
+    
