@@ -8,11 +8,11 @@ from . import schedulers
 from . import signal_groups
 from . import hyperparam_helpers
 
-
 custom_objects = {
     "MultiTimeDistributed": custom_layers.MultiTimeDistributed,
     "InverseDense": custom_layers.InverseDense,
     "InverseBatchNormalization": custom_layers.InverseBatchNormalization,
+    "RelativeError": custom_layers.RelativeError,
     "ParametricLinearSystem": custom_layers.ParametricLinearSystem,
     "ParaMatrix": custom_layers.ParaMatrix,
     "Orthonormal": custom_constraints.Orthonormal,
