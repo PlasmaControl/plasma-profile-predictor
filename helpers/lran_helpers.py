@@ -835,6 +835,10 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         "z1": zk[:, 1, :],
         "u0": uk[:, 0, :],
         "v0": vk[:, 0, :],
+        "xp0": xkp[:, 0, :],
+        "xp1": xkp[:, 1, :],
+        "zp0": zkp[:, 0, :],
+        "zp1": zkp[:, 1, :],
         "dx": dx,
         "dz": dz,
     }
