@@ -47,8 +47,15 @@ class InverseDense(tf.keras.layers.Layer):
         self.bias_constraint = layer.bias_constraint
 
     def build(self, input_shape):
-        assert input_shape[1] == self.kernel.shape[1]
+        assert (
+            input_shape[1] == self.kernel.shape[1]
+        ), "shapes don't match input shape={}, kernel shape={}".format(
+            input_shape[1], self.kernel_shape[1]
+        )
         self.built = True
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     # TODO: get_config / from_config for serialization?
 
@@ -97,7 +104,18 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
         self.gamma_constraint = layer.gamma_constraint
 
     def build(self, input_shape):
-        assert input_shape == self.moving_mean.shape
+        if isinstance(input_shape, int):
+            input_shape = (input_shape,)
+        if input_shape[0] is None and len(input_shape) > 1:
+            input_shape = input_shape[1:]
+        assert (
+            input_shape == self.moving_mean.shape
+        ), "shapes don't match input shape={}, kernel shape={}".format(
+            input_shape, self.moving_mean.shape
+        )
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     def call(self, inputs):
         # out = gamma * (inputs - mean) / sqrt(var + epsilon) + beta
@@ -114,16 +132,16 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
 
 
 class relativeSquaredError(tf.keras.layers.Layer):
-    """ Layer for computing relative squared error
+    """Layer for computing relative squared error
     for the latent state
 
     """
-    
-    def __init__(self, lookahead, stepwise=False, name=''):
+
+    def __init__(self, lookahead, stepwise=False, name=""):
         super(relativeSquaredError, self).__init__(name=name)
         self.lookahead = lookahead
         self.stepwise = stepwise
-        
+
     # Call with true value as first element, predicted
     # as second
     def call(self, inputs):
@@ -133,21 +151,24 @@ class relativeSquaredError(tf.keras.layers.Layer):
         # compute relative error normalized by the true encoded state at
         # each time step
         if self.stepwise:
-            rel_error = [(elem[0]-elem[1])/(tf.norm(elem[1], axis=1, keepdims=True))
-                         for elem in zip(pred_unstack, true_unstack)]
+            rel_error = [
+                (elem[0] - elem[1]) / (tf.norm(elem[1], axis=1, keepdims=True))
+                for elem in zip(pred_unstack, true_unstack)
+            ]
             return tf.stack(rel_error, axis=1)
-        # scale everything by the first true encoded state and then subtract 
+        # scale everything by the first true encoded state and then subtract
         else:
             scaling_factor = tf.norm(true_unstack[0], axis=1, keepdims=True)
-            rel_error = [(elem[0] - elem[1])/scaling_factor for elem in zip(pred_unstack, true_unstack)]
+            rel_error = [
+                (elem[0] - elem[1]) / scaling_factor
+                for elem in zip(pred_unstack, true_unstack)
+            ]
             return tf.stack(rel_error, axis=1)
 
-        
     def get_config(self):
         config = super(relativeSquaredError, self).get_config()
         config.update({"stepwise_normalization": self.stepwise})
         return config
-
 
 
 class ParametricLinearSystem(tf.keras.layers.Layer):
@@ -876,7 +897,3 @@ class MultiTimeDistributed(Wrapper):
                     )
 
         return y
-
-
-
-    
