@@ -907,12 +907,11 @@ def process_data(
     sys.stdout.flush()
     gc.collect()
 
+    qs = ["q", "q_EFIT01", "q_EFIT02", "q_EFITRT1", "q_EFITRT2"]
     if kwargs.get("invert_q"):
-        qs = ["q", "q_EFIT01", "q_EFIT02", "q_EFITRT1", "q_EFITRT2"]
         for sig in alldata.keys():
             if sig in qs:
                 alldata[sig] = 1 / alldata[sig]
-                alldata[sig][:, :, -1] = 0
 
     ##############################
     # normalize data

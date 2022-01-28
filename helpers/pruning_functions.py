@@ -292,6 +292,21 @@ def remove_outliers(data, verbose):
     Returns:
         data (dict): Dictionary of training samples with values removed.
     """
+    # remove samples where any q==0
+    if verbose:
+        print("Removing zero q profiles")
+    qs = ["q", "q_EFIT01", "q_EFIT02", "q_EFITRT1", "q_EFITRT2"]
+    mask = np.ones(len(data["time"]), dtype=bool)
+    for sig in data.keys():
+        if sig in qs:
+            temp_mask = (data[sig] != 0).all(axis=-1).all(axis=-1)
+            mask = mask & temp_mask
+    for sig in data.keys():
+        data[sig] = data[sig][mask]
+    if verbose:
+        print("Removed {} samples".format(len(np.nonzero(mask == 0)[0])))
+        print("{} samples remaining".format(len(np.nonzero(mask)[0])))
+
     if "q_EFIT02" in data:
         # get rid of jagged profiles
         if verbose:
@@ -306,8 +321,6 @@ def remove_outliers(data, verbose):
         for sig in data.keys():
             data[sig] = data[sig][list(keep_inds)]
         # get rid of all zero profiles
-        if verbose:
-            print("Removing zero q profiles")
         remove_inds = np.where(np.sum(np.abs(data["q_EFIT02"]), axis=-1) < 0.1)[0]
         remove_inds = np.unique(remove_inds)
         if verbose:
