@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_21_22/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_24_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -76,20 +76,13 @@ def main(scenario_index=-2):
         ],
         ### what type of model to use and settings etc.
         "state_encoder_type": "dense",
-        "state_decoder_type": "dense",
         "control_encoder_type": "none",
-        "control_decoder_type": "none",
         "state_encoder_kwargs": {
             "num_layers": 6,
             "activation": "elu",
             "norm": True,
         },
-        "state_decoder_kwargs": {
-            "num_layers": 6,
-            "activation": "elu",
-        },
         "control_encoder_kwargs": {},
-        "control_decoder_kwargs": {},
         ### dimension of latent states: negative means same as physical state, scaled
         "state_latent_dim": -1,
         "control_latent_dim": -1,
@@ -161,6 +154,7 @@ def main(scenario_index=-2):
     scenarios_dict["flattop_only"] = [{"flattop_only": False}]
     scenarios_dict["sample_weights"] = [
         {"sample_weights": "std"},
+        {"sample_weights": True},
     ]
     scenarios_dict["state_latent_dim"] = [
         {"state_latent_dim": 50},
@@ -182,11 +176,6 @@ def main(scenario_index=-2):
                 "norm": True,
                 "layer_scale": np.inf,
             },
-            "state_decoder_kwargs": {
-                "num_layers": 5,
-                "activation": "leaky_relu",
-                "layer_scale": np.inf,
-            },
         },
         {
             "state_encoder_kwargs": {
@@ -195,22 +184,12 @@ def main(scenario_index=-2):
                 "norm": True,
                 "layer_scale": np.inf,
             },
-            "state_decoder_kwargs": {
-                "num_layers": 7,
-                "activation": "leaky_relu",
-                "layer_scale": np.inf,
-            },
         },
         {
             "state_encoder_kwargs": {
                 "num_layers": 8,
                 "activation": "leaky_relu",
                 "norm": True,
-                "layer_scale": np.inf,
-            },
-            "state_decoder_kwargs": {
-                "num_layers": 9,
-                "activation": "leaky_relu",
                 "layer_scale": np.inf,
             },
         },
@@ -256,11 +235,8 @@ def main(scenario_index=-2):
         print("Loading Default Scenario:")
         scenario = default_scenario
 
-    if (scenario["control_encoder_type"] == "none") or (
-        scenario["control_decoder_type"] == "none"
-    ):
+    if (scenario["control_encoder_type"] == "none") or ():
         assert scenario["control_encoder_type"] == "none"
-        assert scenario["control_decoder_type"] == "none"
         scenario["control_latent_dim"] = len(scenario["actuator_names"])
 
     if scenario["control_latent_dim"] < 0:
@@ -435,13 +411,10 @@ def main(scenario_index=-2):
     ###############
     model = models.autoencoder.make_autoencoder(
         scenario["state_encoder_type"],
-        scenario["state_decoder_type"],
         scenario["control_encoder_type"],
-        scenario["control_decoder_type"],
         scenario["state_encoder_kwargs"],
-        scenario["state_decoder_kwargs"],
         scenario["control_encoder_kwargs"],
-        scenario["control_decoder_kwargs"],
+        scenario["recurrent_kwargs"],
         scenario["profile_names"],
         scenario["scalar_names"],
         scenario["actuator_names"],
@@ -449,7 +422,6 @@ def main(scenario_index=-2):
         scenario["control_latent_dim"],
         scenario["profile_length"],
         scenario["lookahead"],
-        None,  # scenario["batch_size"],
     )
     model.summary()
     model.compile(optimizer, loss, metrics, sample_weight_mode="temporal")

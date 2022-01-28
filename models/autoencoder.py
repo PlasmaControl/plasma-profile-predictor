@@ -17,8 +17,13 @@ from tensorflow.keras.layers import (
     LeakyReLU,
 )
 from tensorflow.keras.models import Model
-from helpers.custom_layers import MultiTimeDistributed
+from helpers.custom_layers import (
+    MultiTimeDistributed,
+    InverseBatchNormalization,
+    InverseDense,
+)
 from helpers.custom_activations import InverseLeakyReLU
+from helpers.custom_constraints import SoftOrthonormal, Orthonormal, Invertible
 
 activations = {
     "relu": ReLU(),
@@ -26,6 +31,15 @@ activations = {
     "leaky_relu": LeakyReLU(),
     "inv_leaky_relu": InverseLeakyReLU(),
 }
+
+
+def inverse_layer(layer):
+    if isinstance(layer, Dense):
+        return InverseDense(layer)
+    elif isinstance(layer, BatchNormalization):
+        return InverseBatchNormalization(layer)
+    else:
+        raise ValueError("No inverse defined for layer {}".format(layer))
 
 
 def get_state_input_model(
@@ -224,81 +238,70 @@ def get_control_splitter(actuator_names, batch_size):
 
 
 def get_control_encoder_dense(actuator_names, control_latent_dim, batch_size, **kwargs):
-    """Control encoder using dense network.
+    """Control encoder/decoder using dense network.
 
     Args:
         actuator_names (str): List of names of actuators
         control_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        std_activation (str or fn): activation function to apply to hidden layers
-        num_layers (int): number of hidden layers
-        layer_scale (float): power law scaling for size of hidden layers
+        std_activation (str or callable or tuple): activation function to apply to
+            hidden layers. If a list or tuple, uses first element for encoder, 2nd for decoder
+        num_layers (int or tuple of int): number of hidden layers, for encoder and decoder
+        layer_scale (float or tuple of float): power law scaling for size of hidden layers
             size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
 
     Returns:
         control_encoder (model): Keras model that takes each actuator as individual inputs
             and returns a single tensor of the encoded values.
+        control_decoder (model): Keras model that takes a single tensor of the
+            encoded values and returns each actuator as individual outputs.
+
     """
-    layer_scale = kwargs.get("layer_scale", 1)
-    num_layers = kwargs.get("num_layers", 6)
-    std_activation = kwargs.get("std_activation", "elu")
+    layer_scale = kwargs.pop("layer_scale", [1, 1])
+    if not isinstance(layer_scale, (list, tuple)):
+        layer_scale = [layer_scale]
+    num_layers = kwargs.pop("num_layers", [6, 6])
+    if not isinstance(num_layers, (list, tuple)):
+        num_layers = [num_layers]
+    std_activation = kwargs.pop("std_activation", ["elu", "elu"])
+    if not isinstance(std_activation, (list, tuple)):
+        std_activation = [std_activation]
     num_actuators = len(actuator_names)
+
     joiner = get_control_joiner(actuator_names, batch_size)
     u = joiner(joiner.inputs)
-    for i in range(num_layers):
+    for i in range(num_layers[0]):
         units = int(
             control_latent_dim
             + (num_actuators - control_latent_dim)
-            * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
+            * ((num_layers[0] - i - 1) / (num_layers[0] - 1)) ** layer_scale[0]
         )
-        u = Dense(units=units, activation=std_activation, use_bias=True)(u)
-    u = Reshape((control_latent_dim,))(u)
+        u = Dense(units=units, activation=std_activation[0], use_bias=True, **kwargs)(u)
     encoder = Model(inputs=joiner.inputs, outputs=u, name="dense_control_encoder")
-    return encoder
 
-
-def get_control_decoder_dense(actuator_names, control_latent_dim, batch_size, **kwargs):
-    """Control decoder using dense network.
-
-    Args:
-        actuator_names (str): List of names of actuators
-        control_latent_dim (int): dimensionality of the encoded variables
-        batch_size (int) : number of samples per minibatch
-        kwargs:
-        std_activation (str or fn): activation function to apply to hidden layers
-        num_layers (int): number of hidden layers
-        layer_scale (float): power law scaling for size of hidden layers
-            size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
-
-    Returns:
-        control_encoder (model): Keras model that takes a single tensor of the
-            encoded values and returns each actuator as individual outputs.
-    """
-    layer_scale = kwargs.get("layer_scale", 1)
-    num_layers = kwargs.get("num_layers", 6)
-    std_activation = kwargs.get("std_activation", "elu")
-    num_actuators = len(actuator_names)
-    splitter = get_control_splitter(actuator_names, batch_size)
     ui = Input(batch_shape=(batch_size, control_latent_dim))
     u = ui
-    for i in range(num_layers - 1):
+    for i in range(num_layers[-1] - 1):
         units = int(
             num_actuators
             - (num_actuators - control_latent_dim)
-            * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
+            * ((num_layers[-1] - i - 1) / (num_layers[-1] - 1)) ** layer_scale[-1]
         )
-        u = Dense(units=units, activation=std_activation, use_bias=True)(u)
-    u = Dense(units=num_actuators, activation="linear")(u)
-    u = Reshape((num_actuators,))(u)
+        u = Dense(units=units, activation=std_activation[-1], use_bias=True, **kwargs)(
+            u
+        )
+    u = Dense(units=num_actuators, activation="linear", **kwargs)(u)
+    splitter = get_control_splitter(actuator_names, batch_size)
     outputs = splitter(u)
     decoder = Model(inputs=ui, outputs=outputs, name="dense_control_decoder")
-    return decoder
+
+    return encoder, decoder
 
 
 def get_control_encoder_none(actuator_names, control_latent_dim, batch_size, **kwargs):
 
-    """Control encoder using identity transformation.
+    """Control encoder/decoder using identity transformation.
 
     Args:
         actuator_names (str): List of names of actuators
@@ -309,46 +312,31 @@ def get_control_encoder_none(actuator_names, control_latent_dim, batch_size, **k
     Returns:
         control_encoder (model): Keras model that takes each actuator as individual inputs
             and returns a single tensor of the encoded values.
+        control_decoder (model): Keras model that takes a single tensor of the
+            encoded values and returns each actuator as individual outputs.
+
     """
 
     assert len(actuator_names) == control_latent_dim
     num_actuators = len(actuator_names)
     joiner = get_control_joiner(actuator_names, batch_size)
     u = joiner(joiner.inputs)
-    u = Reshape((control_latent_dim,))(u)
     encoder = Model(inputs=joiner.inputs, outputs=u, name="none_control_encoder")
-    return encoder
 
-
-def get_control_decoder_none(actuator_names, control_latent_dim, batch_size, **kwargs):
-    """Control decoder using identity transformation.
-
-    Args:
-        actuator_names (str): List of names of actuators
-        control_latent_dim (int): dimensionality of the encoded variables
-        batch_size (int) : number of samples per minibatch
-        kwargs:
-
-    Returns:
-        control_encoder (model): Keras model that takes a single tensor of the
-            encoded values and returns each actuator as individual outputs.
-    """
-    assert len(actuator_names) == control_latent_dim
-
-    num_actuators = len(actuator_names)
     splitter = get_control_splitter(actuator_names, batch_size)
     ui = Input(batch_shape=(batch_size, control_latent_dim))
     u = ui
     u = Reshape((num_actuators,))(u)
     outputs = splitter(u)
     decoder = Model(inputs=ui, outputs=outputs, name="none_control_decoder")
-    return decoder
+
+    return encoder, decoder
 
 
 def get_state_encoder_dense(
     profile_names, scalar_names, profile_length, state_latent_dim, batch_size, **kwargs
 ):
-    """State encoder using dense network.
+    """State encoder/decoder using dense network.
 
     Args:
         profile_names (str): List of names of profiles
@@ -357,21 +345,30 @@ def get_state_encoder_dense(
         state_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        activation (str or fn): activation function to apply to hidden layers
-        num_layers (int): number of hidden layers
-        layer_scale (float): power law scaling for size of hidden layers
+        activation (str or fn or tuple): activation function to apply to hidden layers
+        num_layers (int or tuple): number of hidden layers, for encoder and decoder
+        layer_scale (float or tuple): power law scaling for size of hidden layers
             size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
 
     Returns:
         state_encoder (model): Keras model that takes each profile and scalar as individual inputs
             and returns a single tensor of the encoded values.
+        state_decoder (model): Keras model that takes a single tensor of the
+            encoded values and returns each profile/scalar as individual outputs.
     """
-    layer_scale = kwargs.pop("layer_scale", 1)
-    num_layers = kwargs.pop("num_layers", 6)
+    layer_scale = kwargs.pop("layer_scale", [1, 1])
+    if not isinstance(layer_scale, (list, tuple)):
+        layer_scale = [layer_scale]
+    num_layers = kwargs.pop("num_layers", [6, 6])
+    if not isinstance(num_layers, (list, tuple)):
+        num_layers = [num_layers]
+    activation = kwargs.pop("std_activation", ["elu", "elu"])
+    if not isinstance(activation, (list, tuple)):
+        activation = [activation]
     norm = kwargs.pop("norm", False)
-    activation = kwargs.pop("activation", ELU())
-    if activation in activations:
-        activation = activations[activation]
+    for i, act in enumerate(activation):
+        if act in activations:
+            activation[i] = activations[act]
 
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
@@ -379,30 +376,47 @@ def get_state_encoder_dense(
 
     joiner = get_state_joiner(profile_names, scalar_names, profile_length, batch_size)
     x = joiner(joiner.inputs)
-    for i in range(num_layers):
+    for i in range(num_layers[0]):
         units = int(
             state_latent_dim
             + (state_dim - state_latent_dim)
-            * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
+            * ((num_layers[0] - i - 1) / (num_layers[0] - 1)) ** layer_scale[0]
         )
         x = Dense(
             units=units,
-            activation=None,
+            activation=activation[0],
             **kwargs,
         )(x)
-        x = activation(x)
-    x = Reshape((state_latent_dim,))(x)
     if norm:
         x = BatchNormalization(center=False, scale=False, name="latent_state_norm")(x)
-
     encoder = Model(inputs=joiner.inputs, outputs=x, name="dense_state_encoder")
-    return encoder
+
+    xi = Input(batch_shape=(batch_size, state_latent_dim))
+    x = xi
+    for i in range(num_layers[-1] - 1, 0, -1):
+        units = int(
+            state_latent_dim
+            + (state_dim - state_latent_dim)
+            * ((num_layers[-1] - i - 1) / (num_layers[-1] - 1)) ** layer_scale[-1]
+        )
+        x = Dense(
+            units=units,
+            activation=activation[-1],
+            **kwargs,
+        )(x)
+    y = Dense(units=state_dim, activation=None, **kwargs)(x)
+    splitter = get_state_splitter(
+        profile_names, scalar_names, profile_length, batch_size
+    )
+    outputs = splitter(y)
+    decoder = Model(inputs=xi, outputs=outputs, name="dense_state_decoder")
+    return encoder, decoder
 
 
-def get_state_decoder_dense(
+def get_state_encoder_invertible(
     profile_names, scalar_names, profile_length, state_latent_dim, batch_size, **kwargs
 ):
-    """State decoder using dense network.
+    """State encoder/decoder using invertible transformations.
 
     Args:
         profile_names (str): List of names of profiles
@@ -411,49 +425,67 @@ def get_state_decoder_dense(
         state_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        activation (str or fn): activation function to apply to hidden layers
-        num_layers (int): number of hidden layers
-        layer_scale (float): power law scaling for size of hidden layers
+        activation (str or fn or tuple): activation function to apply to hidden layers
+        num_layers (int or tuple): number of hidden layers, for encoder and decoder
+        layer_scale (float or tuple): power law scaling for size of hidden layers
             size of layer(i) = min_size + (max_size-min_size)*(i/num_layers)**layer_scale
 
     Returns:
+        state_encoder (model): Keras model that takes each profile and scalar as individual inputs
+            and returns a single tensor of the encoded values.
         state_decoder (model): Keras model that takes a single tensor of the
             encoded values and returns each profile/scalar as individual outputs.
     """
-    layer_scale = kwargs.pop("layer_scale", 1)
-    num_layers = kwargs.pop("num_layers", 6)
-    activation = kwargs.pop("activation", ELU())
-    if activation in activations:
-        activation = activations[activation]
-
     num_profiles = len(profile_names)
     num_scalars = len(scalar_names)
     state_dim = num_profiles * profile_length + num_scalars
+    assert state_dim == state_latent_dim
 
-    xi = Input(batch_shape=(batch_size, state_latent_dim))
-    x = xi
-    for i in range(num_layers - 1, 0, -1):
-        units = int(
-            state_latent_dim
-            + (state_dim - state_latent_dim)
-            * ((num_layers - i - 1) / (num_layers - 1)) ** layer_scale
-        )
-        x = activation(x)
-        x = Dense(
-            units=units,
-            activation=None,
+    _ = kwargs.pop("layer_scale", None)
+    num_layers = kwargs.pop("num_layers", 6)
+    if isinstance(num_layers, (list, tuple)):
+        num_layers = num_layers[0]
+    activation = kwargs.pop("std_activation", "leaky_relu")
+    if isinstance(activation, (list, tuple)):
+        activation = activation[0]
+    if activation in activations:
+        activation = activations[activation]
+    norm = kwargs.pop("norm", True)
+
+    kwargs.setdefault("kernel_initializer", "orthogonal")
+    kwargs.setdefault("kernel_constraint", Orthonormal())
+    kwargs.setdefault("bias_regularizer", "l2")
+
+    joiner = get_state_joiner(profile_names, scalar_names, profile_length, batch_size)
+    x = joiner(joiner.inputs)
+
+    layers = []
+    for i in range(num_layers):
+        layer = Dense(
+            units=state_latent_dim,
+            activation=activation,
             **kwargs,
-        )(x)
+        )
+        layers.append(layer)
+    if norm:
+        layers.append(
+            BatchNormalization(center=False, scale=False, name="latent_state_norm")
+        )
+    for layer in layers:
+        x = layer(x)
 
-    x = activation(x)
-    y = Dense(units=state_dim, activation=None)(x)
-    y = Reshape((state_dim,))(y)
+    z = Input(state_latent_dim)
+    zi = z
+    for layer in layers[::-1]:
+        zi = inverse_layer(layer)(zi)
+
     splitter = get_state_splitter(
         profile_names, scalar_names, profile_length, batch_size
     )
-    outputs = splitter(y)
-    decoder = Model(inputs=xi, outputs=outputs, name="dense_state_decoder")
-    return decoder
+    outputs = splitter(zi)
+    encoder = Model(inputs=joiner.inputs, outputs=x, name="invertible_state_encoder")
+    decoder = Model(inputs=z, outputs=outputs, name="invertible_state_decoder")
+    return encoder, decoder
 
 
 def get_latent_linear_model(
@@ -506,13 +538,10 @@ def get_latent_linear_model(
 
 def make_autoencoder(
     state_encoder_type,
-    state_decoder_type,
     control_encoder_type,
-    control_decoder_type,
     state_encoder_kwargs,
-    state_decoder_kwargs,
     control_encoder_kwargs,
-    control_decoder_kwargs,
+    recurrent_kwargs,
     profile_names,
     scalar_names,
     actuator_names,
@@ -520,20 +549,16 @@ def make_autoencoder(
     control_latent_dim,
     profile_length,
     lookahead,
-    batch_size=1,
-    **kwargs
+    batch_size=None,
 ):
     """Linear Recurrent autoencoder
 
     Args:
         state_encoder_type (str): Type of netork to use for state encoding
-        state_decoder_type (str): Type of netork to use for state decoding
         control_encoder_type (str): Type of netork to use for control encoding
-        control_decoder_type (str): Type of netork to use for control decoding
         state_encoder_kwargs (dict): Dictionary of keyword arguments for state encoder model
-        state_decoder_kwargs (dict): Dictionary of keyword arguments for state decoder model
         control_encoder_kwargs (dict): Dictionary of keyword arguments for control encoder model
-        control_decoder_kwargs (dict): Dictionary of keyword arguments for control decoder model
+        recurrent_kwargs (dict): Dictionary of keyword arguments for latent linear model
         profile_names (str): List of names of profiles
         scalar_names (str): list of names of scalars
         actuator_names (str): list of names of actuators
@@ -550,19 +575,13 @@ def make_autoencoder(
             state reconstruction, control reconstruction, and linear dynamic approximation
     """
 
-    num_profiles = len(profile_names)
-    num_scalars = len(scalar_names)
-    num_actuators = len(actuator_names)
-    state_dim = num_profiles * profile_length + num_scalars
-    state_encoders = {"dense": get_state_encoder_dense}
-    state_decoders = {"dense": get_state_decoder_dense}
+    state_encoders = {
+        "dense": get_state_encoder_dense,
+        "invertible": get_state_encoder_invertible,
+    }
     control_encoders = {
         "dense": get_control_encoder_dense,
         "none": get_control_encoder_none,
-    }
-    control_decoders = {
-        "dense": get_control_decoder_dense,
-        "none": get_control_decoder_none,
     }
 
     profile_inputs = [
@@ -580,7 +599,7 @@ def make_autoencoder(
         for nm in actuator_names
     ]
 
-    state_encoder = state_encoders[state_encoder_type](
+    state_encoder, state_decoder = state_encoders[state_encoder_type](
         profile_names,
         scalar_names,
         profile_length,
@@ -588,25 +607,11 @@ def make_autoencoder(
         batch_size=batch_size,
         **state_encoder_kwargs,
     )
-    state_decoder = state_decoders[state_decoder_type](
-        profile_names,
-        scalar_names,
-        profile_length,
-        state_latent_dim,
-        batch_size=batch_size,
-        **state_decoder_kwargs,
-    )
-    control_encoder = control_encoders[control_encoder_type](
+    control_encoder, control_decoder = control_encoders[control_encoder_type](
         actuator_names,
         control_latent_dim,
         batch_size=batch_size,
         **control_encoder_kwargs,
-    )
-    control_decoder = control_decoders[control_decoder_type](
-        actuator_names,
-        control_latent_dim,
-        batch_size=batch_size,
-        **control_decoder_kwargs,
     )
     state_input = get_state_input_model(
         profile_names,
@@ -628,9 +633,6 @@ def make_autoencoder(
     vi = MultiTimeDistributed(control_encoder, name="ctrl_encoder_time_dist")(ui)
     uo = MultiTimeDistributed(control_decoder, name="ctrl_decoder_time_dist")(vi)
 
-    regularization = kwargs.get(
-        "regularization", {"l1A": 0, "l2A": 0, "l1B": 0, "l2B": 0}
-    )
     z0 = Reshape((state_latent_dim,), name="x0")(Cropping1D((0, lookahead))(zi))
     z1 = Cropping1D((1, 0), name="x1")(zi)
     vi = Cropping1D((0, 1), name="u")(vi)
@@ -640,13 +642,8 @@ def make_autoencoder(
         activation="linear",
         use_bias=False,
         name="AB_matrices",
-        kernel_regularizer=keras.regularizers.l1_l2(
-            l1=regularization["l1B"], l2=regularization["l2B"]
-        ),
-        recurrent_regularizer=keras.regularizers.l1_l2(
-            l1=regularization["l1A"], l2=regularization["l2A"]
-        ),
         return_sequences=True,
+        **recurrent_kwargs,
     )
 
     z1est = Reshape((lookahead, state_latent_dim), name="x1est")(
