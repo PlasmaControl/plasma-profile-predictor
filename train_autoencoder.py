@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_24_22/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_28_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
