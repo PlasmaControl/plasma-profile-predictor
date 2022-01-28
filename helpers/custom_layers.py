@@ -131,19 +131,24 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
         return out
 
 
-class relativeSquaredError(tf.keras.layers.Layer):
-    """Layer for computing relative squared error
-    for the latent state
+class RelativeError(tf.keras.layers.Layer):
+    """Layer for computing relative difference between two inputs
 
+    Should be called with a list of 2 tensors [true, pred]
+
+    Parameters
+    ----------
+    lookahead : int
+        number of timesteps in input
+    stepwise : bool
+        whether to normalize each step independently, or same for all
     """
 
     def __init__(self, lookahead, stepwise=False, name=""):
-        super(relativeSquaredError, self).__init__(name=name)
+        super(RelativeError, self).__init__(name=name)
         self.lookahead = lookahead
         self.stepwise = stepwise
 
-    # Call with true value as first element, predicted
-    # as second
     def call(self, inputs):
         pred_unstack = tf.unstack(inputs[1], num=self.lookahead, axis=1)
         true_unstack = tf.unstack(inputs[0], num=self.lookahead, axis=1)
@@ -166,8 +171,8 @@ class relativeSquaredError(tf.keras.layers.Layer):
             return tf.stack(rel_error, axis=1)
 
     def get_config(self):
-        config = super(relativeSquaredError, self).get_config()
-        config.update({"stepwise_normalization": self.stepwise})
+        config = super(RelativeError, self).get_config()
+        config.update({"stepwise": self.stepwise, "lookahead": self.lookahead})
         return config
 
 
