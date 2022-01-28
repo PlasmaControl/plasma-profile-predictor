@@ -61,25 +61,25 @@ def main(scenario_index=-2):
             "q_{}".format(efit_type),
         ],
         "scalar_names": [
-            # "density_estimate",
-            # "curr",
-            # "a_{}".format(efit_type),
-            # "betan_{}".format(efit_type),
-            # "drsep_{}".format(efit_type),
-            # "kappa_{}".format(efit_type),
-            # "li_{}".format(efit_type),
-            # "rmagx_{}".format(efit_type),
-            # "zmagX_{}".format(efit_type),
-            # "volume_{}".format(efit_type),
-            # "triangularity_top_{}".format(efit_type),
-            # "triangularity_bot_{}".format(efit_type),
+            "density_estimate",
+            "curr",
+            "a_{}".format(efit_type),
+            "betan_{}".format(efit_type),
+            "drsep_{}".format(efit_type),
+            "kappa_{}".format(efit_type),
+            "li_{}".format(efit_type),
+            "rmagx_{}".format(efit_type),
+            "zmagX_{}".format(efit_type),
+            "volume_{}".format(efit_type),
+            "triangularity_top_{}".format(efit_type),
+            "triangularity_bot_{}".format(efit_type),
         ],
         ### what type of model to use and settings etc.
-        "state_encoder_type": "dense",
+        "state_encoder_type": "invertible",
         "control_encoder_type": "none",
         "state_encoder_kwargs": {
             "num_layers": 6,
-            "activation": "elu",
+            "activation": "leaky_relu",
             "norm": True,
         },
         "control_encoder_kwargs": {},
@@ -87,8 +87,8 @@ def main(scenario_index=-2):
         "state_latent_dim": -1,
         "control_latent_dim": -1,
         ### weighting for different terms. latent state loss == 1
-        "sample_weights": True,  # True to weight samples temporally, "std" to weight by how much things are changing
-        "x_weight": 1,  # state encode/decode error
+        "sample_weights": "std",  # True to weight samples temporally, "std" to weight by how much things are changing
+        "x_weight": 0,  # state encode/decode error
         "u_weight": 1,  # control encode/decode error
         "discount_factor": 1,  # reduction ratio for future predictions
         ### loss and training parameters
@@ -101,7 +101,7 @@ def main(scenario_index=-2):
         "epochs": 400,
         ### data processing stuff
         "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms.pkl",
-        "flattop_only": True,  # only include data during "steady state"
+        "flattop_only": False,  # only include data during "steady state"
         "invert_q": True,  # to avoid singularity at psi=1
         "normalization_method": "RobustScaler",  # if normalizing data beforehand, None if using BatchNormalization layers
         "uniform_normalization": True,  # whether to use same mean/std for entire profile
@@ -150,17 +150,58 @@ def main(scenario_index=-2):
                 "target_density",
             ]
         },
+        {
+            "actuator_names": [
+                "pinj",
+                "tinj",
+                "curr_target",
+                "target_density",
+                "ech",
+            ]
+        },
+        {
+            "actuator_names": [
+                "pinj",
+                "tinj",
+                "curr_target",
+                "target_density",
+            ]
+            + signal_groups.C_coils
+            + signal_groups.I_coils
+        },
+        {
+            "actuator_names": [
+                "pinj",
+                "tinj",
+                "curr_target",
+                "target_density",
+                "ech",
+            ]
+            + signal_groups.C_coils
+            + signal_groups.I_coils
+        },
     ]
-    scenarios_dict["flattop_only"] = [{"flattop_only": False}]
-    scenarios_dict["sample_weights"] = [
-        {"sample_weights": "std"},
-        {"sample_weights": True},
-    ]
-    scenarios_dict["state_latent_dim"] = [
-        {"state_latent_dim": 50},
-        {"state_latent_dim": 75},
+    scenarios_dict["scalars"] = [
+        {
+            "scalar_names": [
+                "density_estimate",
+                "curr",
+                "a_{}".format(efit_type),
+                "betan_{}".format(efit_type),
+                "drsep_{}".format(efit_type),
+                "kappa_{}".format(efit_type),
+                "li_{}".format(efit_type),
+                "rmagx_{}".format(efit_type),
+                "zmagX_{}".format(efit_type),
+                "volume_{}".format(efit_type),
+                "triangularity_top_{}".format(efit_type),
+                "triangularity_bot_{}".format(efit_type),
+            ]
+        },
+        {"scalar_names": []},
     ]
     scenarios_dict["lookahead"] = [
+        {"lookahead": 10},
         {"lookahead": 20},
     ]
     scenarios_dict["loss"] = [
@@ -174,7 +215,6 @@ def main(scenario_index=-2):
                 "num_layers": 4,
                 "activation": "leaky_relu",
                 "norm": True,
-                "layer_scale": np.inf,
             },
         },
         {
@@ -182,7 +222,6 @@ def main(scenario_index=-2):
                 "num_layers": 6,
                 "activation": "leaky_relu",
                 "norm": True,
-                "layer_scale": np.inf,
             },
         },
         {
@@ -190,7 +229,6 @@ def main(scenario_index=-2):
                 "num_layers": 8,
                 "activation": "leaky_relu",
                 "norm": True,
-                "layer_scale": np.inf,
             },
         },
     ]
