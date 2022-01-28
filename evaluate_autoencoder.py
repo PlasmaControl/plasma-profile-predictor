@@ -216,44 +216,75 @@ def evaluate(file_path):
     print("Computing encoder data took {}s".format(time.time() - T1))
     T1 = time.time()
 
-    norm_data = helpers.lran_helpers.compute_norm_data(
+    encoder_norm_data = helpers.lran_helpers.compute_norm_data(
         encoder_data["x0"], encoder_data["z0"]
     )
+    decoder_norm_data = helpers.lran_helpers.compute_norm_data(
+        encoder_data["xp0"], encoder_data["zp0"]
+    )
+
     print("Computing norm data took {}s".format(time.time() - T1))
     T1 = time.time()
 
     # store operator norm data
-    evaluation_metrics["p25_operator_norm"] = np.nanpercentile(
-        norm_data["operator_norm"], 25
+    evaluation_metrics["p25_encoder_operator_norm"] = np.nanpercentile(
+        encoder_norm_data["operator_norm"], 25
     )
-    evaluation_metrics["p50_operator_norm"] = np.nanpercentile(
-        norm_data["operator_norm"], 50
+    evaluation_metrics["p50_encoder_operator_norm"] = np.nanpercentile(
+        encoder_norm_data["operator_norm"], 50
     )
-    evaluation_metrics["p75_operator_norm"] = np.nanpercentile(
-        norm_data["operator_norm"], 75
+    evaluation_metrics["p75_encoder_operator_norm"] = np.nanpercentile(
+        encoder_norm_data["operator_norm"], 75
     )
-    evaluation_metrics["p99_operator_norm"] = np.nanpercentile(
-        norm_data["operator_norm"], 99
+    evaluation_metrics["p99_encoder_operator_norm"] = np.nanpercentile(
+        encoder_norm_data["operator_norm"], 99
     )
 
-    evaluation_metrics["p25_lipschitz_constant"] = np.nanpercentile(
-        norm_data["lipschitz_constant"], 25
+    evaluation_metrics["p25_decoder_operator_norm"] = np.nanpercentile(
+        decoder_norm_data["operator_norm"], 25
     )
-    evaluation_metrics["p50_lipschitz_constant"] = np.nanpercentile(
-        norm_data["lipschitz_constant"], 50
+    evaluation_metrics["p50_decoder_operator_norm"] = np.nanpercentile(
+        decoder_norm_data["operator_norm"], 50
     )
-    evaluation_metrics["p75_lipschitz_constant"] = np.nanpercentile(
-        norm_data["lipschitz_constant"], 75
+    evaluation_metrics["p75_decoder_operator_norm"] = np.nanpercentile(
+        decoder_norm_data["operator_norm"], 75
     )
-    evaluation_metrics["p99_lipschitz_constant"] = np.nanpercentile(
-        norm_data["lipschitz_constant"], 99
+    evaluation_metrics["p99_decoder_operator_norm"] = np.nanpercentile(
+        decoder_norm_data["operator_norm"], 99
+    )
+
+    evaluation_metrics["p25_encoder_lipschitz_constant"] = np.nanpercentile(
+        encoder_norm_data["lipschitz_constant"], 25
+    )
+    evaluation_metrics["p50_encoder_lipschitz_constant"] = np.nanpercentile(
+        encoder_norm_data["lipschitz_constant"], 50
+    )
+    evaluation_metrics["p75_encoder_lipschitz_constant"] = np.nanpercentile(
+        encoder_norm_data["lipschitz_constant"], 75
+    )
+    evaluation_metrics["p99_encoder_lipschitz_constant"] = np.nanpercentile(
+        encoder_norm_data["lipschitz_constant"], 99
+    )
+
+    evaluation_metrics["p25_decoder_lipschitz_constant"] = np.nanpercentile(
+        decoder_norm_data["lipschitz_constant"], 25
+    )
+    evaluation_metrics["p50_decoder_lipschitz_constant"] = np.nanpercentile(
+        decoder_norm_data["lipschitz_constant"], 50
+    )
+    evaluation_metrics["p75_decoder_lipschitz_constant"] = np.nanpercentile(
+        decoder_norm_data["lipschitz_constant"], 75
+    )
+    evaluation_metrics["p99_decoder_lipschitz_constant"] = np.nanpercentile(
+        decoder_norm_data["lipschitz_constant"], 99
     )
 
     # time dependent residuals in z, x
     for metric_name, metric in metrics.items():
         evaluation_metrics["dzrel_" + metric_name] = np.array(
             [
-                metric(encoder_data["dz"][:, i, :]) / np.nanmedian(norm_data["z0_norm"])
+                metric(encoder_data["dz"][:, i, :])
+                / np.nanmedian(encoder_norm_data["z0_norm"])
                 for i in range(encoder_data["dz"].shape[1])
             ]
         )
@@ -265,7 +296,8 @@ def evaluate(file_path):
         )
         evaluation_metrics["dxrel_" + metric_name] = np.array(
             [
-                metric(encoder_data["dx"][:, i, :]) / np.nanmedian(norm_data["x0_norm"])
+                metric(encoder_data["dx"][:, i, :])
+                / np.nanmedian(encoder_norm_data["x0_norm"])
                 for i in range(encoder_data["dx"].shape[1])
             ]
         )
@@ -276,7 +308,8 @@ def evaluate(file_path):
             ]
         )
 
-    scenario["norm_data"] = norm_data
+    scenario["encoder_norm_data"] = encoder_norm_data
+    scenario["decoder_norm_data"] = decoder_norm_data
     scenario["evaluation_metrics"] = evaluation_metrics
 
     for key, val in evaluation_metrics.items():
