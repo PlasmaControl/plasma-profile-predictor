@@ -83,6 +83,7 @@ def main(scenario_index=-2):
             "norm": True,
         },
         "control_encoder_kwargs": {},
+        "recurrent_kwargs": {},
         ### dimension of latent states: negative means same as physical state, scaled
         "state_latent_dim": -1,
         "control_latent_dim": -1,
