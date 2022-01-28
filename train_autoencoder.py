@@ -289,7 +289,7 @@ def main(scenario_index=-2):
     scenario["runname"] = "LRAN" + time.strftime("_%d%b%y-%H-%M", time.localtime())
     if scenario_index >= 0:
         scenario["runname"] += "_Scenario-{:04d}".format(scenario_index)
-    scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.h5"
+    scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.tf"
     print(scenario["runname"])
 
     ###############

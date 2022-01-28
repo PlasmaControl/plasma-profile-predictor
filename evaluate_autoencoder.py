@@ -125,13 +125,14 @@ def evaluate(file_path):
     T1 = time.time()
     print("took {}s".format(T1 - T0))
 
-    model_path = file_path[:-11] + "_model.h5"
+    fmt = scenario["model_path"][-2:]
+    model_path = file_path[:-11] + "_model." + fmt
     if os.path.exists(model_path):
         print("loading model: " + model_path.split("/")[-1])
         model = tf.keras.models.load_model(
             model_path,
             compile=False,
-            custom_objects=custom_objects,
+            custom_objects=custom_objects if (fmt == "h5") else None,
         )
         print("took {}s".format(time.time() - T1))
     else:
