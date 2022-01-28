@@ -15,11 +15,15 @@ from tensorflow.python.util import nest
 from tensorflow.python.keras.layers.wrappers import Wrapper
 from tensorflow.python.keras.utils import generic_utils
 from tensorflow.python.keras import backend
+from tensorflow.python.keras import constraints
+from tensorflow.python.keras import initializers
+from tensorflow.python.keras import regularizers
+from tensorflow.python.keras import activations
 from helpers.custom_activations import inverse_activation
 from helpers.custom_constraints import Orthonormal, SoftOrthonormal
 
 
-class InverseDense(tf.keras.layers.Layer):
+class InverseDense(Wrapper):
     """Inverse of a dense layer
 
     Initialized with the forward layer, this layer computes the
@@ -34,46 +38,47 @@ class InverseDense(tf.keras.layers.Layer):
 
     def __init__(self, layer, **kwargs):
 
-        self.kernel = layer.kernel
-        self.bias = layer.bias if hasattr(layer, "bias") else 0
-        self.activation = inverse_activation(layer.activation)
-        super(InverseDense, self).__init__(**kwargs)
+        self.layer = layer
 
-        self.kernel_initializer = layer.kernel_initializer
-        self.bias_initializer = layer.bias_initializer
-        self.kernel_regularizer = layer.kernel_regularizer
-        self.bias_regularizer = layer.bias_regularizer
-        self.kernel_constraint = layer.kernel_constraint
-        self.bias_constraint = layer.bias_constraint
+        self.use_bias = self.layer.use_bias
+        self.activation = inverse_activation(self.layer.activation)
+        self.orthogonal = isinstance(
+            self.layer.kernel_constraint, (Orthonormal, SoftOrthonormal)
+        )
+        super(InverseDense, self).__init__(layer, **kwargs)
 
     def build(self, input_shape):
+        super(InverseDense, self).build(input_shape)
         assert (
-            input_shape[1] == self.kernel.shape[1]
+            self.layer.kernel.shape[0] == self.layer.kernel.shape[1]
+        ), "kernel is not square"
+        assert (
+            input_shape[1] == self.layer.kernel.shape[1]
         ), "shapes don't match input shape={}, kernel shape={}".format(
-            input_shape[1], self.kernel_shape[1]
+            input_shape[1], self.layer.kernel_shape[1]
         )
-        self.built = True
 
     def compute_output_shape(self, input_shape):
         return input_shape
 
-    # TODO: get_config / from_config for serialization?
-
     def call(self, inputs):
 
-        sy = self.activation(inputs)
-        if self.bias is not None:
-            sy = sy - self.bias
-        if isinstance(self.kernel_constraint, (Orthonormal, SoftOrthonormal)):
-            x = tf.linalg.matmul(self.kernel, sy, transpose_a=False, transpose_b=True)
-        elif self.kernel.shape[0] == self.kernel.shape[1]:
-            x = tf.linalg.solve(self.kernel, tf.transpose(sy), adjoint=True)
+        if self.activation is not None:
+            sy = self.activation(inputs)
         else:
-            x = tf.linalg.lstsq(tf.transpose(self.kernel), tf.transpose(sy), fast=False)
+            sy = inputs
+        if self.layer.use_bias:
+            sy = sy - self.layer.bias
+        if self.orthogonal:
+            x = tf.linalg.matmul(
+                self.layer.kernel, sy, transpose_a=False, transpose_b=True
+            )
+        else:
+            x = tf.linalg.solve(self.layer.kernel, tf.transpose(sy), adjoint=True)
         return tf.transpose(x)
 
 
-class InverseBatchNormalization(tf.keras.layers.Layer):
+class InverseBatchNormalization(Wrapper):
     """Inverse of BatchNormalization layer
 
     Initialized with a forward BatchNormalization layer, this layer undoes the
@@ -87,31 +92,19 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
 
     def __init__(self, layer, **kwargs):
 
-        super(InverseBatchNormalization, self).__init__(**kwargs)
-
-        self.moving_mean = layer.moving_mean
-        self.moving_variance = layer.moving_variance
-        self.epsilon = layer.epsilon
-        self.gamma = layer.gamma
-        self.beta = layer.beta
-        self.axis = layer.axis
-
-        self.beta_initializer = layer.beta_initializer
-        self.gamma_initializer = layer.gamma_initializer
-        self.beta_regularizer = layer.beta_regularizer
-        self.gamma_regularizer = layer.gamma_regularizer
-        self.beta_constraint = layer.beta_constraint
-        self.gamma_constraint = layer.gamma_constraint
+        self.layer = layer
+        super(InverseBatchNormalization, self).__init__(layer, **kwargs)
 
     def build(self, input_shape):
+        super(InverseBatchNormalization, self).build(input_shape)
         if isinstance(input_shape, int):
             input_shape = (input_shape,)
         if input_shape[0] is None and len(input_shape) > 1:
             input_shape = input_shape[1:]
         assert (
-            input_shape == self.moving_mean.shape
+            input_shape == self.layer.moving_mean.shape
         ), "shapes don't match input shape={}, kernel shape={}".format(
-            input_shape, self.moving_mean.shape
+            input_shape, self.layer.moving_mean.shape
         )
 
     def compute_output_shape(self, input_shape):
@@ -121,13 +114,17 @@ class InverseBatchNormalization(tf.keras.layers.Layer):
         # out = gamma * (inputs - mean) / sqrt(var + epsilon) + beta
         # inputs = (out - beta)/gamma * sqrt(var + epsilon) + mean
 
-        # note - this will not working during training
+        # note - this will not exactly invert druring training, since the batch
+        # to batch statistics may be different from the moving statistics
         out = inputs
-        if self.beta is not None:
-            out = out - self.beta
-        if self.gamma is not None:
-            out = out / self.gamma
-        out = out * tf.math.sqrt(self.moving_variance + self.epsilon) + self.moving_mean
+        if self.layer.center:
+            out = out - self.layer.beta
+        if self.layer.scale:
+            out = out / self.layer.gamma
+        out = (
+            out * tf.math.sqrt(self.layer.moving_variance + self.layer.epsilon)
+            + self.layer.moving_mean
+        )
         return out
 
 
@@ -144,8 +141,8 @@ class RelativeError(tf.keras.layers.Layer):
         whether to normalize each step independently, or same for all
     """
 
-    def __init__(self, lookahead, stepwise=False, name=""):
-        super(RelativeError, self).__init__(name=name)
+    def __init__(self, lookahead, stepwise=False, **kwargs):
+        super(RelativeError, self).__init__(**kwargs)
         self.lookahead = lookahead
         self.stepwise = stepwise
 
