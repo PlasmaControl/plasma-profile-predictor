@@ -128,7 +128,7 @@ class InverseBatchNormalization(Wrapper):
         return out
 
 
-class RelativeSquaredError(tf.keras.layers.Layer):
+class RelativeError(tf.keras.layers.Layer):
     """ Layer for computing relative squared error
     for the latent state
 
@@ -143,7 +143,7 @@ class RelativeSquaredError(tf.keras.layers.Layer):
     """
     
     def __init__(self, lookahead, stepwise=False, name='', **kwargs):
-        super(RelativeSquaredError, self).__init__(name=name, **kwargs)
+        super(RelativeError, self).__init__(name=name, **kwargs)
         self.lookahead = lookahead
         self.stepwise = stepwise
 
@@ -169,7 +169,7 @@ class RelativeSquaredError(tf.keras.layers.Layer):
             return tf.stack(rel_error, axis=1)
 
     def get_config(self):
-        config = super(RelativeSquaredError, self).get_config()
+        config = super(RelativeError, self).get_config()
         config.update({"stepwise": self.stepwise, "lookahead": self.lookahead})
         return config
 
