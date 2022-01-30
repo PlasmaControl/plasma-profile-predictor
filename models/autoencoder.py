@@ -245,7 +245,7 @@ def get_control_encoder_dense(actuator_names, control_latent_dim, batch_size, **
         control_latent_dim (int): dimensionality of the encoded variables
         batch_size (int) : number of samples per minibatch
         kwargs:
-        std_activation (str or callable or tuple): activation function to apply to
+        activation (str or callable or tuple): activation function to apply to
             hidden layers. If a list or tuple, uses first element for encoder, 2nd for decoder
         num_layers (int or tuple of int): number of hidden layers, for encoder and decoder
         layer_scale (float or tuple of float): power law scaling for size of hidden layers
@@ -264,9 +264,9 @@ def get_control_encoder_dense(actuator_names, control_latent_dim, batch_size, **
     num_layers = kwargs.pop("num_layers", [6, 6])
     if not isinstance(num_layers, (list, tuple)):
         num_layers = [num_layers]
-    std_activation = kwargs.pop("std_activation", ["elu", "elu"])
-    if not isinstance(std_activation, (list, tuple)):
-        std_activation = [std_activation]
+    activation = kwargs.pop("activation", ["elu", "elu"])
+    if not isinstance(activation, (list, tuple)):
+        activation = [activation]
     num_actuators = len(actuator_names)
 
     joiner = get_control_joiner(actuator_names, batch_size)
@@ -277,7 +277,7 @@ def get_control_encoder_dense(actuator_names, control_latent_dim, batch_size, **
             + (num_actuators - control_latent_dim)
             * ((num_layers[0] - i - 1) / (num_layers[0] - 1)) ** layer_scale[0]
         )
-        u = Dense(units=units, activation=std_activation[0], use_bias=True, **kwargs)(u)
+        u = Dense(units=units, activation=activation[0], use_bias=True, **kwargs)(u)
     encoder = Model(inputs=joiner.inputs, outputs=u, name="dense_control_encoder")
 
     ui = Input(batch_shape=(batch_size, control_latent_dim))
@@ -288,9 +288,7 @@ def get_control_encoder_dense(actuator_names, control_latent_dim, batch_size, **
             - (num_actuators - control_latent_dim)
             * ((num_layers[-1] - i - 1) / (num_layers[-1] - 1)) ** layer_scale[-1]
         )
-        u = Dense(units=units, activation=std_activation[-1], use_bias=True, **kwargs)(
-            u
-        )
+        u = Dense(units=units, activation=activation[-1], use_bias=True, **kwargs)(u)
     u = Dense(units=num_actuators, activation="linear", **kwargs)(u)
     splitter = get_control_splitter(actuator_names, batch_size)
     outputs = splitter(u)
@@ -362,7 +360,7 @@ def get_state_encoder_dense(
     num_layers = kwargs.pop("num_layers", [6, 6])
     if not isinstance(num_layers, (list, tuple)):
         num_layers = [num_layers]
-    activation = kwargs.pop("std_activation", ["elu", "elu"])
+    activation = kwargs.pop("activation", ["elu", "elu"])
     if not isinstance(activation, (list, tuple)):
         activation = [activation]
     norm = kwargs.pop("norm", False)
@@ -445,7 +443,7 @@ def get_state_encoder_invertible(
     num_layers = kwargs.pop("num_layers", 6)
     if isinstance(num_layers, (list, tuple)):
         num_layers = num_layers[0]
-    activation = kwargs.pop("std_activation", "leaky_relu")
+    activation = kwargs.pop("activation", "leaky_relu")
     if isinstance(activation, (list, tuple)):
         activation = activation[0]
     if activation in activations:
