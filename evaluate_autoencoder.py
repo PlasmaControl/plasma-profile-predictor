@@ -44,51 +44,51 @@ def sigma(inp, true, prediction):
 
 
 def mean_absolute_error(residual):
-    return np.mean(np.abs(residual))
+    return np.mean(np.linalg.norm(residual, ord=1, axis=-1))
 
 
 def median_absolute_error(residual):
-    return np.median(np.abs(residual))
+    return np.median(np.linalg.norm(residual, ord=1, axis=-1))
 
 
 def percentile25_absolute_error(residual):
-    return np.percentile(np.abs(residual), 25)
+    return np.percentile(np.linalg.norm(residual, ord=1, axis=-1), 25)
 
 
 def percentile75_absolute_error(residual):
-    return np.percentile(np.abs(residual), 75)
+    return np.percentile(np.linalg.norm(residual, ord=1, axis=-1), 75)
 
 
 def percentile99_absolute_error(residual):
-    return np.percentile(np.abs(residual), 99)
+    return np.percentile(np.linalg.norm(residual, ord=1, axis=-1), 99)
 
 
 def max_absolute_error(residual):
-    return np.max(np.abs(residual))
+    return np.max(np.linalg.norm(residual, ord=1, axis=-1))
 
 
 def root_mean_squared_error(residual):
-    return np.sqrt(np.mean((residual) ** 2))
+    return np.mean(np.linalg.norm(residual, ord=2, axis=-1))
 
 
 def root_median_squared_error(residual):
-    return np.sqrt(np.median((residual) ** 2))
+    return np.median(np.linalg.norm(residual, ord=2, axis=-1))
 
 
 def root_percentile25_squared_error(residual):
-    return np.sqrt(np.percentile((residual) ** 2, 25))
+    return np.percentile(np.linalg.norm(residual, ord=2, axis=-1), 25)
 
 
 def root_percentile75_squared_error(residual):
-    return np.sqrt(np.percentile((residual) ** 2, 75))
+    return np.percentile(np.linalg.norm(residual, ord=2, axis=-1), 75)
 
 
 def root_percentile99_squared_error(residual):
-    return np.sqrt(np.percentile((residual) ** 2, 99))
+    return np.percentile(np.linalg.norm(residual, ord=2, axis=-1), 99)
 
 
 def root_max_squared_error(residual):
-    return np.sqrt(np.max((residual) ** 2))
+    return np.max(np.linalg.norm(residual, ord=2, axis=-1))
 
 
 metrics = {
@@ -189,7 +189,9 @@ def evaluate(file_path):
     T1 = time.time()
 
     x_residuals = {
-        sig: xres[..., i * 33 : (i + 1) * 33]
+        sig: xres[
+            ..., i * scenario["profile_length"] : (i + 1) * scenario["profile_length"]
+        ]
         for i, sig in enumerate(scenario["profile_names"])
     }
 
