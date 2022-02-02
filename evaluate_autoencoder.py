@@ -332,6 +332,10 @@ def evaluate(file_path):
     scenario["decoder_norm_data"] = decoder_norm_data
     scenario["evaluation_metrics"] = evaluation_metrics
 
+    A, B = helpers.lran_helpers.get_AB(model)
+    scenario["A_matrix"] = A
+    scenario["B_matrix"] = B
+
     for key, val in evaluation_metrics.items():
         print(key)
         print(val)
