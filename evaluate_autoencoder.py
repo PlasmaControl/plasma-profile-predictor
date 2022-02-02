@@ -220,18 +220,22 @@ def evaluate(file_path):
     del valdata
     gc.collect()
 
-    evaluation_metrics["p25_sigma"] = np.nanpercentile(
-        encoder_data["sigma"], 25, axis=0
-    )
-    evaluation_metrics["p50_sigma"] = np.nanpercentile(
-        encoder_data["sigma"], 50, axis=0
-    )
-    evaluation_metrics["p75_sigma"] = np.nanpercentile(
-        encoder_data["sigma"], 75, axis=0
-    )
-    evaluation_metrics["p99_sigma"] = np.nanpercentile(
-        encoder_data["sigma"], 99, axis=0
-    )
+    evaluation_metrics["p25_sigma"] = {
+        key: np.nanpercentile(val, 25, axis=0)
+        for key, val in encoder_data["sigma"].items()
+    }
+    evaluation_metrics["p50_sigma"] = {
+        key: np.nanpercentile(val, 50, axis=0)
+        for key, val in encoder_data["sigma"].items()
+    }
+    evaluation_metrics["p75_sigma"] = {
+        key: np.nanpercentile(val, 75, axis=0)
+        for key, val in encoder_data["sigma"].items()
+    }
+    evaluation_metrics["p99_sigma"] = {
+        key: np.nanpercentile(val, 99, axis=0)
+        for key, val in encoder_data["sigma"].items()
+    }
 
     print("Computing encoder data took {}s".format(time.time() - T1))
     T1 = time.time()
