@@ -327,14 +327,14 @@ def compute_ctrb(A, B):
     C = np.hstack(
         [B] + [(np.linalg.matrix_power(A, i) @ B) for i in range(1, A.shape[0])]
     )
-    k = np.linalg.matrix_rank(C)
+    k = np.linalg.matrix_rank(C, tol=1e-6)  # tol~1e-6 for single precision
 
     # find out how many cols are needed for full rank
     cols = k - 1
     ki = 0
     while ki < k:
         cols += 1
-        ki = np.linalg.matrix_rank(C[:, :cols])
+        ki = np.linalg.matrix_rank(C[:, :cols], tol=1e-6)
 
     return C, k, cols
 
