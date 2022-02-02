@@ -211,11 +211,28 @@ def evaluate(file_path):
     print("Computing metrics took {}s".format(time.time() - T1))
     T1 = time.time()
 
+    # denormalize data for the rest of it
+    valdata = helpers.normalization.denormalize(valdata, normalization_dict)
+
     encoder_data = helpers.lran_helpers.compute_encoder_data(
         model, scenario, valdata, verbose=0
     )
     del valdata
     gc.collect()
+
+    evaluation_metrics["p25_sigma"] = np.nanpercentile(
+        encoder_data["sigma"], 25, axis=0
+    )
+    evaluation_metrics["p50_sigma"] = np.nanpercentile(
+        encoder_data["sigma"], 50, axis=0
+    )
+    evaluation_metrics["p75_sigma"] = np.nanpercentile(
+        encoder_data["sigma"], 75, axis=0
+    )
+    evaluation_metrics["p99_sigma"] = np.nanpercentile(
+        encoder_data["sigma"], 99, axis=0
+    )
+
     print("Computing encoder data took {}s".format(time.time() - T1))
     T1 = time.time()
 
