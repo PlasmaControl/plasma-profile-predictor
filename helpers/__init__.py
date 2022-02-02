@@ -1,3 +1,4 @@
+from tensorflow import keras
 from . import callbacks
 from . import custom_activations
 from . import custom_constraints
@@ -18,6 +19,7 @@ custom_objects = {
     "Orthonormal": custom_constraints.Orthonormal,
     "SoftOrthonormal": custom_constraints.SoftOrthonormal,
     "Invertible": custom_constraints.Invertible,
+    "LeakyReLU": keras.layers.LeakyReLU,  # for some reason keras doesn't recognize this, so need to include here
     "InverseLeakyReLU": custom_activations.InverseLeakyReLU,
     "inverse_selu": custom_activations.inverse_selu,
 }
