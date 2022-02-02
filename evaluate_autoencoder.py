@@ -340,6 +340,10 @@ def evaluate(file_path):
     scenario["A_matrix"] = A
     scenario["B_matrix"] = B
 
+    ctrb, rank, cols = helpers.qpmpc.compute_ctrb(A, B)
+    scenario["ctrb_rank"] = rank
+    scenario["ctrb"] = ctrb
+
     for key, val in evaluation_metrics.items():
         print(key)
         print(val)
