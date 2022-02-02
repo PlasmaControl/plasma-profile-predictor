@@ -191,10 +191,7 @@ class LRANMPC:
         return out
 
     def denormalize(self, data):
-        out = {}
-        out = denormalize(
-            copy.copy(data), self._params["normalization_dict"], verbose=0
-        )
+        out = copy.copy(data)
         for key in out:
             if key in self._norm_layers:
                 norm = self._norm_layers[key]
@@ -202,6 +199,8 @@ class LRANMPC:
                     out[key] * np.sqrt(norm.moving_variance.numpy() + norm.epsilon)
                     + norm.moving_mean.numpy()
                 )
+        out = denormalize(out, self._params["normalization_dict"], verbose=0)
+
         return out
 
     def encode(self, state):
@@ -743,7 +742,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         traindata, valdata, normalization_dict = process_data(
             rawdata,
             scenario["sig_names"],
-            scenario["normalization_method"],
+            None,  # scenario["normalization_method"],
             scenario["window_length"],
             scenario["window_overlap"],
             0,  # scenario["lookback"],
@@ -771,9 +770,13 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     # parse data into timesteps / arrays
     xk_dict = {
         key: (
-            valdata[key][:nsamples, : scenario["lookahead"] + 1, ::2]
+            valdata[key][
+                :nsamples,
+                : scenario["lookahead"] + 1,
+                :: scenario["profile_downsample"],
+            ]
             if valdata[key].ndim == 3
-            else valdata[key][:nsamples, : scenario["lookahead"] + 1].reshape((-1, 1))
+            else valdata[key][:nsamples, : scenario["lookahead"] + 1]
         )
         for key in (scenario["profile_names"] + scenario["scalar_names"])
     }
@@ -790,35 +793,44 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
     lran = LRANMPC(model, scenario)
 
     if verbose:
+        print("computing sigma")
+
+    sigma = compute_sigma_metric(lran, xk_dict, uk_dict)
+
+    if verbose:
         print("Encoding")
 
     # encode data
-    xk_dict = lran.normalize(xk_dict)
-    uk_dict = lran.normalize(uk_dict)
+    xk_dict_norm = lran.normalize(xk_dict)
+    uk_dict_norm = lran.normalize(uk_dict)
     xk = np.concatenate(
         [
-            xk_dict[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
+            xk_dict_norm[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
             for sig in lran.state_names
         ],
         axis=-1,
     )
     uk = np.concatenate(
         [
-            uk_dict[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
+            uk_dict_norm[sig].reshape((nsamples, scenario["lookahead"] + 1, -1))
             for sig in lran.actuator_names
         ],
         axis=-1,
     )
 
-    zk = lran.encode(xk_dict)
-    vk = np.stack([uk_dict[sig] for sig in scenario["actuator_names"]], axis=-1)
+    zk = lran.encode(xk_dict_norm)
+    vk = np.stack([uk_dict_norm[sig] for sig in scenario["actuator_names"]], axis=-1)
     vk = np.moveaxis(vk, 0, 1)
     # compute residuals
+    if verbose:
+        print("Predicting")
     zkp = lran.predict_latent(zk[:, 0, :], vk)
     vk = np.moveaxis(vk, 0, 1)
     zkp = np.moveaxis(zkp, 0, 1)
     dz = zkp[:, :-1, :] - zk
 
+    if verbose:
+        print("Decoding")
     xkp = lran.decode(zkp)
     xkp = np.concatenate(
         [xkp[sig].reshape(zkp.shape[:2] + (-1,)) for sig in lran.state_names],
@@ -841,6 +853,7 @@ def compute_encoder_data(model, scenario, rawdata, verbose=2):
         "zp1": zkp[:, 1, :],
         "dx": dx,
         "dz": dz,
+        "sigma": sigma,
     }
     return encoder_data
 
@@ -892,3 +905,43 @@ def compute_norm_data(x, z, nsamples=None, workers=1, verbose=True):
         "z0_norm": z0_norm,
     }
     return norm_data
+
+
+def compute_sigma_metric(lran, x, u):
+    """Computes sigma metric for comparison to transport codes
+
+    sigma = norm(error)/norm(profile)
+
+    Parameters
+    ----------
+    lran : LRANMPC objet
+        model/predictor class
+    x : dict of ndarray, shape (samples, times, space)
+        input data for profiles and scalars
+    u : dict of ndarray, shape (samples, times, 1)
+        actuator inputs to model
+
+    Returns
+    -------
+    sigma : dict of ndarray, shape (samples, times)
+        sigma metric for each profile/scalar over time
+    """
+    # make sure scalars are treated correctly
+    for key in x.keys():
+        if x[key].ndim == 2:
+            x[key] = x[key][:, :, None]
+
+    x0 = {key: val[:, 0] for key, val in x.items()}
+    xp = lran.predict(x0, u)
+    for key in xp.keys():
+        if xp[key].ndim == 2:
+            xp[key] = xp[key][:, :, None]
+
+    num = {key: np.linalg.norm(x[key] - xp[key][:, :-1], axis=-1) for key in x.keys()}
+    den = {key: np.linalg.norm(x[key], axis=-1) for key in x.keys()}
+
+    # avoid dividing by zero
+    mask = ~np.any([np.isclose(den[key], 0) for key in x.keys()], axis=(0, -1))
+    sigma = {key: num[key][mask] / den[key][mask] for key in x.keys()}
+
+    return sigma
