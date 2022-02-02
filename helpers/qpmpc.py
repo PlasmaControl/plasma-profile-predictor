@@ -305,7 +305,7 @@ def mpc_action(
     return uhat, lagrange
 
 
-def compute_ctrb(A, B):
+def compute_ctrb(A, B, tol=None):
     """Compute controllability matrix
 
     Parameters
@@ -314,6 +314,9 @@ def compute_ctrb(A, B):
         system dynamics matrix
     B : ndarray, shape(N,M)
         system control matrix
+    tol : float or None
+        tolerance on singular values for rank test
+        None defaults to S.max() * M * N * eps
 
     Returns
     -------
@@ -327,14 +330,14 @@ def compute_ctrb(A, B):
     C = np.hstack(
         [B] + [(np.linalg.matrix_power(A, i) @ B) for i in range(1, A.shape[0])]
     )
-    k = np.linalg.matrix_rank(C, tol=1e-6)  # tol~1e-6 for single precision
+    k = np.linalg.matrix_rank(C, tol=tol)  # tol~1e-6 for single precision
 
     # find out how many cols are needed for full rank
     cols = k - 1
     ki = 0
     while ki < k:
         cols += 1
-        ki = np.linalg.matrix_rank(C[:, :cols], tol=1e-6)
+        ki = np.linalg.matrix_rank(C[:, :cols], tol=tol)
 
     return C, k, cols
 
