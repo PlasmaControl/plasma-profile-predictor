@@ -380,6 +380,9 @@ class AutoEncoderDataGenerator(Sequence):
             "linear_system_residual": np.zeros(
                 (self.batch_size, self.lookahead, self.state_latent_dim)
             ),
+            "linear_system_residual_rel": np.zeros(
+                (self.batch_size, self.lookahead, self.state_latent_dim)
+            )
         }
         time_weights = np.array(
             [self.discount_factor ** i for i in range(self.lookahead)]
@@ -390,6 +393,7 @@ class AutoEncoderDataGenerator(Sequence):
             "x_residual": self.x_weight * sample_weights * time_ones,
             "u_residual": self.u_weight * sample_weights * time_ones,
             "linear_system_residual": time_weights * sample_weights,
+            "linear_system_residual_rel": time_weights * sample_weights
         }
 
         if self.times_called % len(self) == 0 and self.shuffle:

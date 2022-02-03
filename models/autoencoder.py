@@ -21,6 +21,7 @@ from helpers.custom_layers import (
     MultiTimeDistributed,
     InverseBatchNormalization,
     InverseDense,
+    RelativeError
 )
 from helpers.custom_activations import InverseLeakyReLU
 from helpers.custom_constraints import SoftOrthonormal, Orthonormal, Invertible
@@ -648,6 +649,9 @@ def make_autoencoder(
         AB(vi, initial_state=z0)
     )
     x1_residual = subtract([z1, z1est], name="linear_system_residual")
+    x1_residual_rel = RelativeError(lookahead=lookahead,
+                                    stepwise=True,
+                                    name="linear_system_residual_rel")([z1, z1est])
     xicat = Concatenate()(xi)
     xocat = Concatenate()(xo)
     uicat = Concatenate()(ui)
@@ -656,6 +660,6 @@ def make_autoencoder(
     u_res = subtract([uicat, uocat], name="u_residual")
     model = Model(
         inputs=profile_inputs + scalar_inputs + actuator_inputs,
-        outputs=[u_res, x_res, x1_residual],
+        outputs=[u_res, x_res, x1_residual, x1_residual_rel],
     )
     return model

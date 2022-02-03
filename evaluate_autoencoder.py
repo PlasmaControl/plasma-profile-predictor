@@ -182,7 +182,7 @@ def evaluate(file_path):
         sample_weights=None,
     )
 
-    ures, xres, lres = model.predict(
+    ures, xres, lres, lres_rel = model.predict(
         val_generator, verbose=0, workers=4, use_multiprocessing=True
     )
     print("Computing residuals took {}s".format(time.time() - T1))
