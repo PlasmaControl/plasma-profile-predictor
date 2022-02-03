@@ -129,7 +129,7 @@ class InverseBatchNormalization(Wrapper):
 
 
 class RelativeError(tf.keras.layers.Layer):
-    """ Layer for computing relative squared error
+    """Layer for computing relative squared error
     for the latent state
 
     Should be called with a list of 2 tensors [true, pred]
@@ -140,12 +140,15 @@ class RelativeError(tf.keras.layers.Layer):
         number of timesteps in input
     stepwise : bool
         whether to normalize each step independently, or same for all
+    eps : float
+        small positive value to add to scale to avoid division by zero
     """
-    
-    def __init__(self, lookahead, stepwise=False, name='', **kwargs):
+
+    def __init__(self, lookahead, stepwise=False, eps=1e-3, name="", **kwargs):
         super(RelativeError, self).__init__(name=name, **kwargs)
         self.lookahead = lookahead
         self.stepwise = stepwise
+        self.eps = eps
 
     def call(self, inputs):
         pred_unstack = tf.unstack(inputs[1], num=self.lookahead, axis=1)
@@ -155,13 +158,14 @@ class RelativeError(tf.keras.layers.Layer):
         # each time step
         if self.stepwise:
             rel_error = [
-                (elem[0] - elem[1]) / (tf.norm(elem[1], axis=1, keepdims=True))
+                (elem[0] - elem[1])
+                / (tf.norm(elem[1], axis=1, keepdims=True) + self.eps)
                 for elem in zip(pred_unstack, true_unstack)
             ]
             return tf.stack(rel_error, axis=1)
         # scale everything by the first true encoded state and then subtract
         else:
-            scaling_factor = tf.norm(true_unstack[0], axis=1, keepdims=True)
+            scaling_factor = tf.norm(true_unstack[0], axis=1, keepdims=True) + self.eps
             rel_error = [
                 (elem[0] - elem[1]) / scaling_factor
                 for elem in zip(pred_unstack, true_unstack)
