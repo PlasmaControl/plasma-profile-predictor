@@ -324,6 +324,12 @@ class AutoEncoderDataGenerator(Sequence):
         self.discount_factor = discount_factor
         self.x_weight = x_weight
         self.u_weight = u_weight
+        self.x_rel_weight = kwargs.get("x_rel_weight", self.x_weight)
+        self.u_rel_weight = kwargs.get("u_rel_weight", self.u_weight)
+        self.x1_weight = kwargs.get("x1_weight", 1)
+        self.x1_rel_weight = kwargs.get("x1_rel_weight", self.x1_weight)
+        self.z1_weight = kwargs.get("z1_weight", 1)
+        self.z1_rel_weight = kwargs.get("z1_rel_weight", self.z1_weight)
         self.shuffle = shuffle
         self.kwargs = kwargs
         self.times_called = 0
@@ -374,15 +380,25 @@ class AutoEncoderDataGenerator(Sequence):
             "x_residual": np.zeros(
                 (self.batch_size, self.lookahead + 1, self.state_dim)
             ),
+            "x_residual_rel": np.zeros(
+                (self.batch_size, self.lookahead + 1, self.state_dim)
+            ),
             "u_residual": np.zeros(
                 (self.batch_size, self.lookahead + 1, self.num_actuators)
             ),
-            "linear_system_residual": np.zeros(
+            "u_residual_rel": np.zeros(
+                (self.batch_size, self.lookahead + 1, self.num_actuators)
+            ),
+            "z1_residual": np.zeros(
                 (self.batch_size, self.lookahead, self.state_latent_dim)
             ),
-            "linear_system_residual_rel": np.zeros(
+            "z1_residual_rel": np.zeros(
                 (self.batch_size, self.lookahead, self.state_latent_dim)
-            )
+            ),
+            "x1_residual": np.zeros((self.batch_size, self.lookahead, self.state_dim)),
+            "x1_residual_rel": np.zeros(
+                (self.batch_size, self.lookahead, self.state_dim)
+            ),
         }
         time_weights = np.array(
             [self.discount_factor ** i for i in range(self.lookahead)]
@@ -392,8 +408,12 @@ class AutoEncoderDataGenerator(Sequence):
         weights_dict = {
             "x_residual": self.x_weight * sample_weights * time_ones,
             "u_residual": self.u_weight * sample_weights * time_ones,
-            "linear_system_residual": time_weights * sample_weights,
-            "linear_system_residual_rel": time_weights * sample_weights
+            "x_residual_rel": self.x_rel_weight * sample_weights * time_ones,
+            "u_residual_rel": self.u_rel_weight * sample_weights * time_ones,
+            "z1_residual": self.z1_weight * time_weights * sample_weights,
+            "x1_residual": self.x1_weight * time_weights * sample_weights,
+            "z1_residual_rel": self.z1_rel_weight * time_weights * sample_weights,
+            "x1_residual_rel": self.x1_rel_weight * time_weights * sample_weights,
         }
 
         if self.times_called % len(self) == 0 and self.shuffle:
@@ -455,15 +475,18 @@ class AutoEncoderDataGenerator(Sequence):
         for sig in self.scalar_inputs:
             inp["input_" + sig] = self.data[sig][inds, :]
         targ = {
-            "x_residual": np.zeros(
-                (self.batch_size, self.lookahead + 1, self.state_dim)
+            "x_residual": np.zeros((len(inds), self.lookahead + 1, self.state_dim)),
+            "x_residual_rel": np.zeros((len(inds), self.lookahead + 1, self.state_dim)),
+            "u_residual": np.zeros((len(inds), self.lookahead + 1, self.num_actuators)),
+            "u_residual_rel": np.zeros(
+                (len(inds), self.lookahead + 1, self.num_actuators)
             ),
-            "u_residual": np.zeros(
-                (self.batch_size, self.lookahead, self.num_actuators)
+            "z1_residual": np.zeros((len(inds), self.lookahead, self.state_latent_dim)),
+            "z1_residual_rel": np.zeros(
+                (len(inds), self.lookahead, self.state_latent_dim)
             ),
-            "linear_system_residual": np.zeros(
-                (self.batch_size, self.lookahead, self.state_latent_dim)
-            ),
+            "x1_residual": np.zeros((len(inds), self.lookahead, self.state_dim)),
+            "x1_residual_rel": np.zeros((len(inds), self.lookahead, self.state_dim)),
         }
 
         actual_shots_times = {
