@@ -21,7 +21,7 @@ from helpers.custom_layers import (
     MultiTimeDistributed,
     InverseBatchNormalization,
     InverseDense,
-    RelativeError
+    RelativeError,
 )
 from helpers.custom_activations import InverseLeakyReLU
 from helpers.custom_constraints import SoftOrthonormal, Orthonormal, Invertible
@@ -626,15 +626,28 @@ def make_autoencoder(
     xi = state_input(profile_inputs + scalar_inputs)
     ui = control_input(actuator_inputs)
 
-    zi = MultiTimeDistributed(state_encoder, name="state_encoder_time_dist")(xi)
-    xo = MultiTimeDistributed(state_decoder, name="state_decoder_time_dist")(zi)
+    state_encoder_time_dist = MultiTimeDistributed(
+        state_encoder, name="state_encoder_time_dist"
+    )
+    state_decoder_time_dist = MultiTimeDistributed(
+        state_decoder, name="state_decoder_time_dist"
+    )
 
-    vi = MultiTimeDistributed(control_encoder, name="ctrl_encoder_time_dist")(ui)
-    uo = MultiTimeDistributed(control_decoder, name="ctrl_decoder_time_dist")(vi)
+    ctrl_encoder_time_dist = MultiTimeDistributed(
+        control_encoder, name="ctrl_encoder_time_dist"
+    )
+    ctrl_decoder_time_dist = MultiTimeDistributed(
+        control_decoder, name="ctrl_decoder_time_dist"
+    )
 
-    z0 = Reshape((state_latent_dim,), name="x0")(Cropping1D((0, lookahead))(zi))
-    z1 = Cropping1D((1, 0), name="x1")(zi)
-    vi = Cropping1D((0, 1), name="u")(vi)
+    zi = state_encoder_time_dist(xi)
+    xo = state_decoder_time_dist(zi)
+    vi = ctrl_encoder_time_dist(ui)
+    uo = ctrl_decoder_time_dist(vi)
+
+    z0 = Reshape((state_latent_dim,), name="z0")(Cropping1D((0, lookahead))(zi))
+    z1 = Cropping1D((1, 0), name="z1")(zi)
+    vi = Cropping1D((0, 1), name="v")(vi)
 
     AB = SimpleRNN(
         units=state_latent_dim,
@@ -645,21 +658,49 @@ def make_autoencoder(
         **recurrent_kwargs,
     )
 
-    z1est = Reshape((lookahead, state_latent_dim), name="x1est")(
+    z1est = Reshape((lookahead, state_latent_dim), name="z1est")(
         AB(vi, initial_state=z0)
     )
-    x1_residual = subtract([z1, z1est], name="linear_system_residual")
-    x1_residual_rel = RelativeError(lookahead=lookahead,
-                                    stepwise=True,
-                                    name="linear_system_residual_rel")([z1, z1est])
+
+    x1 = state_decoder_time_dist(z1)
+    x1cat = Concatenate()(x1)
+    x1est = state_decoder_time_dist(z1est)
+    x1estcat = Concatenate()(x1est)
+    x1_residual = subtract([x1cat, x1estcat], name="x1_residual")
+    x1_residual_rel = RelativeError(
+        lookahead=lookahead, stepwise=True, name="x1_residual_rel"
+    )([x1cat, x1estcat])
+
+    z1_residual = subtract([z1, z1est], name="linear_system_residual")
+    z1_residual_rel = RelativeError(
+        lookahead=lookahead, stepwise=True, name="linear_system_residual_rel"
+    )([z1, z1est])
+
     xicat = Concatenate()(xi)
     xocat = Concatenate()(xo)
+    x_res = subtract([xicat, xocat], name="x_residual")
+    x_res_rel = RelativeError(
+        lookahead=lookahead + 1, stepwise=True, name="x_residual_rel"
+    )([xicat, xocat])
+
     uicat = Concatenate()(ui)
     uocat = Concatenate()(uo)
-    x_res = subtract([xicat, xocat], name="x_residual")
     u_res = subtract([uicat, uocat], name="u_residual")
+    u_res_rel = RelativeError(
+        lookahead=lookahead + 1, stepwise=True, name="u_residual_rel"
+    )([uicat, uocat])
+
     model = Model(
         inputs=profile_inputs + scalar_inputs + actuator_inputs,
-        outputs=[u_res, x_res, x1_residual, x1_residual_rel],
+        outputs=[
+            u_res,
+            u_res_rel,
+            x_res,
+            x_res_rel,
+            z1_residual,
+            z1_residual_rel,
+            x1_residual,
+            x1_residual_rel,
+        ],
     )
     return model
