@@ -507,10 +507,10 @@ def get_latent_linear_model(
     """
     if regularization is None:
         regularization = {"l1A": 0, "l2A": 0, "l1B": 0, "l2B": 0}
-    xi = Input(batch_shape=(batch_size, lookahead + 1, state_latent_dim), name="xi")
+    zi = Input(batch_shape=(batch_size, lookahead + 1, state_latent_dim), name="zi")
     ui = Input(batch_shape=(batch_size, lookahead, control_latent_dim), name="ui")
-    x0 = Reshape((state_latent_dim,), name="x0")(Cropping1D((0, lookahead))(xi))
-    x1 = Cropping1D((1, 0), name="x1")(xi)
+    x0 = Reshape((state_latent_dim,), name="x0")(Cropping1D((0, lookahead))(zi))
+    z1 = Cropping1D((1, 0), name="z1")(zi)
     u = Cropping1D((0, 1), name="u")(ui)
 
     AB = SimpleRNN(
@@ -527,11 +527,11 @@ def get_latent_linear_model(
         return_sequences=True,
     )
 
-    x1est = Reshape((lookahead, state_latent_dim), name="x1est")(
-        AB(u, initial_state=x0)
+    z1est = Reshape((lookahead, state_latent_dim), name="z1est")(
+        AB(u, initial_state=z0)
     )
-    x1_residual = subtract([x1, x1est], name="linear_system_residual")
-    model = Model(inputs=[xi, ui], outputs=x1_residual, name="latent_linear_system")
+    z1_residual = subtract([z1, z1est], name="z1_residual")
+    model = Model(inputs=[zi, ui], outputs=z1_residual, name="latent_linear_system")
     return model
 
 
@@ -671,9 +671,9 @@ def make_autoencoder(
         lookahead=lookahead, stepwise=True, name="x1_residual_rel"
     )([x1cat, x1estcat])
 
-    z1_residual = subtract([z1, z1est], name="linear_system_residual")
+    z1_residual = subtract([z1, z1est], name="z1_residual")
     z1_residual_rel = RelativeError(
-        lookahead=lookahead, stepwise=True, name="linear_system_residual_rel"
+        lookahead=lookahead, stepwise=True, name="z1_residual_rel"
     )([z1, z1est])
 
     xicat = Concatenate()(xi)
