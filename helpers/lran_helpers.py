@@ -163,6 +163,7 @@ class LRANMPC:
         xt : dict of ndarray
             predicted future values of physical state
         """
+        batch = False
         x0 = self.normalize(x0)
         u = self.normalize(u)
         z0 = self.encode(x0).squeeze()
