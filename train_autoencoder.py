@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_01_28_22/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_02_03_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -343,7 +343,7 @@ def main(scenario_index=-2):
     scenario["runname"] = "LRAN" + time.strftime("_%d%b%y-%H-%M", time.localtime())
     if scenario_index >= 0:
         scenario["runname"] += "_Scenario-{:04d}".format(scenario_index)
-    scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.tf"
+    scenario["model_path"] = checkpt_dir + scenario["runname"] + "_model.h5"
     print(scenario["runname"])
 
     ###############
@@ -504,9 +504,9 @@ def main(scenario_index=-2):
     scenario["history"] = history.history
     scenario["history_params"] = history.params
 
-    if not any([isinstance(cb, ModelCheckpoint) for cb in callbacks]):
-        model.save(scenario["model_path"])
-        print("Saved model after training")
+    model.save(scenario["model_path"])
+    model.save(scenario["model_path"][:-2] + "tf")
+    print("Saved model after training")
     with open(checkpt_dir + scenario["runname"] + "_params.pkl", "wb+") as f:
         pickle.dump(copy.deepcopy(scenario), f)
     print("Saved Analysis params after training")
