@@ -96,7 +96,7 @@ def main(scenario_index=-2):
         "optimizer": "adam",
         "optimizer_kwargs": {"lr": 0.001},
         "shuffle_generators": True,  # re-order samples on each epoch
-        "loss_function": "mse",
+        "loss_function": "mae",
         "loss_function_kwargs": {},
         "batch_size": 64,
         "epochs": 400,
@@ -166,16 +166,6 @@ def main(scenario_index=-2):
                 "tinj",
                 "curr_target",
                 "target_density",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
-        },
-        {
-            "actuator_names": [
-                "pinj",
-                "tinj",
-                "curr_target",
-                "target_density",
                 "ech",
             ]
             + signal_groups.C_coils
@@ -199,18 +189,50 @@ def main(scenario_index=-2):
                 "triangularity_bot_{}".format(efit_type),
             ]
         },
-        {"scalar_names": []},
+        {
+            "scalar_names": [
+                "density_estimate",
+                "curr",
+                "betan",
+                "betap",
+                "vloop",
+                "wmhd",
+                "li_{}".format(efit_type),
+                "a_{}".format(efit_type),
+                "drsep_{}".format(efit_type),
+                "kappa_{}".format(efit_type),
+                "rmagx_{}".format(efit_type),
+                "zmagX_{}".format(efit_type),
+                "volume_{}".format(efit_type),
+                "triangularity_top_{}".format(efit_type),
+                "triangularity_bot_{}".format(efit_type),
+                "n1rms",
+                "n2rms",
+                "n3rms",
+            ]
+        },
     ]
     scenarios_dict["lookahead"] = [
         {"lookahead": 10},
         {"lookahead": 20},
     ]
-    scenarios_dict["loss"] = [
-        {"loss_function": "mse"},
-        {"loss_function": "mae"},
-        {"loss_function": "logcosh"},
+    scenarios_dict["profile_downsample"] = [
+        {"profile_downsample": 2},
+        {"profile_downsample": 4},
+    ]
+    scenarios_dict["weighting"] = [
+        {"x1_weight": 0, "z1_weight": 1},
+        {"x1_weight": 1, "z1_weight": 0},
+        {"x1_weight": 1, "z1_weight": 1},
     ]
     scenarios_dict["state_encoder_kwargs"] = [
+        {
+            "state_encoder_kwargs": {
+                "num_layers": 2,
+                "activation": "leaky_relu",
+                "norm": True,
+            },
+        },
         {
             "state_encoder_kwargs": {
                 "num_layers": 4,
@@ -221,13 +243,6 @@ def main(scenario_index=-2):
         {
             "state_encoder_kwargs": {
                 "num_layers": 6,
-                "activation": "leaky_relu",
-                "norm": True,
-            },
-        },
-        {
-            "state_encoder_kwargs": {
-                "num_layers": 8,
                 "activation": "leaky_relu",
                 "norm": True,
             },
@@ -349,6 +364,8 @@ def main(scenario_index=-2):
         scenario["u_weight"],
         scenario["shuffle_generators"],
         sample_weights=scenario["sample_weights"],
+        x1_weight=scenario.get("x1_weight", 1),
+        z1_weight=scenario.get("z1_weight", 1),
     )
     val_generator = AutoEncoderDataGenerator(
         valdata,
@@ -364,6 +381,8 @@ def main(scenario_index=-2):
         scenario["u_weight"],
         scenario["shuffle_generators"],
         sample_weights=scenario["sample_weights"],
+        x1_weight=scenario.get("x1_weight", 1),
+        z1_weight=scenario.get("z1_weight", 1),
     )
     print("Made Generators")
 
