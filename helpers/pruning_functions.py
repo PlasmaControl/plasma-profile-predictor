@@ -1,5 +1,6 @@
 import numpy as np
 import numba
+import helpers.signal_groups
 
 
 def prune_loop(inds, shotnumarr, timearr):
@@ -321,6 +322,8 @@ def remove_outliers(data, verbose):
         for sig in data.keys():
             data[sig] = data[sig][list(keep_inds)]
         # get rid of all zero profiles
+        if verbose:
+            print("Removing all-zero q profiles")
         remove_inds = np.where(np.sum(np.abs(data["q_EFIT02"]), axis=-1) < 0.1)[0]
         remove_inds = np.unique(remove_inds)
         if verbose:
@@ -344,31 +347,20 @@ def remove_outliers(data, verbose):
             print("{} samples remaining".format(len(keep_inds)))
         for sig in data.keys():
             data[sig] = data[sig][list(keep_inds)]
-        # remove negative pressure profiles
-        if verbose:
-            print("Removing negative pressure profiles")
-        remove_inds = np.where(data["press_EFIT02"] < 0)[0]
-        remove_inds = np.unique(remove_inds)
-        if verbose:
-            print("Removed {} samples".format(len(remove_inds)))
-        keep_inds = set(range(len(data["time"]))).difference(remove_inds)
-        if verbose:
-            print("{} samples remaining".format(len(keep_inds)))
-        for sig in data.keys():
-            data[sig] = data[sig][list(keep_inds)]
 
-    if "press_EFIT01" in data:
-        # remove negative pressure profiles
-        if verbose:
-            print("Removing negative pressure profiles")
-        remove_inds = np.where(data["press_EFIT01"] < 0)[0]
-        remove_inds = np.unique(remove_inds)
-        if verbose:
-            print("Removed {} samples".format(len(remove_inds)))
-        keep_inds = set(range(len(data["time"]))).difference(remove_inds)
-        if verbose:
-            print("{} samples remaining".format(len(keep_inds)))
-        for sig in data.keys():
-            data[sig] = data[sig][list(keep_inds)]
+    # remove negative values
+    for sig in data.keys():
+        if sig in helpers.signal_groups.non_neg:
+            if verbose:
+                print("Removing negative {}".format(sig))
+            remove_inds = np.where(data[sig] < 0)[0]
+            remove_inds = np.unique(remove_inds)
+            if verbose:
+                print("Removed {} samples".format(len(remove_inds)))
+            keep_inds = set(range(len(data["time"]))).difference(remove_inds)
+            if verbose:
+                print("{} samples remaining".format(len(keep_inds)))
+            for sig1 in data.keys():
+                data[sig1] = data[sig1][list(keep_inds)]
 
     return data
