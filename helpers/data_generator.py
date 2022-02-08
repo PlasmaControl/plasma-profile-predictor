@@ -20,7 +20,7 @@ from helpers.pruning_functions import (
     remove_non_beta_feedback,
     remove_outliers,
 )
-from helpers import exclude_shots
+from helpers import exclude_shots, signal_groups
 
 
 class DataGenerator(Sequence):
@@ -504,8 +504,8 @@ def process_data(
     window_length=1,
     window_overlap=0,
     lookbacks={},
-    lookahead=3,
-    sample_step=5,
+    lookahead=1,
+    sample_step=1,
     uniform_normalization=True,
     train_frac=0.7,
     val_frac=0.2,
@@ -521,14 +521,14 @@ def process_data(
     and split into training and validation sets.
 
     Args:
-        rawdata (dict): Nested dictionary of raw signal data, or path to pickle.
+        rawdata (dict or path-like): Nested dictionary of raw signal data, or path to pickle.
             Should be of the form rawdata[shot][signal_name] = signal_data.
         sig_names (list): List of signal names as strings.
         normalization_method (str): One of `StandardScaler`, `MinMax`, `MaxAbs`,
-            `RobustScaler`, `PowerTransform`.
-        window_length (int): Number of samples to average over in each bin/window.
+            `RobustScaler`, `PowerTransform` or None.
+        window_length (int): Number of 50ms samples to average over in each bin/window.
         window_overlap (int): How many timesteps to overlap windows.
-        lookbacks (dict of int): How many window lengths for lookback for each sig.
+        lookbacks (int or dict of int): How many window lengths for lookback for each sig.
         lookahead (int): How many window lengths to predict into the future.
         sample_step (int): How much to offset sequential training sequences.
             Step of 1 means sample[i] and sample[i+1] will be offset by 1, with
@@ -545,10 +545,11 @@ def process_data(
         pruning_functions (array-like of str or fn handle): Names of pruning functions to use.
             Options are:
                 "remove_nan": (on by default): remove all time slices with NaN data
-                "remove_ECH": remove time slices during and after ECH turn on
-                "remove_gas": remove time slices during and after non H/D/T gas injection
-                "remove_I_coil": remove time slices during and after non standard I coil operations
-                "remove_dudtrip": remove time slices during and after dudtrip signal (ie disruption, pcs crash etc)
+                "remove_outliers": (recommended) remove weird values for various signals
+                "remove_ECH": (on by default if ECH not in sigs) remove time slices during and after ECH turn on
+                "remove_gas": (on by default if gasB/C/D not in sigs) remove time slices during and after non H/D/T gas injection
+                "remove_I_coil": (on by default if I/C coils not in sigs) remove time slices during and after non standard I coil operations
+                "remove_dudtrip": (recommended) remove time slices during and after dudtrip signal (ie disruption, pcs crash etc)
                 "remove_non_gas_feedback": remove time slices where density feedback control is not used
                 "remove_non_beta_feedback": remove time slices where beta feedback is not used
         excluded_shots (array): List of shot numbers to exclude, or name of standard set based on topology:
@@ -584,33 +585,15 @@ def process_data(
     ##############################
     # get pruning functions
     ##############################
-    IC_coils = [
-        "C_coil_139",
-        "C_coil_19",
-        "C_coil_199",
-        "C_coil_259",
-        "C_coil_319",
-        "C_coil_79",
-        "I_coil_150L",
-        "I_coil_150U",
-        "I_coil_210L",
-        "I_coil_210U",
-        "I_coil_270L",
-        "I_coil_270U",
-        "I_coil_30L",
-        "I_coil_30U",
-        "I_coil_330L",
-        "I_coil_330U",
-        "I_coil_90L",
-        "I_coil_90U",
-    ]
-
     pruning_functions = copy.copy(kwargs.get("pruning_functions", []))
+    pruning_functions.append("remove_nan")
     if "ech" not in sig_names:
         pruning_functions.append("remove_ECH")
     if not {"gasB", "gasC", "gasD", "gasE"}.issubset(set(sig_names)):
         pruning_functions.append("remove_gas")
-    if not set(IC_coils).issubset(set(sig_names)):
+    if not set(signal_groups.I_coils).issubset(set(sig_names)) and set(
+        signal_groups.C_coils
+    ).issubset(set(sig_names)):
         pruning_functions.append("remove_I_coil")
 
     prun_dict = {
