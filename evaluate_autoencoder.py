@@ -182,9 +182,14 @@ def evaluate(file_path):
         sample_weights=None,
     )
 
-    ures, xres, lres, lres_rel = model.predict(
-        val_generator, verbose=0, workers=4, use_multiprocessing=True
-    )
+    res = model.predict(val_generator, verbose=0, workers=4, use_multiprocessing=True)
+    if len(res) == 3:
+        ures, xres, lres = res
+    elif len(res) == 8:
+        ures, _, xres, _, lres, _, _, _ = res
+    else:
+        raise ValueError("unknown model outputs")
+
     print("Computing residuals took {}s".format(time.time() - T1))
     T1 = time.time()
 
