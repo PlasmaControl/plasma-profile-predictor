@@ -148,7 +148,7 @@ def evaluate(file_path):
         scenario["window_length"],
         scenario["window_overlap"],
         0,  # scenario['lookback'],
-        scenario["lookahead"],
+        20,  # scenario["lookahead"], # always evaluate 1s into future
         scenario["sample_step"],
         scenario["uniform_normalization"],
         1,  # scenario['train_frac'],
@@ -172,7 +172,7 @@ def evaluate(file_path):
         scenario["profile_names"],
         scenario["actuator_names"],
         scenario["scalar_names"],
-        scenario["lookahead"],
+        20,  # scenario["lookahead"], # always evaluate 1s into future
         scenario["profile_downsample"],
         scenario["state_latent_dim"],
         1,  # scenario["discount_factor"],
