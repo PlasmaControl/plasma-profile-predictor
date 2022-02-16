@@ -720,10 +720,14 @@ def process_data(
         ):
             # shot missing sigs
             shots_without_sigs.append(shot)
-        if set(sigsplustime).issubset(set(rawdata[shot].keys())) and rawdata[shot][
-            "time"
-        ].size > (max_lookback + lookahead) * (window_length - window_overlap):
+        if shot in excluded_shots:
             shots_excluded.append(shot)
+
+    if verbose:
+        print("Number shots total: {}\n".format(len(all_shots)))
+        print("Number without sigs: {}\n".format(len(shots_without_sigs)))
+        print("Number too short: {}\n".format(len(shots_too_short)))
+        print("Number excluded: {}\n".format(len(shots_excluded)))
 
     usabledata = np.array(usabledata)
     if len(usabledata) == 0:
