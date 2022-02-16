@@ -41,7 +41,7 @@ def main(scenario_index=-2):
     # global stuff
     ###############
 
-    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_02_03_22/"
+    checkpt_dir = "/projects/EKOLEMEN/profile_predictor/LRAN_02_16_22/"
     if not os.path.exists(checkpt_dir):
         os.makedirs(checkpt_dir)
 
@@ -63,16 +63,22 @@ def main(scenario_index=-2):
         "scalar_names": [
             "density_estimate",
             "curr",
+            "betan",
+            "betap",
+            "vloop",
+            "wmhd",
+            "li_{}".format(efit_type),
             "a_{}".format(efit_type),
-            "betan_{}".format(efit_type),
             "drsep_{}".format(efit_type),
             "kappa_{}".format(efit_type),
-            "li_{}".format(efit_type),
             "rmagx_{}".format(efit_type),
             "zmagX_{}".format(efit_type),
             "volume_{}".format(efit_type),
             "triangularity_top_{}".format(efit_type),
             "triangularity_bot_{}".format(efit_type),
+            "n1rms",
+            "n2rms",
+            "n3rms",
         ],
         ### what type of model to use and settings etc.
         "state_encoder_type": "invertible",
@@ -149,67 +155,31 @@ def main(scenario_index=-2):
                 "tinj",
                 "curr_target",
                 "target_density",
-            ]
-        },
-        {
-            "actuator_names": [
-                "pinj",
-                "tinj",
-                "curr_target",
-                "target_density",
                 "ech",
             ]
-        },
-        {
-            "actuator_names": [
-                "pinj",
-                "tinj",
-                "curr_target",
-                "target_density",
-                "ech",
-            ]
-            + signal_groups.C_coils
-            + signal_groups.I_coils
         },
     ]
-    scenarios_dict["scalars"] = [
+    scenarios_dict["data_path"] = [
         {
-            "scalar_names": [
-                "density_estimate",
-                "curr",
-                "a_{}".format(efit_type),
-                "betan_{}".format(efit_type),
-                "drsep_{}".format(efit_type),
-                "kappa_{}".format(efit_type),
-                "li_{}".format(efit_type),
-                "rmagx_{}".format(efit_type),
-                "zmagX_{}".format(efit_type),
-                "volume_{}".format(efit_type),
-                "triangularity_top_{}".format(efit_type),
-                "triangularity_bot_{}".format(efit_type),
-            ]
+            "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms.pkl"
         },
         {
-            "scalar_names": [
-                "density_estimate",
-                "curr",
-                "betan",
-                "betap",
-                "vloop",
-                "wmhd",
-                "li_{}".format(efit_type),
-                "a_{}".format(efit_type),
-                "drsep_{}".format(efit_type),
-                "kappa_{}".format(efit_type),
-                "rmagx_{}".format(efit_type),
-                "zmagX_{}".format(efit_type),
-                "volume_{}".format(efit_type),
-                "triangularity_top_{}".format(efit_type),
-                "triangularity_bot_{}".format(efit_type),
-                "n1rms",
-                "n2rms",
-                "n3rms",
-            ]
+            "raw_data_path": "/projects/EKOLEMEN/profile_predictor/DATA/profile_data_50ms_raw.pkl"
+        },
+    ]
+    scenarios_dict["pruning"] = [
+        {
+            "pruning_functions": [
+                "remove_nan",  # remove junk data
+                "remove_dudtrip",  # remove PCS crashes etc
+                "remove_outliers",  # remove weird fits and bad postprocessing
+            ],
+        },
+        {
+            "pruning_functions": [
+                "remove_nan",  # remove junk data
+                "remove_outliers",  # remove weird fits and bad postprocessing
+            ],
         },
     ]
     scenarios_dict["lookahead"] = [
@@ -221,7 +191,6 @@ def main(scenario_index=-2):
         {"profile_downsample": 4},
     ]
     scenarios_dict["weighting"] = [
-        {"x1_weight": 0, "z1_weight": 1},
         {"x1_weight": 1, "z1_weight": 0},
         {"x1_weight": 1, "z1_weight": 1},
     ]
