@@ -172,7 +172,7 @@ def evaluate(file_path):
         scenario["profile_names"],
         scenario["actuator_names"],
         scenario["scalar_names"],
-        20,  # scenario["lookahead"], # always evaluate 1s into future
+        scenario["lookahead"], # always evaluate 1s into future
         scenario["profile_downsample"],
         scenario["state_latent_dim"],
         1,  # scenario["discount_factor"],
