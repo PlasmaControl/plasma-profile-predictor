@@ -391,7 +391,7 @@ if __name__ == "__main__":
                 ncpu=1,
                 ngpu=0,
                 mem=60,
-                time=235,
+                time=360,
                 user="",
             )
         print("Jobs submitted, exiting")
