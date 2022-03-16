@@ -388,10 +388,10 @@ if __name__ == "__main__":
                 file_path=file_path,
                 command=command,
                 job_name=job,
-                ncpu=1,
+                ncpu=32,
                 ngpu=0,
-                mem=60,
-                time=360,
+                mem=128,
+                time=720,
                 user="",
             )
         print("Jobs submitted, exiting")
