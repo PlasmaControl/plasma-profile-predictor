@@ -767,9 +767,13 @@ def process_data(
     ##############################
     def moving_average(a, n):
         """moving average of array a with window size n"""
-        ret = np.nancumsum(a, axis=0)
-        ret[n:] = ret[n:] - ret[:-n]
-        return (ret[n - 1 :] / n).astype("float32")
+        if n == 1:
+            return a
+        return np.array([
+            np.NaN if np.isnan(a[i-n:i]).all()
+            else np.nansum(a[i-n:i]) / (n - np.sum(np.isnan(a[i-n:i])))
+            for i in range(n, len(a))
+        ])
 
     def is_valid(shot):
         """checks if a shot is completely NaN or if it never reached flattop"""
