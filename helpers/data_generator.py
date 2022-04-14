@@ -772,7 +772,7 @@ def process_data(
         return np.array([
             np.NaN if np.isnan(a[i-n:i]).all()
             else np.nansum(a[i-n:i]) / (n - np.sum(np.isnan(a[i-n:i])))
-            for i in range(n, len(a))
+            for i in range(n, len(a) + 1)
         ])
 
     def is_valid(shot):
